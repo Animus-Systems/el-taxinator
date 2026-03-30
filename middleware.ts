@@ -23,5 +23,6 @@ export const config = {
     "/unsorted/:path*",
     "/files/:path*",
     "/dashboard/:path*",
+    // NOTE: /accountant/:path* is intentionally excluded — token-based access, no session required
   ],
 }

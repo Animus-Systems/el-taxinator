@@ -46,6 +46,7 @@ model User {
   quotes              Quote[]
   invoices            Invoice[]
   timeEntries         TimeEntry[]
+  accountantInvites   AccountantInvite[]
 
   @@map("users")
 }
@@ -383,4 +384,53 @@ model TimeEntry {
   @@index([userId, clientId])
   @@index([userId, startedAt])
   @@map("time_entries")
+}
+
+model AccountantInvite {
+  id          String    @id @default(uuid()) @db.Uuid
+  userId      String    @map("user_id") @db.Uuid
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token       String    @unique
+  name        String
+  email       String?
+  permissions Json      @default("{\"transactions\":true,\"invoices\":true,\"tax\":true,\"time\":false}")
+  isActive    Boolean   @default(true) @map("is_active")
+  expiresAt   DateTime? @map("expires_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  accessLogs  AccountantAccessLog[]
+  comments    AccountantComment[]
+
+  @@index([userId])
+  @@index([token])
+  @@map("accountant_invites")
+}
+
+model AccountantAccessLog {
+  id         String           @id @default(uuid()) @db.Uuid
+  inviteId   String           @map("invite_id") @db.Uuid
+  invite     AccountantInvite @relation(fields: [inviteId], references: [id], onDelete: Cascade)
+  section    String
+  ipAddress  String?          @map("ip_address")
+  userAgent  String?          @map("user_agent")
+  accessedAt DateTime         @default(now()) @map("accessed_at")
+
+  @@index([inviteId])
+  @@index([inviteId, accessedAt])
+  @@map("accountant_access_logs")
+}
+
+model AccountantComment {
+  id         String           @id @default(uuid()) @db.Uuid
+  inviteId   String           @map("invite_id") @db.Uuid
+  invite     AccountantInvite @relation(fields: [inviteId], references: [id], onDelete: Cascade)
+  entityType String           @map("entity_type")
+  entityId   String           @map("entity_id")
+  body       String
+  createdAt  DateTime         @default(now()) @map("created_at")
+  updatedAt  DateTime         @updatedAt @map("updated_at")
+
+  @@index([inviteId])
+  @@index([entityType, entityId])
+  @@map("accountant_comments")
 }

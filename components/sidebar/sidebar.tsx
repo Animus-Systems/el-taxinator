@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/sidebar"
 import { UserProfile } from "@/lib/auth"
 import config from "@/lib/config"
-import { Calculator, Clock, ClockArrowUp, FileText, Gift, House, Import, LayoutDashboard, Receipt, Settings, Upload, Users } from "lucide-react"
+import { Calculator, Clock, ClockArrowUp, FileText, Gift, House, Import, LayoutDashboard, Receipt, Settings, Upload, UserCog, Users } from "lucide-react"
 import Image from "next/image"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
@@ -143,6 +143,14 @@ export function AppSidebar({
                     <Link href="/apps">
                       <LayoutDashboard />
                       <span>Apps</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItemWithHighlight>
+                <SidebarMenuItemWithHighlight href="/settings/accountant">
+                  <SidebarMenuButton asChild>
+                    <Link href="/settings/accountant">
+                      <UserCog />
+                      <span>Accountant</span>
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItemWithHighlight>

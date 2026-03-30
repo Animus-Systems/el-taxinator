@@ -45,6 +45,10 @@ const settingsCategories = [
     href: "/settings/backups",
   },
   {
+    title: "Accountant Access",
+    href: "/settings/accountant",
+  },
+  {
     title: "Danger Zone",
     href: "/settings/danger",
   },
