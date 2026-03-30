@@ -14,11 +14,11 @@ export async function WelcomeWidget() {
 
   return (
     <Card className="flex flex-col lg:flex-row items-start gap-10 p-10 w-full">
-      <Image src="/logo/1024.png" alt="Logo" width={256} height={256} className="w-64 h-64" />
+      <Image src="/logo/logo.webp" alt="Logo" width={256} height={256} className="w-64 h-64" />
       <div className="flex flex-col">
         <CardTitle className="flex items-center justify-between">
           <span className="text-2xl font-bold">
-            <ColoredText>Hey, I&apos;m TaxHacker 👋</ColoredText>
+            <ColoredText>Hey, I&apos;m Taxinator 👋</ColoredText>
           </span>
           <Button
             variant="outline"
@@ -69,15 +69,15 @@ export async function WelcomeWidget() {
           </p>
         </CardDescription>
         <div className="mt-2">
-          <Link href="https://github.com/vas3k/TaxHacker" className="text-blue-500 hover:underline">
+          <Link href="https://github.com/vas3k/Taxinator" className="text-blue-500 hover:underline">
             Source Code
           </Link>
           <span className="mx-2">|</span>
-          <Link href="https://github.com/vas3k/TaxHacker/issues" className="text-blue-500 hover:underline">
+          <Link href="https://github.com/vas3k/Taxinator/issues" className="text-blue-500 hover:underline">
             Request New Feature
           </Link>
           <span className="mx-2">|</span>
-          <Link href="https://github.com/vas3k/TaxHacker/issues" className="text-blue-500 hover:underline">
+          <Link href="https://github.com/vas3k/Taxinator/issues" className="text-blue-500 hover:underline">
             Report a Bug
           </Link>
           <span className="mx-2">|</span>

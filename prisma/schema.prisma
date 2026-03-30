@@ -45,6 +45,7 @@ model User {
   products            Product[]
   quotes              Quote[]
   invoices            Invoice[]
+  timeEntries         TimeEntry[]
 
   @@map("users")
 }
@@ -131,6 +132,7 @@ model Project {
   color        String        @default("#000000")
   llm_prompt   String?
   transactions Transaction[]
+  timeEntries  TimeEntry[]
   createdAt    DateTime      @default(now()) @map("created_at")
 
   @@unique([userId, code])
@@ -196,6 +198,7 @@ model Transaction {
   createdAt             DateTime  @default(now()) @map("created_at")
   updatedAt             DateTime  @updatedAt @map("updated_at")
   text                  String?
+  deductible            Boolean?
 
   @@index([userId])
   @@index([projectCode])
@@ -253,10 +256,11 @@ model Client {
   address   String?
   taxId     String?   @map("tax_id")
   notes     String?
-  quotes    Quote[]
-  invoices  Invoice[]
-  createdAt DateTime  @default(now()) @map("created_at")
-  updatedAt DateTime  @updatedAt @map("updated_at")
+  quotes      Quote[]
+  invoices    Invoice[]
+  timeEntries TimeEntry[]
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
 
   @@index([userId])
   @@map("clients")
@@ -352,4 +356,31 @@ model InvoiceItem {
   position    Int      @default(0)
 
   @@map("invoice_items")
+}
+
+model TimeEntry {
+  id              String    @id @default(uuid()) @db.Uuid
+  userId          String    @map("user_id") @db.Uuid
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  description     String?
+  projectCode     String?   @map("project_code")
+  project         Project?  @relation(fields: [projectCode, userId], references: [code, userId])
+  clientId        String?   @map("client_id") @db.Uuid
+  client          Client?   @relation(fields: [clientId], references: [id])
+  startedAt       DateTime  @map("started_at")
+  endedAt         DateTime? @map("ended_at")
+  durationMinutes Int?      @map("duration_minutes")
+  hourlyRate      Int?      @map("hourly_rate")
+  currencyCode    String?   @map("currency_code")
+  isBillable      Boolean   @default(true) @map("is_billable")
+  isInvoiced      Boolean   @default(false) @map("is_invoiced")
+  notes           String?
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  @@index([userId])
+  @@index([userId, projectCode])
+  @@index([userId, clientId])
+  @@index([userId, startedAt])
+  @@map("time_entries")
 }

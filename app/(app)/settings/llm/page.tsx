@@ -10,10 +10,8 @@ export default async function LlmSettingsPage() {
   const fields = await getFields(user.id)
 
   return (
-    <>
-      <div className="w-full max-w-2xl">
-        <LLMSettingsForm settings={settings} fields={fields} showApiKey={config.selfHosted.isEnabled} />
-      </div>
-    </>
+    <div className="w-full max-w-2xl">
+      <LLMSettingsForm settings={settings} fields={fields} showApiKey={config.selfHosted.isEnabled} />
+    </div>
   )
 }

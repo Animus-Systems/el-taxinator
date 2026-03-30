@@ -17,7 +17,7 @@ COPY package*.json ./
 COPY prisma ./prisma/
 
 # Install dependencies
-RUN npm ci
+RUN npm ci --legacy-peer-deps
 
 # Copy source code
 COPY . .
@@ -36,7 +36,8 @@ RUN apt-get update && apt-get install -y \
     openssl \
     libwebp-dev \
     postgresql-client \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && npm install -g @anthropic-ai/claude-code@latest @openai/codex@latest
 
 WORKDIR /app
 
@@ -56,8 +57,12 @@ COPY --from=builder /app/next.config.ts ./
 COPY docker-entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
-# Create directory for uploads
-RUN mkdir -p /app/data
+# Create non-root user and directories
+RUN useradd -m -s /bin/bash taxuser \
+    && mkdir -p /app/data \
+    && chown -R taxuser:taxuser /app
+
+USER taxuser
 
 EXPOSE 7331
 

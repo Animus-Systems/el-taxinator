@@ -5,16 +5,20 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Client, Product } from "@/prisma/client"
+import { Client, Product, TimeEntry, Project } from "@/prisma/client"
 import { format } from "date-fns"
 import { useRouter } from "next/navigation"
 import { useRef, useState, useTransition } from "react"
 import { toast } from "sonner"
 import { LineItem, LineItemsEditor } from "./line-items-editor"
+import { ImportTimeEntries } from "./import-time-entries"
+
+type TimeEntryWithRelations = TimeEntry & { project: Project | null; client: Client | null }
 
 type Props = {
   clients: Client[]
   products: Product[]
+  timeEntries?: TimeEntryWithRelations[]
 }
 
 function generateInvoiceNumber() {
@@ -22,7 +26,7 @@ function generateInvoiceNumber() {
   return `F-${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}-001`
 }
 
-export function InvoiceForm({ clients, products }: Props) {
+export function InvoiceForm({ clients, products, timeEntries = [] }: Props) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [items, setItems] = useState<LineItem[]>([])
@@ -96,8 +100,14 @@ export function InvoiceForm({ clients, products }: Props) {
       </div>
 
       <div className="space-y-2">
-        <Label>Line Items *</Label>
-        <LineItemsEditor products={products} onChange={setItems} />
+        <div className="flex items-center justify-between">
+          <Label>Line Items *</Label>
+          <ImportTimeEntries
+            timeEntries={timeEntries}
+            onImport={(newItems) => setItems((prev) => [...prev, ...newItems.map((item, i) => ({ ...item, position: prev.length + i }))])}
+          />
+        </div>
+        <LineItemsEditor products={products} initialItems={items} onChange={setItems} />
       </div>
 
       <div className="grid grid-cols-2 gap-4">

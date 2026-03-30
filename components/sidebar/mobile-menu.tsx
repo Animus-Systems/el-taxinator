@@ -11,7 +11,7 @@ export default function MobileMenu({ unsortedFilesCount }: { unsortedFilesCount:
   return (
     <menu className="flex flex-row gap-2 p-2 items-center justify-between fixed top-0 left-0 w-full z-50 border-b-2 border-solid bg-background md:hidden">
       <Avatar className="h-10 w-10 rounded-lg cursor-pointer" onClick={toggleSidebar}>
-        <AvatarImage src="/logo/256.png" />
+        <AvatarImage src="/logo/logo.webp" />
         <AvatarFallback className="rounded-lg">AI</AvatarFallback>
       </Avatar>
       <Link href="/" className="text-lg font-bold">

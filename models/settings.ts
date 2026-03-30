@@ -7,33 +7,33 @@ export type SettingsMap = Record<string, string>
 
 /**
  * Helper to extract LLM provider settings from SettingsMap.
+ * Respects llm_primary_provider for quick-switching, with llm_providers as fallback order.
  */
 export function getLLMSettings(settings: SettingsMap) {
-  const priorities = (settings.llm_providers || "openai,google,mistral").split(",").map(p => p.trim()).filter(Boolean)
+  const primaryProvider = settings.llm_primary_provider || ""
+  const backupProvider = settings.llm_backup_provider || ""
+  const fallbackOrder = (settings.llm_providers || PROVIDERS.map(p => p.key).join(","))
+    .split(",").map(p => p.trim()).filter(Boolean)
 
-  const providers = priorities.map((provider) => {
-    if (provider === "openai") {
-      return {
-        provider: provider as LLMProvider,
-        apiKey: settings.openai_api_key || "",
-        model: settings.openai_model_name || PROVIDERS[0]['defaultModelName'],
-      }
+  // Build ordered list: primary first, backup second, then remaining fallback order
+  const seen = new Set<string>()
+  const orderedKeys: string[] = []
+  if (primaryProvider) { orderedKeys.push(primaryProvider); seen.add(primaryProvider) }
+  if (backupProvider && !seen.has(backupProvider)) { orderedKeys.push(backupProvider); seen.add(backupProvider) }
+  for (const k of fallbackOrder) { if (!seen.has(k)) { orderedKeys.push(k); seen.add(k) } }
+
+  const providers = orderedKeys.map((providerKey) => {
+    const providerMeta = PROVIDERS.find(p => p.key === providerKey)
+    if (!providerMeta) return null
+
+    return {
+      provider: providerKey as LLMProvider,
+      apiKey: settings[providerMeta.apiKeyName] || "",
+      model: settings[providerMeta.modelName] || providerMeta.defaultModelName,
+      thinking: providerMeta.thinkingSettingName
+        ? (settings[providerMeta.thinkingSettingName] || "medium")
+        : undefined,
     }
-    if (provider === "google") {
-      return {
-        provider: provider as LLMProvider,
-        apiKey: settings.google_api_key || "",
-        model: settings.google_model_name || PROVIDERS[1]['defaultModelName'],
-      }
-    }
-    if (provider === "mistral") {
-      return {
-        provider: provider as LLMProvider,
-        apiKey: settings.mistral_api_key || "",
-        model: settings.mistral_model_name || PROVIDERS[2]['defaultModelName'],
-      }
-    }
-    return null
   }).filter((provider): provider is NonNullable<typeof provider> => provider !== null)
 
   return {

@@ -19,7 +19,7 @@ export default async function Cookie() {
       </p>
 
       <p className="text-slate-700 mb-6 leading-relaxed">
-        This Cookie Policy explains how TaxHacker uses cookies and similar technologies when you visit our website or
+        This Cookie Policy explains how Taxinator uses cookies and similar technologies when you visit our website or
         use our services.
       </p>
 
