@@ -40,6 +40,10 @@ model User {
   sessions            Session[]
   appData             AppData[]
   progress            Progress[]
+  clients             Client[]
+  products            Product[]
+  quotes              Quote[]
+  invoices            Invoice[]
 
   @@map("users")
 }
@@ -236,4 +240,114 @@ model Progress {
 
   @@index([userId])
   @@map("progress")
+}
+
+model Client {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String
+  email     String?
+  phone     String?
+  address   String?
+  taxId     String?   @map("tax_id")
+  notes     String?
+  quotes    Quote[]
+  invoices  Invoice[]
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+
+  @@index([userId])
+  @@map("clients")
+}
+
+model Product {
+  id           String        @id @default(uuid()) @db.Uuid
+  userId       String        @map("user_id") @db.Uuid
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name         String
+  description  String?
+  price        Int           @default(0)
+  currencyCode String        @default("EUR") @map("currency_code")
+  vatRate      Float         @default(21.0) @map("vat_rate")
+  unit         String?
+  quoteItems   QuoteItem[]
+  invoiceItems InvoiceItem[]
+  createdAt    DateTime      @default(now()) @map("created_at")
+  updatedAt    DateTime      @updatedAt @map("updated_at")
+
+  @@index([userId])
+  @@map("products")
+}
+
+model Quote {
+  id         String      @id @default(uuid()) @db.Uuid
+  userId     String      @map("user_id") @db.Uuid
+  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  clientId   String?     @map("client_id") @db.Uuid
+  client     Client?     @relation(fields: [clientId], references: [id])
+  number     String
+  status     String      @default("draft")
+  issueDate  DateTime    @map("issue_date")
+  expiryDate DateTime?   @map("expiry_date")
+  notes      String?
+  items      QuoteItem[]
+  invoice    Invoice?
+  createdAt  DateTime    @default(now()) @map("created_at")
+  updatedAt  DateTime    @updatedAt @map("updated_at")
+
+  @@index([userId])
+  @@map("quotes")
+}
+
+model QuoteItem {
+  id          String   @id @default(uuid()) @db.Uuid
+  quoteId     String   @map("quote_id") @db.Uuid
+  quote       Quote    @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  productId   String?  @map("product_id") @db.Uuid
+  product     Product? @relation(fields: [productId], references: [id])
+  description String
+  quantity    Float    @default(1)
+  unitPrice   Int      @map("unit_price")
+  vatRate     Float    @default(21.0) @map("vat_rate")
+  position    Int      @default(0)
+
+  @@map("quote_items")
+}
+
+model Invoice {
+  id        String        @id @default(uuid()) @db.Uuid
+  userId    String        @map("user_id") @db.Uuid
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  clientId  String?       @map("client_id") @db.Uuid
+  client    Client?       @relation(fields: [clientId], references: [id])
+  quoteId   String?       @unique @map("quote_id") @db.Uuid
+  quote     Quote?        @relation(fields: [quoteId], references: [id])
+  number    String
+  status    String        @default("draft")
+  issueDate DateTime      @map("issue_date")
+  dueDate   DateTime?     @map("due_date")
+  paidAt    DateTime?     @map("paid_at")
+  notes     String?
+  items     InvoiceItem[]
+  createdAt DateTime      @default(now()) @map("created_at")
+  updatedAt DateTime      @updatedAt @map("updated_at")
+
+  @@index([userId])
+  @@map("invoices")
+}
+
+model InvoiceItem {
+  id          String   @id @default(uuid()) @db.Uuid
+  invoiceId   String   @map("invoice_id") @db.Uuid
+  invoice     Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  productId   String?  @map("product_id") @db.Uuid
+  product     Product? @relation(fields: [productId], references: [id])
+  description String
+  quantity    Float    @default(1)
+  unitPrice   Int      @map("unit_price")
+  vatRate     Float    @default(21.0) @map("vat_rate")
+  position    Int      @default(0)
+
+  @@map("invoice_items")
 }

@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/sidebar"
 import { UserProfile } from "@/lib/auth"
 import config from "@/lib/config"
-import { ClockArrowUp, FileText, Gift, House, Import, LayoutDashboard, Settings, Upload } from "lucide-react"
+import { ClockArrowUp, FileText, Gift, House, Import, LayoutDashboard, Receipt, Settings, Upload, Users } from "lucide-react"
 import Image from "next/image"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
@@ -51,7 +51,7 @@ export function AppSidebar({
       <Sidebar variant="inset" collapsible="icon">
         <SidebarHeader>
           <Link href="/" className="flex items-center gap-2">
-            <Image src="/logo/256.png" alt="Logo" className="h-10 w-10 rounded-lg" width={40} height={40} />
+            <Image src="/logo/logo.webp" alt="Logo" className="h-10 w-10 rounded-lg" width={40} height={40} />
             <div className="grid flex-1 text-left leading-tight">
               <span className="truncate font-semibold text-lg">
                 <ColoredText>{config.app.title}</ColoredText>
@@ -103,6 +103,22 @@ export function AppSidebar({
                       )}
                       {notification && notification.code === "sidebar.unsorted" && notification.message && <Blinker />}
                       <span></span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItemWithHighlight>
+                <SidebarMenuItemWithHighlight href="/invoices">
+                  <SidebarMenuButton asChild>
+                    <Link href="/invoices">
+                      <Receipt />
+                      <span>Invoices</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItemWithHighlight>
+                <SidebarMenuItemWithHighlight href="/clients">
+                  <SidebarMenuButton asChild>
+                    <Link href="/clients">
+                      <Users />
+                      <span>Clients</span>
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItemWithHighlight>

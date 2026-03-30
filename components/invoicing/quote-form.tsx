@@ -1,0 +1,117 @@
+"use client"
+
+import { createQuoteAction } from "@/app/(app)/quotes/actions"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Client, Product } from "@/prisma/client"
+import { format } from "date-fns"
+import { useRouter } from "next/navigation"
+import { useRef, useState, useTransition } from "react"
+import { toast } from "sonner"
+import { LineItem, LineItemsEditor } from "./line-items-editor"
+
+type Props = {
+  clients: Client[]
+  products: Product[]
+}
+
+function generateQuoteNumber() {
+  const now = new Date()
+  return `PRE-${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}-001`
+}
+
+export function QuoteForm({ clients, products }: Props) {
+  const router = useRouter()
+  const [isPending, startTransition] = useTransition()
+  const [items, setItems] = useState<LineItem[]>([])
+  const formRef = useRef<HTMLFormElement>(null)
+  const today = format(new Date(), "yyyy-MM-dd")
+
+  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    const formData = new FormData(e.currentTarget)
+    formData.set("items", JSON.stringify(items))
+
+    startTransition(async () => {
+      const result = await createQuoteAction(null, formData)
+      if (result.success && result.data) {
+        toast.success("Quote created")
+        router.push(`/quotes/${result.data.id}`)
+      } else {
+        toast.error(result.error || "Failed to create quote")
+      }
+    })
+  }
+
+  return (
+    <form ref={formRef} onSubmit={handleSubmit} className="space-y-6">
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-1">
+          <Label htmlFor="number">Quote Number *</Label>
+          <Input id="number" name="number" defaultValue={generateQuoteNumber()} required />
+        </div>
+        <div className="space-y-1">
+          <Label htmlFor="clientId">Client</Label>
+          <Select name="clientId">
+            <SelectTrigger>
+              <SelectValue placeholder="Select client..." />
+            </SelectTrigger>
+            <SelectContent>
+              {clients.map((c) => (
+                <SelectItem key={c.id} value={c.id}>
+                  {c.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-3 gap-4">
+        <div className="space-y-1">
+          <Label htmlFor="issueDate">Issue Date *</Label>
+          <Input id="issueDate" name="issueDate" type="date" defaultValue={today} required />
+        </div>
+        <div className="space-y-1">
+          <Label htmlFor="expiryDate">Expiry Date</Label>
+          <Input id="expiryDate" name="expiryDate" type="date" />
+        </div>
+        <div className="space-y-1">
+          <Label htmlFor="status">Status</Label>
+          <Select name="status" defaultValue="draft">
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="draft">Draft</SelectItem>
+              <SelectItem value="sent">Sent</SelectItem>
+              <SelectItem value="accepted">Accepted</SelectItem>
+              <SelectItem value="rejected">Rejected</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <Label>Line Items *</Label>
+        <LineItemsEditor products={products} onChange={setItems} />
+      </div>
+
+      <div className="space-y-1">
+        <Label htmlFor="notes">Notes</Label>
+        <Input id="notes" name="notes" placeholder="Terms and conditions, validity period, etc." />
+      </div>
+
+      <div className="flex gap-2 justify-end">
+        <Button type="button" variant="outline" onClick={() => router.back()}>
+          Cancel
+        </Button>
+        <Button type="submit" disabled={isPending}>
+          {isPending ? "Creating..." : "Create Quote"}
+        </Button>
+      </div>
+    </form>
+  )
+}
