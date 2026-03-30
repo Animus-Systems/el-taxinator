@@ -36,6 +36,7 @@ model User {
   businessAddress     String?       @map("business_address")
   businessBankDetails String?       @map("business_bank_details")
   businessLogo        String?       @map("business_logo")
+  businessTaxId       String?       @map("business_tax_id")
   accounts            Account[]
   sessions            Session[]
   appData             AppData[]
@@ -329,6 +330,7 @@ model Invoice {
   dueDate   DateTime?     @map("due_date")
   paidAt    DateTime?     @map("paid_at")
   notes     String?
+  irpfRate  Float         @default(0.0) @map("irpf_rate")
   items     InvoiceItem[]
   createdAt DateTime      @default(now()) @map("created_at")
   updatedAt DateTime      @updatedAt @map("updated_at")

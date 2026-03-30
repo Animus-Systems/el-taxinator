@@ -33,6 +33,7 @@ export async function createInvoiceAction(
       issueDate: new Date(formData.get("issueDate") as string),
       dueDate: formData.get("dueDate") ? new Date(formData.get("dueDate") as string) : null,
       notes: (formData.get("notes") as string) || null,
+      irpfRate: parseFloat((formData.get("irpfRate") as string) || "0") || 0,
       items: parseItems(formData.get("items") as string),
     })
     revalidatePath("/invoices")
@@ -57,6 +58,7 @@ export async function updateInvoiceAction(
       issueDate: new Date(formData.get("issueDate") as string),
       dueDate: formData.get("dueDate") ? new Date(formData.get("dueDate") as string) : null,
       notes: (formData.get("notes") as string) || null,
+      irpfRate: parseFloat((formData.get("irpfRate") as string) || "0") || 0,
       items: parseItems(formData.get("items") as string),
     })
     revalidatePath("/invoices")

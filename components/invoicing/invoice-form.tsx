@@ -100,9 +100,26 @@ export function InvoiceForm({ clients, products }: Props) {
         <LineItemsEditor products={products} onChange={setItems} />
       </div>
 
-      <div className="space-y-1">
-        <Label htmlFor="notes">Notes</Label>
-        <Input id="notes" name="notes" placeholder="Payment terms, bank details, etc." />
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-1">
+          <Label htmlFor="irpfRate">Retención IRPF (%)</Label>
+          <Select name="irpfRate" defaultValue="0">
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="0">0% — Sin retención</SelectItem>
+              <SelectItem value="7">7% — Nuevos autónomos (1er año)</SelectItem>
+              <SelectItem value="15">15% — General autónomos</SelectItem>
+              <SelectItem value="19">19% — Rendimientos capital</SelectItem>
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground">Retención a cuenta del IRPF aplicada sobre la base imponible</p>
+        </div>
+        <div className="space-y-1">
+          <Label htmlFor="notes">Notes</Label>
+          <Input id="notes" name="notes" placeholder="Payment terms, bank details, etc." />
+        </div>
       </div>
 
       <div className="flex gap-2 justify-end">

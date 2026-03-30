@@ -18,6 +18,7 @@ export type InvoiceData = {
   issueDate: Date
   dueDate?: Date | null
   notes?: string | null
+  irpfRate?: number
   items: InvoiceItemData[]
 }
 

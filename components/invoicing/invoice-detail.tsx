@@ -155,12 +155,20 @@ export function InvoiceDetail({
             <TableCell className="text-right">{formatCurrency(subtotal, "EUR")}</TableCell>
           </TableRow>
           <TableRow>
-            <TableCell colSpan={4}>VAT</TableCell>
+            <TableCell colSpan={4}>IVA</TableCell>
             <TableCell className="text-right">{formatCurrency(vatTotal, "EUR")}</TableCell>
           </TableRow>
+          {invoice.irpfRate > 0 && (
+            <TableRow className="text-muted-foreground">
+              <TableCell colSpan={4}>Retención IRPF ({invoice.irpfRate}%)</TableCell>
+              <TableCell className="text-right">−{formatCurrency(Math.round(subtotal * invoice.irpfRate / 100), "EUR")}</TableCell>
+            </TableRow>
+          )}
           <TableRow className="font-bold">
-            <TableCell colSpan={4}>Total</TableCell>
-            <TableCell className="text-right">{formatCurrency(total, "EUR")}</TableCell>
+            <TableCell colSpan={4}>Total a pagar</TableCell>
+            <TableCell className="text-right">
+              {formatCurrency(total - (invoice.irpfRate > 0 ? Math.round(subtotal * invoice.irpfRate / 100) : 0), "EUR")}
+            </TableCell>
           </TableRow>
         </TableFooter>
       </Table>

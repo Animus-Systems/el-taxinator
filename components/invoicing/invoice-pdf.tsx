@@ -123,12 +123,20 @@ export function InvoicePDF({ invoice, businessName, businessAddress, businessTax
             <Text style={styles.totalsValue}>{formatEUR(subtotal)}</Text>
           </View>
           <View style={styles.totalsRow}>
-            <Text style={styles.totalsLabel}>VAT</Text>
+            <Text style={styles.totalsLabel}>IVA</Text>
             <Text style={styles.totalsValue}>{formatEUR(vatTotal)}</Text>
           </View>
+          {invoice.irpfRate > 0 && (
+            <View style={styles.totalsRow}>
+              <Text style={styles.totalsLabel}>Ret. IRPF ({invoice.irpfRate}%)</Text>
+              <Text style={styles.totalsValue}>−{formatEUR(Math.round(subtotal * invoice.irpfRate / 100))}</Text>
+            </View>
+          )}
           <View style={[styles.totalsRow, { marginTop: 6 }]}>
-            <Text style={styles.grandTotalLabel}>TOTAL</Text>
-            <Text style={styles.grandTotalValue}>{formatEUR(total)}</Text>
+            <Text style={styles.grandTotalLabel}>TOTAL A PAGAR</Text>
+            <Text style={styles.grandTotalValue}>
+              {formatEUR(total - (invoice.irpfRate > 0 ? Math.round(subtotal * invoice.irpfRate / 100) : 0))}
+            </Text>
           </View>
         </View>
 

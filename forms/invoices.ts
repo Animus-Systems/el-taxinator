@@ -22,6 +22,7 @@ export const invoiceFormSchema = z.object({
     .optional()
     .nullable(),
   notes: z.string().max(1024).optional().nullable(),
+  irpfRate: z.union([z.number().min(0).max(100), z.string().transform((v) => parseFloat(v) || 0)]).default(0),
   items: z.array(invoiceItemSchema).min(1),
 })
 
