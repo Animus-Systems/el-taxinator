@@ -1,7 +1,8 @@
 import { AccountantCommentBox } from "@/components/accountant/comment-box"
+import { calcDurationMinutes } from "@/lib/time-entry-calculations"
 import { getAccountantInviteByToken } from "@/models/accountants"
 import { AccountantPermissions } from "@/models/accountants"
-import { getTimeEntries, calcDurationMinutes } from "@/models/time-entries"
+import { getTimeEntries } from "@/models/time-entries"
 import { format } from "date-fns"
 import { notFound } from "next/navigation"
 

@@ -1,7 +1,7 @@
 "use client"
 
 import { formatCurrency, formatPeriodLabel } from "@/lib/utils"
-import { DetailedTimeSeriesData } from "@/models/stats"
+import type { DetailedTimeSeriesData } from "@/models/stats"
 import { addDays, endOfMonth, format, startOfMonth } from "date-fns"
 import { useRouter } from "next/navigation"
 import { useEffect, useRef, useState } from "react"
@@ -109,7 +109,7 @@ export function IncomeExpenseGraph({ data, defaultCurrency }: IncomeExpenseGraph
         <div className="h-full flex flex-col" style={{ minWidth: `${Math.max(600, data.length * 94)}px` }}>
           {/* Income section (top half) */}
           <div className="h-1/2 flex justify-center gap-1 px-2">
-            {data.map((item, index) => {
+            {data.map((item) => {
               const incomeHeight = maxValue > 0 ? (item.income / maxValue) * 100 : 0
 
               return (
@@ -148,7 +148,7 @@ export function IncomeExpenseGraph({ data, defaultCurrency }: IncomeExpenseGraph
 
           {/* Expense section (bottom half) */}
           <div className="h-1/2 flex justify-center gap-1 px-2">
-            {data.map((item, index) => {
+            {data.map((item) => {
               const expenseHeight = maxValue > 0 ? (item.expenses / maxValue) * 100 : 0
 
               return (

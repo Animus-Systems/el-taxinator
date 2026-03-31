@@ -1,5 +1,5 @@
 import config from "@/lib/config"
-import { createUserDefaults, isDatabaseEmpty } from "@/models/defaults"
+import { createUserDefaults, isDatabaseEmpty } from "@/models/defaults-server"
 import { getSelfHostedUser } from "@/models/users"
 import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"

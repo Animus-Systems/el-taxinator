@@ -43,7 +43,6 @@ export default function LLMSettingsForm({
 }: {
   settings: Record<string, string>
   fields: Field[]
-  showApiKey?: boolean
 }) {
   const [saveState, saveAction, pending] = useActionState(saveSettingsAction, null)
   const [providerOrder, setProviderOrder] = useState<string[]>(getInitialProviderOrder(settings))

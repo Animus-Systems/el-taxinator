@@ -5,11 +5,11 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { calcInvoiceTotals } from "@/models/invoices"
+import { calcInvoiceTotals } from "@/lib/invoice-calculations"
 import { formatCurrency } from "@/lib/utils"
 import { Client, Invoice, InvoiceItem, Product, Quote } from "@/prisma/client"
 import { format } from "date-fns"
-import { ArrowLeft, Download, Pencil, Trash2 } from "lucide-react"
+import { ArrowLeft, Download, Trash2 } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useTransition } from "react"
@@ -25,12 +25,8 @@ const STATUSES = ["draft", "sent", "paid", "overdue", "cancelled"] as const
 
 export function InvoiceDetail({
   invoice,
-  clients,
-  products,
 }: {
   invoice: InvoiceWithRelations
-  clients: Client[]
-  products: Product[]
 }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()

@@ -1,12 +1,15 @@
 "use server"
 
 import config from "@/lib/config"
-import { resend, sendNewsletterWelcomeEmail } from "@/lib/email"
+import { isResendConfigured, resend, sendNewsletterWelcomeEmail } from "@/lib/email"
 
 export async function subscribeToNewsletterAction(email: string) {
   try {
     if (!email || !email.includes("@")) {
       return { success: false, error: "Invalid email address" }
+    }
+    if (!isResendConfigured()) {
+      return { success: false, error: "Newsletter email is not configured on this instance" }
     }
 
     const existingContacts = await resend.contacts.list({

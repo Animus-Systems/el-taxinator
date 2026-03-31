@@ -2,7 +2,7 @@
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Modelo390Result } from "@/models/tax"
+import type { Modelo390Result } from "@/models/tax"
 import { Download } from "lucide-react"
 import Link from "next/link"
 

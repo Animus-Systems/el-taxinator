@@ -10,7 +10,7 @@ import { FormSelectProject } from "@/components/forms/select-project"
 import { FormSelectType } from "@/components/forms/select-type"
 import { FormInput, FormTextarea } from "@/components/forms/simple"
 import { Button } from "@/components/ui/button"
-import { TransactionData } from "@/models/transactions"
+import type { TransactionData } from "@/models/transactions"
 import { Category, Currency, Field, Project, Transaction } from "@/prisma/client"
 import { format } from "date-fns"
 import { Loader2, Save, Trash2 } from "lucide-react"
@@ -53,10 +53,10 @@ export default function TransactionEditForm({
     items: transaction.items || [],
     ...extraFields.reduce(
       (acc, field) => {
-        acc[field.code] = transaction.extra?.[field.code as keyof typeof transaction.extra] || ""
+        acc[field.code] = (transaction.extra as Record<string, unknown> | null)?.[field.code] || ""
         return acc
       },
-      {} as Record<string, any>
+      {} as Record<string, unknown>
     ),
   })
 

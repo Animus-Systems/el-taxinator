@@ -1,6 +1,6 @@
 "use server"
 
-import { createUserDefaults, isDatabaseEmpty } from "@/models/defaults"
+import { createUserDefaults, isDatabaseEmpty } from "@/models/defaults-server"
 import { updateSettings } from "@/models/settings"
 import { getOrCreateSelfHostedUser } from "@/models/users"
 import { revalidatePath } from "next/cache"

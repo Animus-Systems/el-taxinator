@@ -11,7 +11,7 @@ const envSchema = z.object({
   MISTRAL_API_KEY: z.string().optional(),
   MISTRAL_MODEL_NAME: z.string().default("mistral-medium-latest"),
   ANTHROPIC_API_KEY: z.string().optional(),
-  ANTHROPIC_MODEL_NAME: z.string().default("claude-sonnet-4-5-20250514"),
+  ANTHROPIC_MODEL_NAME: z.string().default("claude-sonnet-4-6"),
   BETTER_AUTH_SECRET: z
     .string()
     .min(16, "Auth secret must be at least 16 characters")

@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { Badge } from "@/components/ui/badge"
-import { AccountantPermissions } from "@/models/accountants"
+import type { AccountantPermissions } from "@/models/accountants"
 import { createInviteAction, deleteInviteAction, reactivateInviteAction, revokeInviteAction } from "@/app/(app)/settings/accountant/actions"
 import { Check, Copy, Link, Plus, Trash2, UserX, UserCheck } from "lucide-react"
 

@@ -1,4 +1,4 @@
-import { calcInvoiceTotals } from "@/models/invoices"
+import { calcInvoiceTotals } from "@/lib/invoice-calculations"
 import { Client, Invoice, InvoiceItem, Product, Quote } from "@/prisma/client"
 import { Document, Page, StyleSheet, Text, View } from "@react-pdf/renderer"
 import { format } from "date-fns"

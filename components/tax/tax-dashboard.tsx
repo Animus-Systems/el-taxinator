@@ -3,10 +3,10 @@
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { QuarterlySummary } from "@/models/tax"
-import { AlertCircle, CheckCircle, ChevronRight, FileText } from "lucide-react"
+import type { QuarterlySummary } from "@/models/tax"
+import { AlertCircle, ChevronRight, FileText } from "lucide-react"
 import Link from "next/link"
-import { useRouter, useSearchParams } from "next/navigation"
+import { useRouter } from "next/navigation"
 
 type Deadline = {
   quarter: number
@@ -37,7 +37,7 @@ function isDueSoon(deadline: Date) {
 
 export function TaxDashboard({ year, summary, deadlines }: Props) {
   const router = useRouter()
-  const searchParams = useSearchParams()
+  const deadlineCount = deadlines.length
 
   function changeYear(delta: number) {
     router.push(`/tax?year=${year + delta}`)
@@ -126,6 +126,7 @@ export function TaxDashboard({ year, summary, deadlines }: Props) {
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Resumen del año {year}</CardTitle>
+          <p className="text-xs text-muted-foreground">{deadlineCount} plazos fiscales monitorizados</p>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">

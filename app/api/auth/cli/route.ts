@@ -4,6 +4,9 @@ import {
   getClaudeLoginUrl,
   completeClaudeLogin,
   logoutClaude,
+  getCodexLoginUrl,
+  completeCodexLogin,
+  logoutCodex,
 } from "@/lib/cli-auth"
 
 // GET /api/auth/cli — Get auth status for all CLI providers
@@ -32,28 +35,27 @@ export async function POST(request: Request) {
     if (action === "login") {
       if (provider === "claude") {
         const url = getClaudeLoginUrl()
-        if (url) {
-          return NextResponse.json({ loginUrl: url })
-        }
-        return NextResponse.json(
-          { error: "Could not generate Claude login URL. Is Claude CLI installed?" },
-          { status: 500 }
-        )
+        if (url) return NextResponse.json({ loginUrl: url })
+        return NextResponse.json({ error: "Could not generate Claude login URL. Is Claude CLI installed?" }, { status: 500 })
       }
-      return NextResponse.json({ error: "Login only supported for Claude currently" }, { status: 400 })
+      if (provider === "codex") {
+        const url = getCodexLoginUrl()
+        if (url) return NextResponse.json({ loginUrl: url })
+        return NextResponse.json({ error: "Could not generate Codex login URL. Is Codex CLI installed?" }, { status: 500 })
+      }
+      return NextResponse.json({ error: "Unknown provider" }, { status: 400 })
     }
 
     if (action === "complete-login") {
       if (provider === "claude" && code) {
         const result = await completeClaudeLogin(code.trim())
-        if (result.success) {
-          const status = getAllAuthStatus()
-          return NextResponse.json({ success: true, status })
-        }
-        return NextResponse.json(
-          { success: false, error: result.error || "Login failed" },
-          { status: 400 }
-        )
+        if (result.success) return NextResponse.json({ success: true, status: getAllAuthStatus() })
+        return NextResponse.json({ success: false, error: result.error || "Login failed" }, { status: 400 })
+      }
+      if (provider === "codex" && code) {
+        const result = await completeCodexLogin(code.trim())
+        if (result.success) return NextResponse.json({ success: true, status: getAllAuthStatus() })
+        return NextResponse.json({ success: false, error: result.error || "Login failed" }, { status: 400 })
       }
       return NextResponse.json({ error: "Provider and code required" }, { status: 400 })
     }
@@ -61,10 +63,13 @@ export async function POST(request: Request) {
     if (action === "logout") {
       if (provider === "claude") {
         logoutClaude()
-        const status = getAllAuthStatus()
-        return NextResponse.json({ success: true, status })
+        return NextResponse.json({ success: true, status: getAllAuthStatus() })
       }
-      return NextResponse.json({ error: "Logout not supported for this provider" }, { status: 400 })
+      if (provider === "codex") {
+        logoutCodex()
+        return NextResponse.json({ success: true, status: getAllAuthStatus() })
+      }
+      return NextResponse.json({ error: "Unknown provider" }, { status: 400 })
     }
 
     if (action === "status") {

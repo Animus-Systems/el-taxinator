@@ -1,6 +1,5 @@
 import { ClientList } from "@/components/invoicing/client-list"
 import { NewClientDialog } from "@/components/invoicing/new-client-dialog"
-import { Button } from "@/components/ui/button"
 import { getCurrentUser } from "@/lib/auth"
 import { getClients } from "@/models/clients"
 import { Plus } from "lucide-react"

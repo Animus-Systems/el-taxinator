@@ -1,100 +1,47 @@
-import { readFileSync, existsSync } from "fs"
+import { readFileSync, existsSync, unlinkSync } from "fs"
 import { execFileSync, spawn } from "child_process"
 import { join } from "path"
 
 const HOME = process.env.HOME || "/home/taxuser"
+const CLI_ENV = { ...process.env, HOME }
+const CLI_ENV_NO_BROWSER = { ...CLI_ENV, BROWSER: "echo" }
 
-// ── Claude CLI Auth ──────────────────────────────────────────
+// ── Generic CLI helpers ──────────────────────────────────────
 
-interface ClaudeAuthStatus {
-  provider: "claude"
-  loggedIn: boolean
-  email?: string
-  displayName?: string
-  accountUuid?: string
-  organizationName?: string
-}
-
-export function getClaudeAuthStatus(): ClaudeAuthStatus {
-  // Check .claude.json for oauthAccount
+function getCliLoginUrl(binary: string): string | null {
   try {
-    const claudeJsonPath = join(HOME, ".claude.json")
-    if (existsSync(claudeJsonPath)) {
-      const data = JSON.parse(readFileSync(claudeJsonPath, "utf-8"))
-      if (data.oauthAccount?.emailAddress) {
-        return {
-          provider: "claude",
-          loggedIn: true,
-          email: data.oauthAccount.emailAddress,
-          displayName: data.oauthAccount.displayName,
-          accountUuid: data.oauthAccount.accountUuid,
-          organizationName: data.oauthAccount.organizationName,
-        }
-      }
-    }
-  } catch {}
-
-  // Try CLI status
-  try {
-    const result = execFileSync("claude", ["auth", "status"], {
+    execFileSync("timeout", ["5", binary, "auth", "login"], {
       encoding: "utf-8",
       timeout: 10000,
-      env: { ...process.env, HOME },
-    }).trim()
-
-    if (result.includes("Logged in") || result.includes("authenticated")) {
-      return { provider: "claude", loggedIn: true }
-    }
-  } catch {}
-
-  return { provider: "claude", loggedIn: false }
-}
-
-/**
- * Initiates Claude auth login. Returns the OAuth URL the user needs to visit.
- * After visiting, the user gets a code from platform.claude.com which they
- * paste back to complete the flow.
- */
-export function getClaudeLoginUrl(): string | null {
-  try {
-    // Run with BROWSER=echo so it doesn't try to open a browser
-    // The command outputs the URL and then waits for auth completion
-    // We use timeout to kill it after extracting the URL
-    const result = execFileSync("timeout", ["5", "claude", "auth", "login"], {
-      encoding: "utf-8",
-      timeout: 10000,
-      env: { ...process.env, HOME, BROWSER: "echo" },
+      env: CLI_ENV_NO_BROWSER,
     })
-    return extractUrl(result)
-  } catch (err: any) {
-    // timeout kills the process with non-zero exit, but we still got stdout
-    const combined = (err.stdout?.toString() || "") + (err.stderr?.toString() || "")
+    return null
+  } catch (err: unknown) {
+    const e = err as { stdout?: { toString(): string }; stderr?: { toString(): string } }
+    const combined = (e.stdout?.toString() || "") + (e.stderr?.toString() || "")
     return extractUrl(combined)
   }
 }
 
-/**
- * Completes Claude auth by feeding the auth code to the CLI.
- * The code is what the user gets from platform.claude.com after authenticating.
- */
-export async function completeClaudeLogin(code: string): Promise<{ success: boolean; error?: string }> {
+function completeCliLogin(
+  binary: string,
+  code: string,
+  readyPatterns: string[]
+): Promise<{ success: boolean; error?: string }> {
   return new Promise((resolve) => {
-    const proc = spawn("claude", ["auth", "login"], {
-      env: { ...process.env, HOME, BROWSER: "echo" },
+    const proc = spawn(binary, ["auth", "login"], {
+      env: CLI_ENV_NO_BROWSER,
       stdio: ["pipe", "pipe", "pipe"],
     })
 
     let stdout = ""
     let stderr = ""
+    proc.stdout?.on("data", (data: Buffer) => { stdout += data.toString() })
+    proc.stderr?.on("data", (data: Buffer) => { stderr += data.toString() })
 
-    proc.stdout?.on("data", (data) => { stdout += data.toString() })
-    proc.stderr?.on("data", (data) => { stderr += data.toString() })
-
-    // Wait for the URL output, then send the code
     const checkAndSend = setInterval(() => {
-      if (stdout.includes("claude.com") || stdout.includes("oauth")) {
+      if (readyPatterns.some((p) => stdout.includes(p))) {
         clearInterval(checkAndSend)
-        // Small delay to ensure CLI is ready for input
         setTimeout(() => {
           proc.stdin?.write(code + "\n")
           proc.stdin?.end()
@@ -111,25 +58,21 @@ export async function completeClaudeLogin(code: string): Promise<{ success: bool
     proc.on("close", (exitCode) => {
       clearTimeout(timeout)
       clearInterval(checkAndSend)
-
       if (exitCode === 0 || stdout.includes("success") || stdout.includes("logged in")) {
         resolve({ success: true })
       } else {
-        resolve({
-          success: false,
-          error: stderr || stdout || `CLI exited with code ${exitCode}`,
-        })
+        resolve({ success: false, error: stderr || stdout || `CLI exited with code ${exitCode}` })
       }
     })
   })
 }
 
-export function logoutClaude(): boolean {
+function logoutCli(binary: string): boolean {
   try {
-    execFileSync("claude", ["auth", "logout"], {
+    execFileSync(binary, ["auth", "logout"], {
       encoding: "utf-8",
       timeout: 10000,
-      env: { ...process.env, HOME },
+      env: CLI_ENV,
     })
     return true
   } catch {
@@ -137,7 +80,58 @@ export function logoutClaude(): boolean {
   }
 }
 
-// ── Codex CLI Auth ───────────────────────────────────────────
+function extractUrl(text: string): string | null {
+  const match = text.match(/https:\/\/[^\s]+(?:oauth|authorize|auth|login)[^\s]*/)
+  if (match) return match[0]
+  const fallback = text.match(/https:\/\/(?:claude\.com|auth\.openai\.com|platform\.openai\.com)[^\s]+/)
+  if (fallback) return fallback[0]
+  return null
+}
+
+// ── Claude ───────────────────────────────────────────────────
+
+interface ClaudeAuthStatus {
+  provider: "claude"
+  loggedIn: boolean
+  email?: string
+  displayName?: string
+  accountUuid?: string
+  organizationName?: string
+}
+
+export function getClaudeAuthStatus(): ClaudeAuthStatus {
+  try {
+    const claudeJsonPath = join(HOME, ".claude.json")
+    if (existsSync(claudeJsonPath)) {
+      const data = JSON.parse(readFileSync(claudeJsonPath, "utf-8"))
+      if (data.oauthAccount?.emailAddress) {
+        return {
+          provider: "claude",
+          loggedIn: true,
+          email: data.oauthAccount.emailAddress,
+          displayName: data.oauthAccount.displayName,
+          accountUuid: data.oauthAccount.accountUuid,
+          organizationName: data.oauthAccount.organizationName,
+        }
+      }
+    }
+  } catch {}
+  return { provider: "claude", loggedIn: false }
+}
+
+export function getClaudeLoginUrl(): string | null {
+  return getCliLoginUrl("claude")
+}
+
+export function completeClaudeLogin(code: string) {
+  return completeCliLogin("claude", code, ["claude.com", "oauth", "authorize"])
+}
+
+export function logoutClaude(): boolean {
+  return logoutCli("claude")
+}
+
+// ── Codex ────────────────────────────────────────────────────
 
 interface CodexAuthStatus {
   provider: "codex"
@@ -152,33 +146,40 @@ export function getCodexAuthStatus(): CodexAuthStatus {
     if (!existsSync(authPath)) {
       return { provider: "codex", loggedIn: false }
     }
-
     const data = JSON.parse(readFileSync(authPath, "utf-8"))
     if (data.tokens?.id_token) {
-      // Decode JWT to get email
       const payload = data.tokens.id_token.split(".")[1]
       const decoded = JSON.parse(Buffer.from(payload, "base64url").toString())
-      return {
-        provider: "codex",
-        loggedIn: true,
-        email: decoded.email,
-        authMode: data.auth_mode || "chatgpt",
-      }
+      return { provider: "codex", loggedIn: true, email: decoded.email, authMode: data.auth_mode || "chatgpt" }
     }
-
     if (data.OPENAI_API_KEY) {
-      return {
-        provider: "codex",
-        loggedIn: true,
-        authMode: "api_key",
-      }
+      return { provider: "codex", loggedIn: true, authMode: "api_key" }
     }
   } catch {}
-
   return { provider: "codex", loggedIn: false }
 }
 
-// ── Combined Status ──────────────────────────────────────────
+export function getCodexLoginUrl(): string | null {
+  return getCliLoginUrl("codex")
+}
+
+export function completeCodexLogin(code: string) {
+  return completeCliLogin("codex", code, ["openai.com", "oauth", "auth"])
+}
+
+export function logoutCodex(): boolean {
+  if (logoutCli("codex")) return true
+  try {
+    const authPath = join(HOME, ".codex", "auth.json")
+    if (existsSync(authPath)) {
+      unlinkSync(authPath)
+      return true
+    }
+  } catch {}
+  return false
+}
+
+// ── Combined ─────────────────────────────────────────────────
 
 export interface AllAuthStatus {
   claude: ClaudeAuthStatus
@@ -186,18 +187,5 @@ export interface AllAuthStatus {
 }
 
 export function getAllAuthStatus(): AllAuthStatus {
-  return {
-    claude: getClaudeAuthStatus(),
-    codex: getCodexAuthStatus(),
-  }
-}
-
-// ── Helpers ──────────────────────────────────────────────────
-
-function extractUrl(text: string): string | null {
-  const match = text.match(/https:\/\/claude\.com\/[^\s]+/)
-  if (match) return match[0]
-  const match2 = text.match(/https:\/\/[^\s]*oauth[^\s]*authorize[^\s]*/)
-  if (match2) return match2[0]
-  return null
+  return { claude: getClaudeAuthStatus(), codex: getCodexAuthStatus() }
 }

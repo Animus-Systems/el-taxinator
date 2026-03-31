@@ -11,7 +11,6 @@ import fs from "fs/promises"
 import JSZip from "jszip"
 import { NextResponse } from "next/server"
 import path from "path"
-import { Readable } from "stream"
 
 const TRANSACTIONS_CHUNK_SIZE = 300
 const FILES_CHUNK_SIZE = 50
@@ -67,9 +66,16 @@ export async function GET(request: Request) {
     }
     csvStream.end()
 
+    const csvContent = await new Promise<string>((resolve) => {
+      let content = ""
+      csvStream.on("data", (chunk) => {
+        content += chunk
+      })
+      csvStream.on("end", () => resolve(content))
+    })
+
     if (!includeAttachments) {
-      const stream = Readable.from(csvStream)
-      return new NextResponse(stream as any, {
+      return new NextResponse(csvContent, {
         headers: {
           "Content-Type": "text/csv",
           "Content-Disposition": `attachment; filename="transactions.csv"`,
@@ -81,13 +87,6 @@ export async function GET(request: Request) {
     const zip = new JSZip()
 
     // Add CSV to zip
-    const csvContent = await new Promise<string>((resolve) => {
-      let content = ""
-      csvStream.on("data", (chunk) => {
-        content += chunk
-      })
-      csvStream.on("end", () => resolve(content))
-    })
     zip.file("transactions.csv", csvContent)
 
     // Process files in chunks

@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db"
+import { calcBillableAmount, calcDurationMinutes } from "@/lib/time-entry-calculations"
 import { Prisma } from "@/prisma/client"
 import { cache } from "react"
 
@@ -23,14 +24,6 @@ export type TimeEntryFilters = {
   clientId?: string
   isBillable?: boolean
   isInvoiced?: boolean
-}
-
-export function calcDurationMinutes(startedAt: Date, endedAt: Date): number {
-  return Math.round((endedAt.getTime() - startedAt.getTime()) / 60000)
-}
-
-export function calcBillableAmount(durationMinutes: number, hourlyRate: number): number {
-  return Math.round((durationMinutes / 60) * hourlyRate)
 }
 
 export const getTimeEntries = cache(async (userId: string, filters?: TimeEntryFilters) => {

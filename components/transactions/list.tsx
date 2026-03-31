@@ -17,12 +17,17 @@ type FieldRenderer = {
   code: string
   classes?: string
   sortable: boolean
-  formatValue?: (transaction: Transaction & any) => React.ReactNode
+  formatValue?: (transaction: TransactionWithRelations) => React.ReactNode
   footerValue?: (transactions: Transaction[]) => React.ReactNode
 }
 
 type FieldWithRenderer = Field & {
   renderer: FieldRenderer
+}
+
+type TransactionWithRelations = Transaction & {
+  category?: Category | null
+  project?: Project | null
 }
 
 export const standardFieldRenderers: Record<string, FieldRenderer> = {
@@ -50,7 +55,7 @@ export const standardFieldRenderers: Record<string, FieldRenderer> = {
     name: "Project",
     code: "projectCode",
     sortable: true,
-    formatValue: (transaction: Transaction & { project: Project }) =>
+    formatValue: (transaction: TransactionWithRelations) =>
       transaction.projectCode ? (
         <Badge className="whitespace-nowrap" style={{ backgroundColor: transaction.project?.color }}>
           {transaction.project?.name || ""}
@@ -63,7 +68,7 @@ export const standardFieldRenderers: Record<string, FieldRenderer> = {
     name: "Category",
     code: "categoryCode",
     sortable: true,
-    formatValue: (transaction: Transaction & { category: Category }) =>
+    formatValue: (transaction: TransactionWithRelations) =>
       transaction.categoryCode ? (
         <Badge className="whitespace-nowrap" style={{ backgroundColor: transaction.category?.color }}>
           {transaction.category?.name || ""}
@@ -179,7 +184,7 @@ const getFieldRenderer = (field: Field): FieldRenderer => {
   }
 }
 
-export function TransactionList({ transactions, fields = [] }: { transactions: Transaction[]; fields?: Field[] }) {
+export function TransactionList({ transactions, fields = [] }: { transactions: TransactionWithRelations[]; fields?: Field[] }) {
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -240,7 +245,7 @@ export function TransactionList({ transactions, fields = [] }: { transactions: T
     })
   }
 
-  const renderFieldInTable = (transaction: Transaction, field: FieldWithRenderer): string | React.ReactNode => {
+  const renderFieldInTable = (transaction: TransactionWithRelations, field: FieldWithRenderer): string | React.ReactNode => {
     if (field.isExtra) {
       return transaction.extra?.[field.code as keyof typeof transaction.extra] ?? ""
     } else if (field.renderer.formatValue) {
@@ -259,7 +264,7 @@ export function TransactionList({ transactions, fields = [] }: { transactions: T
       params.delete("ordering")
     }
     router.push(`/transactions?${params.toString()}`)
-  }, [sorting])
+  }, [router, searchParams, sorting])
 
   const getSortIcon = (field: string) => {
     if (sorting.field !== field) return null

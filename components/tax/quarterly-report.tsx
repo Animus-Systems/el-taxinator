@@ -2,8 +2,7 @@
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Separator } from "@/components/ui/separator"
-import { Modelo130Result, Modelo303Result, Quarter } from "@/models/tax"
+import type { Modelo130Result, Modelo303Result, Quarter } from "@/models/tax"
 import { Download } from "lucide-react"
 
 type Props = {
@@ -87,6 +86,7 @@ export function QuarterlyReport({ modelo303, modelo130, year, quarter }: Props) 
   return (
     <div className="space-y-6 max-w-2xl">
       <p className="text-sm text-muted-foreground">
+        Ejercicio {year}, trimestre {quarter}.{" "}
         Los importes del Modelo 130 son acumulativos desde el 1 de enero hasta el fin del trimestre, según las instrucciones de la Agencia Tributaria.
         Los importes del Modelo 303 corresponden únicamente al trimestre seleccionado.
       </p>

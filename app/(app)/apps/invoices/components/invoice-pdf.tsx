@@ -1,3 +1,5 @@
+/* eslint-disable jsx-a11y/alt-text */
+
 import { formatCurrency } from "@/lib/utils"
 import { Document, Font, Image, Page, StyleSheet, Text, View } from "@react-pdf/renderer"
 import { formatDate } from "date-fns"

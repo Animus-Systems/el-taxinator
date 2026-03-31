@@ -3,8 +3,8 @@
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { fetchAsBase64 } from "@/lib/utils"
-import { SettingsMap } from "@/models/settings"
 import { Currency, User } from "@/prisma/client"
+import type { SettingsMap } from "@/models/settings"
 import { FileDown, Loader2, Save, TextSelect, X } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { startTransition, useMemo, useReducer, useState } from "react"
@@ -16,9 +16,9 @@ import {
 } from "../actions"
 import defaultTemplates, { InvoiceTemplate } from "../default-templates"
 import { InvoiceAppData } from "../page"
-import { InvoiceFormData, InvoicePage } from "./invoice-page"
+import { InvoiceFormAction, InvoiceFormData, InvoicePage } from "./invoice-page"
 
-function invoiceFormReducer(state: InvoiceFormData, action: any): InvoiceFormData {
+function invoiceFormReducer(state: InvoiceFormData, action: InvoiceFormAction): InvoiceFormData {
   switch (action.type) {
     case "SET_FORM":
       return action.payload
@@ -82,7 +82,7 @@ export function InvoiceGenerator({
 }) {
   const templates: InvoiceTemplate[] = useMemo(
     () => [...defaultTemplates(user, settings), ...(appData?.templates || [])],
-    [appData]
+    [appData, settings, user]
   )
 
   const [selectedTemplate, setSelectedTemplate] = useState<string>(templates[0].name)

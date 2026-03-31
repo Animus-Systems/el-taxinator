@@ -1,9 +1,9 @@
 "use client"
 
-import { Badge } from "@/components/ui/badge"
+import { Badge, type BadgeProps } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { calcInvoiceTotals } from "@/models/invoices"
+import { calcInvoiceTotals } from "@/lib/invoice-calculations"
 import { Client, Quote, QuoteItem } from "@/prisma/client"
 import { formatCurrency } from "@/lib/utils"
 import { format } from "date-fns"
@@ -12,7 +12,7 @@ import { Eye } from "lucide-react"
 
 type QuoteWithRelations = Quote & { client: Client | null; items: QuoteItem[] }
 
-const STATUS_COLORS: Record<string, string> = {
+const STATUS_COLORS: Record<string, NonNullable<BadgeProps["variant"]>> = {
   draft: "secondary",
   sent: "default",
   accepted: "outline",
@@ -56,7 +56,7 @@ export function QuoteList({ quotes }: { quotes: QuoteWithRelations[] }) {
               <TableCell>{quote.expiryDate ? format(quote.expiryDate, "yyyy-MM-dd") : "—"}</TableCell>
               <TableCell>{formatCurrency(total, "EUR")}</TableCell>
               <TableCell>
-                <Badge variant={STATUS_COLORS[quote.status] as any}>{quote.status}</Badge>
+                <Badge variant={STATUS_COLORS[quote.status] ?? "secondary"}>{quote.status}</Badge>
               </TableCell>
               <TableCell className="text-right">
                 <Button asChild variant="ghost" size="icon">

@@ -1,5 +1,5 @@
 import { formatCurrency, formatPeriodLabel } from "@/lib/utils"
-import { DetailedTimeSeriesData } from "@/models/stats"
+import type { DetailedTimeSeriesData } from "@/models/stats"
 
 interface ChartTooltipProps {
   data: DetailedTimeSeriesData | null

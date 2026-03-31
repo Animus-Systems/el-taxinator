@@ -1,8 +1,8 @@
 "use server"
 
 import { prisma } from "@/lib/db"
+import { fullPathForFile } from "@/lib/files"
 import { unlink } from "fs/promises"
-import path from "path"
 import { cache } from "react"
 import { getTransactionById } from "./transactions"
 
@@ -68,13 +68,16 @@ export const updateFile = async (id: string, userId: string, data: any) => {
 }
 
 export const deleteFile = async (id: string, userId: string) => {
-  const file = await getFileById(id, userId)
+  const file = await prisma.file.findFirst({
+    where: { id, userId },
+    include: { user: true },
+  })
   if (!file) {
     return
   }
 
   try {
-    await unlink(path.resolve(path.normalize(file.path)))
+    await unlink(fullPathForFile(file.user, file))
   } catch (error) {
     console.error("Error deleting file:", error)
   }

@@ -20,7 +20,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ prog
   const encoder = new TextEncoder()
   const stream = new ReadableStream({
     async start(controller) {
-      let lastSent: any = null
+      let lastSent: string | null = null
       let stopped = false
 
       req.signal.addEventListener("abort", () => {
@@ -37,9 +37,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ prog
         }
 
         // Only send if progress has changed
-        if (JSON.stringify(progress) !== JSON.stringify(lastSent)) {
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify(progress)}\n\n`))
-          lastSent = progress
+        const currentPayload = JSON.stringify(progress)
+        if (currentPayload !== lastSent) {
+          controller.enqueue(encoder.encode(`data: ${currentPayload}\n\n`))
+          lastSent = currentPayload
 
           // If progress is complete, close the connection
           if (progress.current === progress.total && progress.total > 0) {

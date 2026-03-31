@@ -1,8 +1,7 @@
 import { prisma } from "@/lib/db"
 import { Prisma } from "@/prisma/client"
 import { cache } from "react"
-import { isDatabaseEmpty } from "./defaults"
-import { createUserDefaults } from "./defaults"
+import { createUserDefaults, isDatabaseEmpty } from "./defaults-server"
 
 export const SELF_HOSTED_USER = {
   email: "taxhacker@localhost",

@@ -127,12 +127,12 @@ export function TimerWidget({ projects, clients }: Props) {
         </div>
         <div className="w-40 space-y-1">
           <Label>Project</Label>
-          <Select value={projectCode} onValueChange={setProjectCode} disabled={!!active}>
+          <Select value={projectCode || "__none__"} onValueChange={(v) => setProjectCode(v === "__none__" ? "" : v)} disabled={!!active}>
             <SelectTrigger>
               <SelectValue placeholder="Project..." />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">None</SelectItem>
+              <SelectItem value="__none__">None</SelectItem>
               {projects.map((p) => (
                 <SelectItem key={p.code} value={p.code}>
                   {p.name}
@@ -143,12 +143,12 @@ export function TimerWidget({ projects, clients }: Props) {
         </div>
         <div className="w-40 space-y-1">
           <Label>Client</Label>
-          <Select value={clientId} onValueChange={setClientId} disabled={!!active}>
+          <Select value={clientId || "__none__"} onValueChange={(v) => setClientId(v === "__none__" ? "" : v)} disabled={!!active}>
             <SelectTrigger>
               <SelectValue placeholder="Client..." />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">None</SelectItem>
+              <SelectItem value="__none__">None</SelectItem>
               {clients.map((c) => (
                 <SelectItem key={c.id} value={c.id}>
                   {c.name}

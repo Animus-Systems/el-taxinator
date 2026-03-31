@@ -18,7 +18,22 @@ import {
 } from "@/components/ui/sidebar"
 import { UserProfile } from "@/lib/auth"
 import config from "@/lib/config"
-import { Calculator, Clock, ClockArrowUp, FileText, Gift, House, Import, LayoutDashboard, Receipt, Settings, Upload, UserCog, Users } from "lucide-react"
+import {
+  Calculator,
+  Clock,
+  ClockArrowUp,
+  FileText,
+  Gift,
+  House,
+  Import,
+  Package,
+  Receipt,
+  ScrollText,
+  Settings,
+  Upload,
+  UserCog,
+  Users,
+} from "lucide-react"
 import Image from "next/image"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
@@ -95,7 +110,7 @@ export function AppSidebar({
                   <SidebarMenuButton asChild>
                     <Link href="/unsorted">
                       <ClockArrowUp />
-                      <span>Unsorted</span>
+                      <span>Inbox</span>
                       {unsortedFilesCount > 0 && (
                         <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary text-xs font-medium text-primary-foreground">
                           {unsortedFilesCount}
@@ -114,11 +129,27 @@ export function AppSidebar({
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItemWithHighlight>
+                <SidebarMenuItemWithHighlight href="/quotes">
+                  <SidebarMenuButton asChild>
+                    <Link href="/quotes">
+                      <ScrollText />
+                      <span>Quotes</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItemWithHighlight>
                 <SidebarMenuItemWithHighlight href="/clients">
                   <SidebarMenuButton asChild>
                     <Link href="/clients">
                       <Users />
                       <span>Clients</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItemWithHighlight>
+                <SidebarMenuItemWithHighlight href="/products">
+                  <SidebarMenuButton asChild>
+                    <Link href="/products">
+                      <Package />
+                      <span>Products</span>
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItemWithHighlight>
@@ -135,14 +166,6 @@ export function AppSidebar({
                     <Link href="/tax">
                       <Calculator />
                       <span>Impuestos</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItemWithHighlight>
-                <SidebarMenuItemWithHighlight href="/apps">
-                  <SidebarMenuButton asChild>
-                    <Link href="/apps">
-                      <LayoutDashboard />
-                      <span>Apps</span>
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItemWithHighlight>

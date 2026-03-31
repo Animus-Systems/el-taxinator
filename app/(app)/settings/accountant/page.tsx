@@ -11,7 +11,7 @@ export default async function AccountantSettingsPage() {
   const user = await getCurrentUser()
   const invites = await getAccountantInvites(user.id)
 
-  const invitesWithUrls = invites.map((invite) => ({
+  const invitesWithUrls = invites.map((invite: (typeof invites)[number]) => ({
     ...invite,
     permissions: invite.permissions as AccountantPermissions,
     accessUrl: `${config.app.baseURL}/accountant/${invite.token}`,

@@ -68,6 +68,7 @@ export function CliAuthSection() {
   const [loading, setLoading] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loginUrl, setLoginUrl] = useState<string | null>(null)
+  const [loginProvider, setLoginProvider] = useState<string | null>(null)
   const [authCode, setAuthCode] = useState("")
   const [submitting, setSubmitting] = useState(false)
 
@@ -96,6 +97,7 @@ export function CliAuthSection() {
 
       if (data.loginUrl) {
         setLoginUrl(data.loginUrl)
+        setLoginProvider(provider)
         window.open(data.loginUrl, "_blank", "width=600,height=700")
       } else if (data.error) {
         setError(data.error)
@@ -116,12 +118,13 @@ export function CliAuthSection() {
       const res = await fetch("/api/auth/cli", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "complete-login", provider: "claude", code: authCode }),
+        body: JSON.stringify({ action: "complete-login", provider: loginProvider, code: authCode }),
       })
       const data = await res.json()
 
       if (data.success) {
         setLoginUrl(null)
+        setLoginProvider(null)
         setAuthCode("")
         if (data.status) setStatus(data.status)
         else await fetchStatus()

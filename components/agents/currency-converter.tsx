@@ -2,7 +2,7 @@ import { FormError } from "@/components/forms/error"
 import { formatCurrency } from "@/lib/utils"
 import { format, startOfDay } from "date-fns"
 import { Loader2 } from "lucide-react"
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { Button } from "../ui/button"
 
 async function getCurrencyRate(currencyCodeFrom: string, currencyCodeTo: string, date: Date): Promise<number> {
@@ -39,7 +39,7 @@ export const CurrencyConverterTool = ({
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const fetchAndUpdateRates = async () => {
+  const fetchAndUpdateRates = useCallback(async () => {
     try {
       setIsLoading(true)
       setError(null)
@@ -55,7 +55,7 @@ export const CurrencyConverterTool = ({
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [normalizedDate, originalCurrencyCode, originalTotal, targetCurrencyCode])
 
   const handleRestart = () => {
     setError(null)
@@ -64,11 +64,11 @@ export const CurrencyConverterTool = ({
 
   useEffect(() => {
     fetchAndUpdateRates()
-  }, [originalCurrencyCode, targetCurrencyCode, normalizedDateString, originalTotal])
+  }, [fetchAndUpdateRates, normalizedDateString])
 
   useEffect(() => {
     onChange?.(convertedTotal)
-  }, [convertedTotal])
+  }, [convertedTotal, onChange])
 
   if (!originalTotal || !originalCurrencyCode || !targetCurrencyCode || originalCurrencyCode === targetCurrencyCode) {
     return <></>
@@ -94,7 +94,9 @@ export const CurrencyConverterTool = ({
               value={convertedTotal}
               onChange={(e) => {
                 const newValue = parseFloat(e.target.value || "0")
-                !isNaN(newValue) && setConvertedTotal(Math.round(newValue * 100) / 100)
+                if (!isNaN(newValue)) {
+                  setConvertedTotal(Math.round(newValue * 100) / 100)
+                }
               }}
               className="w-32 rounded-md border border-input px-2 py-1"
             />

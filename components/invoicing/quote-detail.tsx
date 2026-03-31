@@ -5,7 +5,7 @@ import { convertQuoteToInvoiceAction } from "@/app/(app)/invoices/actions"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { calcInvoiceTotals } from "@/models/invoices"
+import { calcInvoiceTotals } from "@/lib/invoice-calculations"
 import { formatCurrency } from "@/lib/utils"
 import { Client, Invoice, Product, Quote, QuoteItem } from "@/prisma/client"
 import { format } from "date-fns"
@@ -23,12 +23,8 @@ type QuoteWithRelations = Quote & {
 
 export function QuoteDetail({
   quote,
-  clients,
-  products,
 }: {
   quote: QuoteWithRelations
-  clients: Client[]
-  products: Product[]
 }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()

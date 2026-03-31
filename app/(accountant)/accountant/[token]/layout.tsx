@@ -1,6 +1,6 @@
 import { getAccountantInviteByToken, logAccountantAccess } from "@/models/accountants"
 import { AccountantPermissions } from "@/models/accountants"
-import { Calculator, Clock, FileText, LogOut, Receipt } from "lucide-react"
+import { Calculator, Clock, FileText, Receipt } from "lucide-react"
 import Image from "next/image"
 import Link from "next/link"
 import { notFound } from "next/navigation"

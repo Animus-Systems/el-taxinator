@@ -1,5 +1,6 @@
 "use server"
 
+import { timeEntryFormSchema } from "@/forms/time"
 import { ActionState } from "@/lib/actions"
 import { getCurrentUser } from "@/lib/auth"
 import {
@@ -16,24 +17,10 @@ export async function createTimeEntryAction(
 ): Promise<ActionState<{ id: string }>> {
   try {
     const user = await getCurrentUser()
+    const parsed = timeEntryFormSchema.safeParse(Object.fromEntries(formData.entries()))
+    if (!parsed.success) return { success: false, error: parsed.error.message }
 
-    const startedAt = formData.get("startedAt") as string
-    const endedAt = (formData.get("endedAt") as string) || null
-    const durationRaw = formData.get("durationMinutes") as string
-    const hourlyRateRaw = formData.get("hourlyRate") as string
-
-    const entry = await createTimeEntry(user.id, {
-      description: (formData.get("description") as string) || null,
-      projectCode: (formData.get("projectCode") as string) || null,
-      clientId: (formData.get("clientId") as string) || null,
-      startedAt: new Date(startedAt),
-      endedAt: endedAt ? new Date(endedAt) : null,
-      durationMinutes: durationRaw ? parseInt(durationRaw) : null,
-      hourlyRate: hourlyRateRaw ? Math.round(parseFloat(hourlyRateRaw) * 100) : null,
-      currencyCode: (formData.get("currencyCode") as string) || null,
-      isBillable: formData.get("isBillable") === "true",
-      notes: (formData.get("notes") as string) || null,
-    })
+    const entry = await createTimeEntry(user.id, parsed.data)
 
     revalidatePath("/time")
     return { success: true, data: { id: entry.id } }
@@ -50,24 +37,10 @@ export async function updateTimeEntryAction(
   try {
     const user = await getCurrentUser()
     const id = formData.get("id") as string
+    const parsed = timeEntryFormSchema.safeParse(Object.fromEntries(formData.entries()))
+    if (!parsed.success) return { success: false, error: parsed.error.message }
 
-    const startedAt = formData.get("startedAt") as string
-    const endedAt = (formData.get("endedAt") as string) || null
-    const durationRaw = formData.get("durationMinutes") as string
-    const hourlyRateRaw = formData.get("hourlyRate") as string
-
-    await updateTimeEntry(id, user.id, {
-      description: (formData.get("description") as string) || null,
-      projectCode: (formData.get("projectCode") as string) || null,
-      clientId: (formData.get("clientId") as string) || null,
-      startedAt: new Date(startedAt),
-      endedAt: endedAt ? new Date(endedAt) : null,
-      durationMinutes: durationRaw ? parseInt(durationRaw) : null,
-      hourlyRate: hourlyRateRaw ? Math.round(parseFloat(hourlyRateRaw) * 100) : null,
-      currencyCode: (formData.get("currencyCode") as string) || null,
-      isBillable: formData.get("isBillable") === "true",
-      notes: (formData.get("notes") as string) || null,
-    })
+    await updateTimeEntry(id, user.id, parsed.data)
 
     revalidatePath("/time")
     revalidatePath(`/time/${id}`)

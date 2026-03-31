@@ -1,3 +1,4 @@
+import { accountantCommentSchema } from "@/forms/accountant"
 import { createAccountantComment, getAccountantInviteByToken } from "@/models/accountants"
 import { NextRequest, NextResponse } from "next/server"
 
@@ -15,15 +16,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 })
   }
 
-  const { entityType, entityId, body: text } = body
-  if (!entityType || !entityId || !text?.trim()) {
-    return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
+  const parsed = accountantCommentSchema.safeParse(body)
+  if (!parsed.success) {
+    return NextResponse.json({ error: parsed.error.message }, { status: 400 })
   }
 
-  if (text.trim().length > 2000) {
-    return NextResponse.json({ error: "Comment too long (max 2000 chars)" }, { status: 400 })
-  }
-
-  const comment = await createAccountantComment(invite.id, entityType, entityId, text.trim())
+  const comment = await createAccountantComment(invite.id, parsed.data.entityType, parsed.data.entityId, parsed.data.body)
   return NextResponse.json(comment)
 }

@@ -1,5 +1,5 @@
-import { TimeEntrySummary } from "@/models/time-entries"
 import { formatCurrency } from "@/lib/utils"
+import type { TimeEntrySummary } from "@/models/time-entries"
 
 function StatCard({ label, value }: { label: string; value: string }) {
   return (

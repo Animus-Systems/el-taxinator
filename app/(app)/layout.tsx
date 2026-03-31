@@ -46,21 +46,21 @@ export default async function RootLayout({ children }: { children: React.ReactNo
 
   return (
     <NotificationProvider>
-      <ScreenDropArea>
-        <SidebarProvider>
-          <MobileMenu unsortedFilesCount={unsortedFilesCount} />
-          <AppSidebar
-            profile={userProfile}
-            unsortedFilesCount={unsortedFilesCount}
-            isSelfHosted={config.selfHosted.isEnabled}
-          />
-          <SidebarInset className="w-full h-full mt-[60px] md:mt-0 overflow-auto">
+      <SidebarProvider>
+        <MobileMenu unsortedFilesCount={unsortedFilesCount} />
+        <AppSidebar
+          profile={userProfile}
+          unsortedFilesCount={unsortedFilesCount}
+          isSelfHosted={config.selfHosted.isEnabled}
+        />
+        <SidebarInset style={{ marginLeft: "var(--sidebar-width)" }} className="mt-[60px] md:mt-0 overflow-auto max-md:!ml-0">
+          <ScreenDropArea>
             {isSubscriptionExpired(user) && <SubscriptionExpired />}
             {children}
-          </SidebarInset>
-        </SidebarProvider>
-        <Toaster />
-      </ScreenDropArea>
+          </ScreenDropArea>
+        </SidebarInset>
+      </SidebarProvider>
+      <Toaster />
     </NotificationProvider>
   )
 }

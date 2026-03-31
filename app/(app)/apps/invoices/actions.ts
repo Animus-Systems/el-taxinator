@@ -16,15 +16,14 @@ import { randomUUID } from "crypto"
 import { mkdir, writeFile } from "fs/promises"
 import { revalidatePath } from "next/cache"
 import path from "path"
-import { createElement } from "react"
 import { InvoiceFormData } from "./components/invoice-page"
 import { InvoicePDF } from "./components/invoice-pdf"
 import { InvoiceTemplate } from "./default-templates"
 import { InvoiceAppData } from "./page"
 
 export async function generateInvoicePDF(data: InvoiceFormData): Promise<Uint8Array> {
-  const pdfElement = createElement(InvoicePDF, { data })
-  const buffer = await renderToBuffer(pdfElement as any)
+  const pdfDocument = InvoicePDF({ data }) as Parameters<typeof renderToBuffer>[0]
+  const buffer = await renderToBuffer(pdfDocument)
   return new Uint8Array(buffer)
 }
 

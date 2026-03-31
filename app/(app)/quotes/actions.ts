@@ -1,13 +1,15 @@
 "use server"
 
+import { quoteFormSchema } from "@/forms/invoices"
 import { ActionState } from "@/lib/actions"
 import { getCurrentUser } from "@/lib/auth"
 import { createQuote, deleteQuote, updateQuote } from "@/models/invoices"
 import { Quote } from "@/prisma/client"
 import { revalidatePath } from "next/cache"
 
-function parseItems(raw: string) {
+function parseItems(raw: FormDataEntryValue | null) {
   try {
+    if (!raw || typeof raw !== "string") return []
     return JSON.parse(raw)
   } catch {
     return []
@@ -20,15 +22,18 @@ export async function createQuoteAction(
 ): Promise<ActionState<Quote>> {
   try {
     const user = await getCurrentUser()
-    const quote = await createQuote(user.id, {
+    const parsed = quoteFormSchema.safeParse({
       clientId: (formData.get("clientId") as string) || null,
-      number: formData.get("number") as string,
-      status: (formData.get("status") as string) || "draft",
-      issueDate: new Date(formData.get("issueDate") as string),
-      expiryDate: formData.get("expiryDate") ? new Date(formData.get("expiryDate") as string) : null,
+      number: formData.get("number"),
+      status: formData.get("status") || "draft",
+      issueDate: formData.get("issueDate"),
+      expiryDate: (formData.get("expiryDate") as string) || null,
       notes: (formData.get("notes") as string) || null,
-      items: parseItems(formData.get("items") as string),
+      items: parseItems(formData.get("items")),
     })
+    if (!parsed.success) return { success: false, error: parsed.error.message }
+
+    const quote = await createQuote(user.id, parsed.data)
     revalidatePath("/quotes")
     return { success: true, data: quote }
   } catch (e) {
@@ -44,15 +49,18 @@ export async function updateQuoteAction(
   try {
     const user = await getCurrentUser()
     const quoteId = formData.get("quoteId") as string
-    await updateQuote(quoteId, user.id, {
+    const parsed = quoteFormSchema.safeParse({
       clientId: (formData.get("clientId") as string) || null,
-      number: formData.get("number") as string,
-      status: (formData.get("status") as string) || "draft",
-      issueDate: new Date(formData.get("issueDate") as string),
-      expiryDate: formData.get("expiryDate") ? new Date(formData.get("expiryDate") as string) : null,
+      number: formData.get("number"),
+      status: formData.get("status") || "draft",
+      issueDate: formData.get("issueDate"),
+      expiryDate: (formData.get("expiryDate") as string) || null,
       notes: (formData.get("notes") as string) || null,
-      items: parseItems(formData.get("items") as string),
+      items: parseItems(formData.get("items")),
     })
+    if (!parsed.success) return { success: false, error: parsed.error.message }
+
+    await updateQuote(quoteId, user.id, parsed.data)
     revalidatePath("/quotes")
     revalidatePath(`/quotes/${quoteId}`)
     return { success: true }

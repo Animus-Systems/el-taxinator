@@ -1,5 +1,6 @@
 "use server"
 
+import { invoiceFormSchema } from "@/forms/invoices"
 import { ActionState } from "@/lib/actions"
 import { getCurrentUser } from "@/lib/auth"
 import {
@@ -12,8 +13,9 @@ import {
 import { Invoice } from "@/prisma/client"
 import { revalidatePath } from "next/cache"
 
-function parseItems(raw: string) {
+function parseItems(raw: FormDataEntryValue | null) {
   try {
+    if (!raw || typeof raw !== "string") return []
     return JSON.parse(raw)
   } catch {
     return []
@@ -26,16 +28,19 @@ export async function createInvoiceAction(
 ): Promise<ActionState<Invoice>> {
   try {
     const user = await getCurrentUser()
-    const invoice = await createInvoice(user.id, {
+    const parsed = invoiceFormSchema.safeParse({
       clientId: (formData.get("clientId") as string) || null,
-      number: formData.get("number") as string,
-      status: (formData.get("status") as string) || "draft",
-      issueDate: new Date(formData.get("issueDate") as string),
-      dueDate: formData.get("dueDate") ? new Date(formData.get("dueDate") as string) : null,
+      number: formData.get("number"),
+      status: formData.get("status") || "draft",
+      issueDate: formData.get("issueDate"),
+      dueDate: (formData.get("dueDate") as string) || null,
       notes: (formData.get("notes") as string) || null,
-      irpfRate: parseFloat((formData.get("irpfRate") as string) || "0") || 0,
-      items: parseItems(formData.get("items") as string),
+      irpfRate: formData.get("irpfRate") || 0,
+      items: parseItems(formData.get("items")),
     })
+    if (!parsed.success) return { success: false, error: parsed.error.message }
+
+    const invoice = await createInvoice(user.id, parsed.data)
     revalidatePath("/invoices")
     return { success: true, data: invoice }
   } catch (e) {
@@ -51,16 +56,19 @@ export async function updateInvoiceAction(
   try {
     const user = await getCurrentUser()
     const invoiceId = formData.get("invoiceId") as string
-    await updateInvoice(invoiceId, user.id, {
+    const parsed = invoiceFormSchema.safeParse({
       clientId: (formData.get("clientId") as string) || null,
-      number: formData.get("number") as string,
-      status: (formData.get("status") as string) || "draft",
-      issueDate: new Date(formData.get("issueDate") as string),
-      dueDate: formData.get("dueDate") ? new Date(formData.get("dueDate") as string) : null,
+      number: formData.get("number"),
+      status: formData.get("status") || "draft",
+      issueDate: formData.get("issueDate"),
+      dueDate: (formData.get("dueDate") as string) || null,
       notes: (formData.get("notes") as string) || null,
-      irpfRate: parseFloat((formData.get("irpfRate") as string) || "0") || 0,
-      items: parseItems(formData.get("items") as string),
+      irpfRate: formData.get("irpfRate") || 0,
+      items: parseItems(formData.get("items")),
     })
+    if (!parsed.success) return { success: false, error: parsed.error.message }
+
+    await updateInvoice(invoiceId, user.id, parsed.data)
     revalidatePath("/invoices")
     revalidatePath(`/invoices/${invoiceId}`)
     return { success: true }

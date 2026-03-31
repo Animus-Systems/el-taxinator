@@ -173,6 +173,7 @@ We use:
 - **Next.js 15+** for the frontend and API
 - **Prisma** for database models and migrations
 - **PostgreSQL** as the database (PostgreSQL 17+ recommended)
+- **Node.js 20.19+** recommended for dependency compatibility
 - **Ghostscript and GraphicsMagick** for PDF processing (install on macOS via `brew install gs graphicsmagick`)
 
 Set up your local development environment:
@@ -183,32 +184,66 @@ git clone https://github.com/vas3k/Taxinator.git
 cd Taxinator
 
 # Install dependencies
-npm install
+yarn install
 
 # Set up environment variables
 cp .env.example .env
 
 # Edit .env with your configuration
-# Make sure to set DATABASE_URL to your PostgreSQL connection string
-# Example: postgresql://user@localhost:5432/taxhacker
+# The default development database runs on localhost:5435
+# Example: postgresql://postgres:postgres@localhost:5435/taxhacker
+
+# Start the development database
+yarn db:dev:up
 
 # Initialize the database
-npx prisma generate && npx prisma migrate dev
+yarn prisma generate
+yarn prisma migrate dev
 
 # Start the development server
-npm run dev
+yarn dev
 ```
 
 Visit `http://localhost:7331` to see your local Taxinator instance in action.
 
-For a production build, instead of `npm run dev` use the following commands:
+### Development Workflow
+
+For active development, the recommended setup is:
+
+- run only PostgreSQL in Docker
+- run the Next.js app on the host with `yarn dev`
+
+Useful commands:
+
+```bash
+# Start only the development database
+yarn db:dev:up
+
+# Stop the development database
+yarn db:dev:down
+
+# Tail database logs
+yarn db:dev:logs
+```
+
+The development database is exposed on `127.0.0.1:5435` to avoid conflicts with other local PostgreSQL services.
+
+If you were previously running the full Docker app stack and want to switch to host development, stop the app container first so port `7331` is free:
+
+```bash
+docker compose -f docker-compose.build.yml stop app
+```
+
+Then keep PostgreSQL running via `docker-compose.dev.yml` and use `yarn dev` for the app.
+
+For a production build, instead of `yarn dev` use the following commands:
 
 ```bash
 # Build the application
-npm run build
+yarn build
 
 # Start the production server
-npm run start
+yarn start
 ```
 
 ## 🤝 Contributing

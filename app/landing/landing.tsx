@@ -43,10 +43,10 @@ export default function LandingPage() {
               🚀 Under Active Development
             </div>
             <h1 className="text-5xl font-bold tracking-tight sm:text-6xl mb-6 bg-gradient-to-r from-gray-900 via-pink-700 to-indigo-700 bg-clip-text text-transparent pb-2">
-              Let AI finally care about your taxes, scan your receipts and analyze your expenses
+              Self-hosted back office for freelancers: receipts, invoices, time, and tax reporting
             </h1>
             <p className="text-xl text-gray-700 mb-8 max-w-2xl mx-auto font-medium">
-              Self-hosted accounting app crafted for freelancers, indie-hackers and small businesses
+              Run client work, log billable hours, issue invoices, and keep your transaction archive in one place.
             </p>
             <div className="flex gap-4 justify-center text-sm md:text-lg">
               <Link
@@ -80,10 +80,10 @@ export default function LandingPage() {
           <div className="text-center mb-16">
             <h2 className="flex flex-col gap-3 mb-4">
               <span className="text-6xl font-bold bg-gradient-to-r from-pink-600 to-indigo-600 bg-clip-text text-transparent">
-                F∗ck Taxes
+                Freelancer Ops
               </span>
               <span className="text-4xl font-bold bg-gradient-to-r from-gray-900 to-gray-600 bg-clip-text text-transparent">
-                Taxinator saves you time, money and nerves
+                Taxinator keeps the operational and tax side of your business in one workflow
               </span>
             </h2>
           </div>
@@ -95,7 +95,7 @@ export default function LandingPage() {
                 🤖 LLM-Powered
               </div>
               <h3 className="text-2xl font-bold mb-4 bg-gradient-to-r from-blue-700 to-indigo-700 bg-clip-text text-transparent">
-                Analyze photos and invoices with AI
+                Turn receipts and supplier documents into structured transactions
               </h3>
               <ul className="space-y-3 text-gray-700">
                 <li className="flex items-center">
@@ -206,31 +206,31 @@ export default function LandingPage() {
             </div>
             <div className="flex-1 min-w-60">
               <div className="inline-block px-4 py-2 rounded-full bg-gradient-to-r from-purple-500 to-indigo-600 text-white text-sm font-bold mb-4 shadow-lg">
-                📋 Invoice Generator
+                📋 Revenue Workflow
               </div>
               <h3 className="text-2xl font-bold mb-4 bg-gradient-to-r from-purple-700 to-indigo-700 bg-clip-text text-transparent">
-                Create custom invoices
+                Create invoices, quotes, and reusable billing templates
               </h3>
               <ul className="space-y-3 text-gray-700">
                 <li className="flex items-center">
                   <span className="text-purple-600 mr-3 text-lg">📄</span>
-                  Advanced invoice generator to create any invoice in any language
+                  Generate polished invoices and quotes with your own branding
                 </li>
                 <li className="flex items-center">
                   <span className="text-purple-600 mr-3 text-lg">📄</span>
-                  Edit any field, even labels and titles
+                  Keep client-facing copy, labels, and totals editable
                 </li>
                 <li className="flex items-center">
                   <span className="text-purple-600 mr-3 text-lg">📄</span>
-                  Export invoices to PDF or as transactions
+                  Export invoices to PDF or store them back in your transaction ledger
                 </li>
                 <li className="flex items-center">
                   <span className="text-purple-600 mr-3 text-lg">📄</span>
-                  Save invoices as templates to reuse them later
+                  Save templates for repeated billing flows
                 </li>
                 <li className="flex items-center">
                   <span className="text-purple-600 mr-3 text-lg">📄</span>
-                  Native support for both included and excluded taxes (VAT, GST, etc.)
+                  Combine VAT, retention, and extra fees without leaving the app
                 </li>
               </ul>
             </div>
@@ -297,7 +297,7 @@ export default function LandingPage() {
                 </li>
                 <li className="flex items-center">
                   <span className="text-orange-600 mr-3 text-lg">📤</span>
-                  Download full data archive to migrate to another service. We don't take away or limit what you do with
+                  Download full data archive to migrate to another service. We do not take away or limit what you do with
                   your data
                 </li>
               </ul>
@@ -318,7 +318,7 @@ export default function LandingPage() {
         <div className="max-w-7xl mx-auto relative z-10">
           <div className="text-center mb-16">
             <h2 className="text-3xl font-bold mb-4 bg-gradient-to-r from-pink-600 to-indigo-600 bg-clip-text text-transparent">
-              Choose Your Version of Taxinator
+              Choose How You Want To Run Taxinator
             </h2>
           </div>
           <div className="grid md:grid-cols-2 gap-16">
@@ -368,7 +368,7 @@ export default function LandingPage() {
               <ul className="space-y-3 text-gray-700 mb-8">
                 <li className="flex items-center">
                   <span className="text-purple-600 mr-3 text-lg">🎯</span>
-                  SaaS version if you don't want to hassle with own servers and deployments
+                  SaaS version if you do not want to handle your own servers and deployments
                 </li>
                 <li className="flex items-center">
                   <span className="text-purple-600 mr-3 text-lg">🤖</span>

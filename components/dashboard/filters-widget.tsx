@@ -2,7 +2,7 @@
 
 import { DateRangePicker } from "@/components/forms/date-range-picker"
 import { useTransactionFilters } from "@/hooks/use-transaction-filters"
-import { TransactionFilters } from "@/models/transactions"
+import type { TransactionFilters } from "@/models/transactions"
 import { format } from "date-fns"
 
 export function FiltersWidget({
