@@ -5,6 +5,8 @@ import { Input } from "@/components/ui/input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Check, Edit, Trash2 } from "lucide-react"
 import { type ReactNode, useState } from "react"
+import { useLocale, useTranslations } from "next-intl"
+import { getLocalizedValue } from "@/lib/i18n-db"
 
 interface CrudColumn<T> {
   key: keyof T
@@ -24,6 +26,8 @@ interface CrudProps<T> {
 }
 
 export function CrudTable<T extends Record<string, unknown>>({ items, columns, onDelete, onAdd, onEdit }: CrudProps<T>) {
+  const t = useTranslations("settings")
+  const locale = useLocale()
   const [isAdding, setIsAdding] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [newItem, setNewItem] = useState<Partial<T>>(itemDefaults(columns))
@@ -35,6 +39,13 @@ export function CrudTable<T extends Record<string, unknown>>({ items, columns, o
   const renderPrimitiveValue = (value: unknown): ReactNode => {
     if (value == null) {
       return ""
+    }
+    // Localize i18n values — parsed objects or JSON strings
+    if (typeof value === "object" && value !== null && !Array.isArray(value)) {
+      return getLocalizedValue(value, locale)
+    }
+    if (typeof value === "string" && value.startsWith("{")) {
+      return getLocalizedValue(value, locale)
     }
     if (typeof value === "boolean") {
       return value ? "True" : "False"
@@ -285,7 +296,7 @@ export function CrudTable<T extends Record<string, unknown>>({ items, columns, o
             {columns.map((column) => (
               <TableHead key={String(column.key)}>{column.label}</TableHead>
             ))}
-            <TableHead className="w-[100px]">Actions</TableHead>
+            <TableHead className="w-[100px]">{t("actions")}</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -302,11 +313,11 @@ export function CrudTable<T extends Record<string, unknown>>({ items, columns, o
                 <div className="flex gap-2">
                   {editingId === String(item.code ?? item.id ?? "") ? (
                     <>
-                      <Button size="sm" onClick={() => handleEdit(String(item.code ?? item.id ?? ""))} aria-label="Save changes">
-                        Save
+                      <Button size="sm" onClick={() => handleEdit(String(item.code ?? item.id ?? ""))} aria-label={t("saveNewItem")}>
+                        {t("saveItem")}
                       </Button>
-                      <Button size="sm" variant="outline" onClick={() => setEditingId(null)} aria-label="Cancel editing">
-                        Cancel
+                      <Button size="sm" variant="outline" onClick={() => setEditingId(null)} aria-label={t("cancelNewItem")}>
+                        {t("cancelEditing")}
                       </Button>
                     </>
                   ) : (
@@ -319,7 +330,7 @@ export function CrudTable<T extends Record<string, unknown>>({ items, columns, o
                             startEditing(item)
                             setIsAdding(false)
                           }}
-                          aria-label={`Edit ${String(item.name ?? item.code ?? "item")}`}
+                          aria-label={t("editItem", { name: String(item.name ?? item.code ?? "item") })}
                         >
                           <Edit />
                         </Button>
@@ -329,7 +340,7 @@ export function CrudTable<T extends Record<string, unknown>>({ items, columns, o
                           variant="ghost" 
                           size="icon" 
                           onClick={() => handleDelete(String(item.code ?? item.id ?? ""))}
-                          aria-label={`Delete ${String(item.name ?? item.code ?? "item")}`}
+                          aria-label={t("deleteItem", { name: String(item.name ?? item.code ?? "item") })}
                         >
                           <Trash2 />
                         </Button>
@@ -349,11 +360,11 @@ export function CrudTable<T extends Record<string, unknown>>({ items, columns, o
               ))}
               <TableCell>
                 <div className="flex gap-2">
-                  <Button size="sm" onClick={handleAdd} aria-label="Save new item">
-                    Save
+                  <Button size="sm" onClick={handleAdd} aria-label={t("saveNewItem")}>
+                    {t("saveItem")}
                   </Button>
-                  <Button size="sm" variant="outline" onClick={() => setIsAdding(false)} aria-label="Cancel adding new item">
-                    Cancel
+                  <Button size="sm" variant="outline" onClick={() => setIsAdding(false)} aria-label={t("cancelNewItem")}>
+                    {t("cancelEditing")}
                   </Button>
                 </div>
               </TableCell>
@@ -367,9 +378,9 @@ export function CrudTable<T extends Record<string, unknown>>({ items, columns, o
             setIsAdding(true)
             setEditingId(null)
           }}
-          aria-label="Add new item"
+          aria-label={t("addNewItem")}
         >
-          Add New
+          {t("addNew")}
         </Button>
       )}
     </div>

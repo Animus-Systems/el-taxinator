@@ -1,6 +1,6 @@
 import { resizeImage } from "@/lib/previews/images"
 import { pdfToImages } from "@/lib/previews/pdf"
-import { User } from "@/prisma/client"
+import type { User } from "@/lib/db-types"
 
 export async function generateFilePreviews(
   user: User,

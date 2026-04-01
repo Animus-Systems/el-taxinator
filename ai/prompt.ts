@@ -1,4 +1,4 @@
-import { Category, Field, Project } from "@/prisma/client"
+import type { Category, Field, Project } from "@/lib/db-types"
 
 export function buildLLMPrompt(
   promptTemplate: string,
@@ -11,24 +11,24 @@ export function buildLLMPrompt(
   prompt = prompt.replace(
     "{fields}",
     fields
-      .filter((field) => field.llm_prompt)
-      .map((field) => `- ${field.code}: ${field.llm_prompt}`)
+      .filter((field) => field.llmPrompt)
+      .map((field) => `- ${field.code}: ${field.llmPrompt}`)
       .join("\n")
   )
 
   prompt = prompt.replace(
     "{categories}",
     categories
-      .filter((category) => category.llm_prompt)
-      .map((category) => `- ${category.code}: for ${category.llm_prompt}`)
+      .filter((category) => category.llmPrompt)
+      .map((category) => `- ${category.code}: for ${category.llmPrompt}`)
       .join("\n")
   )
 
   prompt = prompt.replace(
     "{projects}",
     projects
-      .filter((project) => project.llm_prompt)
-      .map((project) => `- ${project.code}: for ${project.llm_prompt}`)
+      .filter((project) => project.llmPrompt)
+      .map((project) => `- ${project.code}: for ${project.llmPrompt}`)
       .join("\n")
   )
 

@@ -1,4 +1,5 @@
 import { getSession } from "@/lib/auth"
+import config from "@/lib/config"
 import { getOrCreateProgress, getProgressById } from "@/models/progress"
 import { NextRequest, NextResponse } from "next/server"
 
@@ -59,7 +60,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ prog
       "Content-Type": "text/event-stream",
       "Cache-Control": "no-cache, no-transform",
       Connection: "keep-alive",
-      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Origin": config.app.baseURL,
     },
   })
 }

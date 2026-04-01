@@ -2,7 +2,7 @@
 
 import { SidebarMenuItem } from "@/components/ui/sidebar"
 import { cn } from "@/lib/utils"
-import { usePathname } from "next/navigation"
+import { usePathname } from "@/lib/navigation"
 import { ComponentProps } from "react"
 
 export function SidebarMenuItemWithHighlight({

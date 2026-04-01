@@ -1,5 +1,5 @@
 import { calcInvoiceTotals } from "@/lib/invoice-calculations"
-import { Client, Invoice, InvoiceItem, Product, Quote } from "@/prisma/client"
+import type { InvoiceWithRelations } from "@/models/invoices"
 import { Document, Page, StyleSheet, Text, View } from "@react-pdf/renderer"
 import { format } from "date-fns"
 
@@ -35,14 +35,26 @@ const styles = StyleSheet.create({
   footer: { position: "absolute", bottom: 32, left: 48, right: 48, fontSize: 8, color: "#9ca3af", textAlign: "center" },
 })
 
-type InvoiceWithRelations = Invoice & {
-  client: Client | null
-  items: (InvoiceItem & { product: Product | null })[]
-  quote: Quote | null
-}
-
 function formatEUR(cents: number) {
   return new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR" }).format(cents / 100)
+}
+
+type Labels = {
+  issueDate: string
+  dueDate: string
+  billTo: string
+  description: string
+  qty: string
+  unitPrice: string
+  vatPercent: string
+  amount: string
+  subtotal: string
+  iva: string
+  irpfRetention: string
+  totalToPay: string
+  notes: string
+  invoice: string
+  generated: string
 }
 
 type Props = {
@@ -50,9 +62,29 @@ type Props = {
   businessName?: string
   businessAddress?: string
   businessTaxId?: string // optional, for future use
+  labels?: Partial<Labels>
 }
 
-export function InvoicePDF({ invoice, businessName, businessAddress, businessTaxId }: Props) {
+const defaultLabels: Labels = {
+  issueDate: "Issue Date",
+  dueDate: "Due Date",
+  billTo: "Bill To",
+  description: "Description",
+  qty: "Qty",
+  unitPrice: "Unit Price",
+  vatPercent: "VAT %",
+  amount: "Amount",
+  subtotal: "Subtotal",
+  iva: "IGIC",
+  irpfRetention: "Ret. IRPF",
+  totalToPay: "TOTAL A PAGAR",
+  notes: "Notes",
+  invoice: "INVOICE",
+  generated: "Generated",
+}
+
+export function InvoicePDF({ invoice, businessName, businessAddress, businessTaxId, labels: labelOverrides }: Props) {
+  const l = { ...defaultLabels, ...labelOverrides }
   const { subtotal, vatTotal, total } = calcInvoiceTotals(invoice.items)
 
   return (
@@ -66,7 +98,7 @@ export function InvoicePDF({ invoice, businessName, businessAddress, businessTax
             {businessTaxId && <Text style={{ color: "#6b7280" }}>NIF: {businessTaxId}</Text>}
           </View>
           <View style={{ alignItems: "flex-end" }}>
-            <Text style={styles.invoiceTitle}>INVOICE</Text>
+            <Text style={styles.invoiceTitle}>{l.invoice}</Text>
             <Text style={styles.invoiceNumber}>{invoice.number}</Text>
           </View>
         </View>
@@ -74,7 +106,7 @@ export function InvoicePDF({ invoice, businessName, businessAddress, businessTax
         {/* Dates & client */}
         <View style={{ flexDirection: "row", marginBottom: 24, gap: 32 }}>
           <View style={styles.section}>
-            <Text style={styles.sectionLabel}>Bill To</Text>
+            <Text style={styles.sectionLabel}>{l.billTo}</Text>
             <Text style={[styles.sectionValue, { fontFamily: "Helvetica-Bold" }]}>{invoice.client?.name || "—"}</Text>
             {invoice.client?.taxId && <Text style={{ color: "#6b7280" }}>NIF: {invoice.client.taxId}</Text>}
             {invoice.client?.address && <Text>{invoice.client.address}</Text>}
@@ -83,12 +115,12 @@ export function InvoicePDF({ invoice, businessName, businessAddress, businessTax
           <View style={[styles.section, { marginLeft: "auto" }]}>
             <View style={{ flexDirection: "row", gap: 16, marginBottom: 4 }}>
               <View>
-                <Text style={styles.sectionLabel}>Issue Date</Text>
+                <Text style={styles.sectionLabel}>{l.issueDate}</Text>
                 <Text style={styles.sectionValue}>{format(invoice.issueDate, "dd/MM/yyyy")}</Text>
               </View>
               {invoice.dueDate && (
                 <View>
-                  <Text style={styles.sectionLabel}>Due Date</Text>
+                  <Text style={styles.sectionLabel}>{l.dueDate}</Text>
                   <Text style={styles.sectionValue}>{format(invoice.dueDate, "dd/MM/yyyy")}</Text>
                 </View>
               )}
@@ -99,11 +131,11 @@ export function InvoicePDF({ invoice, businessName, businessAddress, businessTax
         {/* Line items */}
         <View style={styles.table}>
           <View style={styles.tableHeader}>
-            <Text style={styles.colDesc}>Description</Text>
-            <Text style={styles.colQty}>Qty</Text>
-            <Text style={styles.colPrice}>Unit Price</Text>
-            <Text style={styles.colVat}>VAT %</Text>
-            <Text style={styles.colTotal}>Amount</Text>
+            <Text style={styles.colDesc}>{l.description}</Text>
+            <Text style={styles.colQty}>{l.qty}</Text>
+            <Text style={styles.colPrice}>{l.unitPrice}</Text>
+            <Text style={styles.colVat}>{l.vatPercent}</Text>
+            <Text style={styles.colTotal}>{l.amount}</Text>
           </View>
           {invoice.items.map((item) => (
             <View key={item.id} style={styles.tableRow}>
@@ -119,21 +151,21 @@ export function InvoicePDF({ invoice, businessName, businessAddress, businessTax
         {/* Totals */}
         <View>
           <View style={styles.totalsRow}>
-            <Text style={styles.totalsLabel}>Subtotal</Text>
+            <Text style={styles.totalsLabel}>{l.subtotal}</Text>
             <Text style={styles.totalsValue}>{formatEUR(subtotal)}</Text>
           </View>
           <View style={styles.totalsRow}>
-            <Text style={styles.totalsLabel}>IVA</Text>
+            <Text style={styles.totalsLabel}>{l.iva}</Text>
             <Text style={styles.totalsValue}>{formatEUR(vatTotal)}</Text>
           </View>
           {invoice.irpfRate > 0 && (
             <View style={styles.totalsRow}>
-              <Text style={styles.totalsLabel}>Ret. IRPF ({invoice.irpfRate}%)</Text>
+              <Text style={styles.totalsLabel}>{l.irpfRetention} ({invoice.irpfRate}%)</Text>
               <Text style={styles.totalsValue}>−{formatEUR(Math.round(subtotal * invoice.irpfRate / 100))}</Text>
             </View>
           )}
           <View style={[styles.totalsRow, { marginTop: 6 }]}>
-            <Text style={styles.grandTotalLabel}>TOTAL A PAGAR</Text>
+            <Text style={styles.grandTotalLabel}>{l.totalToPay}</Text>
             <Text style={styles.grandTotalValue}>
               {formatEUR(total - (invoice.irpfRate > 0 ? Math.round(subtotal * invoice.irpfRate / 100) : 0))}
             </Text>
@@ -142,13 +174,13 @@ export function InvoicePDF({ invoice, businessName, businessAddress, businessTax
 
         {invoice.notes && (
           <View style={styles.notes}>
-            <Text style={{ fontFamily: "Helvetica-Bold", marginBottom: 4 }}>Notes</Text>
+            <Text style={{ fontFamily: "Helvetica-Bold", marginBottom: 4 }}>{l.notes}</Text>
             <Text>{invoice.notes}</Text>
           </View>
         )}
 
         <Text style={styles.footer}>
-          {businessName} — Invoice {invoice.number} — Generated {format(new Date(), "dd/MM/yyyy")}
+          {businessName} — {l.invoice} {invoice.number} — {l.generated} {format(new Date(), "dd/MM/yyyy")}
         </Text>
       </Page>
     </Document>

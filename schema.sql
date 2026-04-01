@@ -1,0 +1,300 @@
+-- Taxinator Database Schema
+-- Single file, no migrations. Applied to fresh databases by lib/schema.ts.
+
+-- ─── Core ────────────────────────────────────────────────────────────────────
+
+CREATE TABLE users (
+    id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
+    email text NOT NULL,
+    name text NOT NULL,
+    avatar text,
+    created_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    membership_plan text,
+    membership_expires_at timestamp(3),
+    is_email_verified boolean DEFAULT false NOT NULL,
+    storage_used integer DEFAULT 0 NOT NULL,
+    storage_limit integer DEFAULT -1 NOT NULL,
+    ai_balance integer DEFAULT 0 NOT NULL,
+    stripe_customer_id text,
+    business_address text,
+    business_bank_details text,
+    business_logo text,
+    business_name text,
+    business_tax_id text
+);
+CREATE UNIQUE INDEX users_email_key ON users (email);
+
+CREATE TABLE settings (
+    id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
+    user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    code text NOT NULL,
+    name text NOT NULL,
+    description text,
+    value text
+);
+CREATE UNIQUE INDEX settings_user_id_code_key ON settings (user_id, code);
+
+CREATE TABLE categories (
+    id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
+    user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    code text NOT NULL,
+    name text NOT NULL,
+    color text DEFAULT '#000000' NOT NULL,
+    llm_prompt text,
+    created_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+CREATE UNIQUE INDEX categories_user_id_code_key ON categories (user_id, code);
+
+CREATE TABLE projects (
+    id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
+    user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    code text NOT NULL,
+    name text NOT NULL,
+    color text DEFAULT '#000000' NOT NULL,
+    llm_prompt text,
+    created_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+CREATE UNIQUE INDEX projects_user_id_code_key ON projects (user_id, code);
+
+CREATE TABLE fields (
+    id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
+    user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    code text NOT NULL,
+    name text NOT NULL,
+    type text DEFAULT 'string' NOT NULL,
+    llm_prompt text,
+    options jsonb,
+    created_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    is_visible_in_list boolean DEFAULT false NOT NULL,
+    is_visible_in_analysis boolean DEFAULT false NOT NULL,
+    is_required boolean DEFAULT false NOT NULL,
+    is_extra boolean DEFAULT true NOT NULL
+);
+CREATE UNIQUE INDEX fields_user_id_code_key ON fields (user_id, code);
+
+CREATE TABLE currencies (
+    id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
+    user_id uuid REFERENCES users(id) ON DELETE CASCADE,
+    code text NOT NULL,
+    name text NOT NULL
+);
+CREATE UNIQUE INDEX currencies_user_id_code_key ON currencies (user_id, code);
+
+-- ─── Files & Transactions ────────────────────────────────────────────────────
+
+CREATE TABLE files (
+    id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
+    user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    filename text NOT NULL,
+    path text NOT NULL,
+    mimetype text NOT NULL,
+    metadata jsonb,
+    is_reviewed boolean DEFAULT false NOT NULL,
+    created_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    cached_parse_result jsonb,
+    is_splitted boolean DEFAULT false NOT NULL
+);
+
+CREATE TABLE transactions (
+    id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
+    user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name text,
+    description text,
+    merchant text,
+    total integer,
+    currency_code text,
+    converted_total integer,
+    converted_currency_code text,
+    type text DEFAULT 'expense',
+    note text,
+    files jsonb DEFAULT '[]' NOT NULL,
+    extra jsonb,
+    category_code text,
+    project_code text,
+    issued_at timestamp(3),
+    created_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    text text,
+    items jsonb DEFAULT '[]' NOT NULL,
+    deductible boolean,
+    FOREIGN KEY (category_code, user_id) REFERENCES categories(code, user_id) ON UPDATE CASCADE ON DELETE RESTRICT,
+    FOREIGN KEY (project_code, user_id) REFERENCES projects(code, user_id) ON UPDATE CASCADE ON DELETE RESTRICT
+);
+CREATE INDEX transactions_user_id_idx ON transactions (user_id);
+CREATE INDEX transactions_issued_at_idx ON transactions (issued_at);
+CREATE INDEX transactions_category_code_idx ON transactions (category_code);
+CREATE INDEX transactions_project_code_idx ON transactions (project_code);
+CREATE INDEX transactions_merchant_idx ON transactions (merchant);
+CREATE INDEX transactions_name_idx ON transactions (name);
+CREATE INDEX transactions_total_idx ON transactions (total);
+
+-- ─── Invoicing ───────────────────────────────────────────────────────────────
+
+CREATE TABLE clients (
+    id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
+    user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name text NOT NULL,
+    email text,
+    phone text,
+    address text,
+    tax_id text,
+    notes text,
+    created_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at timestamp(3) NOT NULL
+);
+CREATE INDEX clients_user_id_idx ON clients (user_id);
+
+CREATE TABLE products (
+    id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
+    user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name text NOT NULL,
+    description text,
+    price integer DEFAULT 0 NOT NULL,
+    currency_code text DEFAULT 'EUR' NOT NULL,
+    vat_rate double precision DEFAULT 7.0 NOT NULL,
+    unit text,
+    created_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at timestamp(3) NOT NULL
+);
+CREATE INDEX products_user_id_idx ON products (user_id);
+
+CREATE TABLE quotes (
+    id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
+    user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    client_id uuid REFERENCES clients(id) ON DELETE SET NULL,
+    number text NOT NULL,
+    status text DEFAULT 'draft' NOT NULL,
+    issue_date timestamp(3) NOT NULL,
+    expiry_date timestamp(3),
+    notes text,
+    created_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at timestamp(3) NOT NULL
+);
+CREATE INDEX quotes_user_id_idx ON quotes (user_id);
+
+CREATE TABLE quote_items (
+    id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
+    quote_id uuid NOT NULL REFERENCES quotes(id) ON DELETE CASCADE,
+    product_id uuid REFERENCES products(id) ON DELETE SET NULL,
+    description text NOT NULL,
+    quantity double precision DEFAULT 1 NOT NULL,
+    unit_price integer NOT NULL,
+    vat_rate double precision DEFAULT 7.0 NOT NULL,
+    "position" integer DEFAULT 0 NOT NULL
+);
+
+CREATE TABLE invoices (
+    id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
+    user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    client_id uuid REFERENCES clients(id) ON DELETE SET NULL,
+    quote_id uuid UNIQUE REFERENCES quotes(id) ON DELETE SET NULL,
+    number text NOT NULL,
+    status text DEFAULT 'draft' NOT NULL,
+    issue_date timestamp(3) NOT NULL,
+    due_date timestamp(3),
+    paid_at timestamp(3),
+    notes text,
+    created_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at timestamp(3) NOT NULL,
+    irpf_rate double precision DEFAULT 0.0 NOT NULL
+);
+CREATE INDEX invoices_user_id_idx ON invoices (user_id);
+
+CREATE TABLE invoice_items (
+    id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
+    invoice_id uuid NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
+    product_id uuid REFERENCES products(id) ON DELETE SET NULL,
+    description text NOT NULL,
+    quantity double precision DEFAULT 1 NOT NULL,
+    unit_price integer NOT NULL,
+    vat_rate double precision DEFAULT 7.0 NOT NULL,
+    "position" integer DEFAULT 0 NOT NULL
+);
+
+-- ─── Time Tracking ───────────────────────────────────────────────────────────
+
+CREATE TABLE time_entries (
+    id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
+    user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    description text,
+    project_code text,
+    client_id uuid REFERENCES clients(id) ON DELETE SET NULL,
+    started_at timestamp(3) NOT NULL,
+    ended_at timestamp(3),
+    duration_minutes integer,
+    hourly_rate integer,
+    currency_code text,
+    is_billable boolean DEFAULT true NOT NULL,
+    is_invoiced boolean DEFAULT false NOT NULL,
+    notes text,
+    created_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at timestamp(3) NOT NULL,
+    FOREIGN KEY (project_code, user_id) REFERENCES projects(code, user_id) ON UPDATE CASCADE ON DELETE SET NULL
+);
+CREATE INDEX time_entries_user_id_idx ON time_entries (user_id);
+CREATE INDEX time_entries_user_id_started_at_idx ON time_entries (user_id, started_at);
+CREATE INDEX time_entries_user_id_project_code_idx ON time_entries (user_id, project_code);
+CREATE INDEX time_entries_user_id_client_id_idx ON time_entries (user_id, client_id);
+
+-- ─── Accountant Access ───────────────────────────────────────────────────────
+
+CREATE TABLE accountant_invites (
+    id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
+    user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    token text NOT NULL,
+    name text NOT NULL,
+    email text,
+    permissions jsonb DEFAULT '{"tax": true, "time": false, "invoices": true, "transactions": true}' NOT NULL,
+    is_active boolean DEFAULT true NOT NULL,
+    expires_at timestamp(3),
+    created_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at timestamp(3) NOT NULL
+);
+CREATE UNIQUE INDEX accountant_invites_token_key ON accountant_invites (token);
+CREATE INDEX accountant_invites_user_id_idx ON accountant_invites (user_id);
+CREATE INDEX accountant_invites_token_idx ON accountant_invites (token);
+
+CREATE TABLE accountant_access_logs (
+    id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
+    invite_id uuid NOT NULL REFERENCES accountant_invites(id) ON DELETE CASCADE,
+    section text NOT NULL,
+    ip_address text,
+    user_agent text,
+    accessed_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+CREATE INDEX accountant_access_logs_invite_id_idx ON accountant_access_logs (invite_id);
+CREATE INDEX accountant_access_logs_invite_id_accessed_at_idx ON accountant_access_logs (invite_id, accessed_at);
+
+CREATE TABLE accountant_comments (
+    id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
+    invite_id uuid NOT NULL REFERENCES accountant_invites(id) ON DELETE CASCADE,
+    entity_type text NOT NULL,
+    entity_id text NOT NULL,
+    body text NOT NULL,
+    created_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at timestamp(3) NOT NULL
+);
+CREATE INDEX accountant_comments_invite_id_idx ON accountant_comments (invite_id);
+CREATE INDEX accountant_comments_entity_type_entity_id_idx ON accountant_comments (entity_type, entity_id);
+
+-- ─── Misc ────────────────────────────────────────────────────────────────────
+
+CREATE TABLE app_data (
+    id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
+    app text NOT NULL,
+    user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    data jsonb NOT NULL
+);
+CREATE UNIQUE INDEX app_data_user_id_app_key ON app_data (user_id, app);
+
+CREATE TABLE progress (
+    id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
+    user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    type text NOT NULL,
+    data jsonb,
+    current integer DEFAULT 0 NOT NULL,
+    total integer DEFAULT 0 NOT NULL,
+    created_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+CREATE INDEX progress_user_id_idx ON progress (user_id);

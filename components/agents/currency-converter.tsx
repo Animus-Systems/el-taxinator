@@ -1,3 +1,5 @@
+"use client"
+
 import { FormError } from "@/components/forms/error"
 import { formatCurrency } from "@/lib/utils"
 import { format, startOfDay } from "date-fns"

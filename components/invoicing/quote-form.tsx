@@ -1,14 +1,15 @@
 "use client"
 
-import { createQuoteAction } from "@/app/(app)/quotes/actions"
+import { createQuoteAction } from "@/actions/quotes"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Client, Product } from "@/prisma/client"
+import type { Client, Product } from "@/lib/db-types"
 import { format } from "date-fns"
-import { useRouter } from "next/navigation"
+import { useRouter } from "@/lib/navigation"
 import { useRef, useState, useTransition } from "react"
+import { useTranslations } from "next-intl"
 import { toast } from "sonner"
 import { LineItem, LineItemsEditor } from "./line-items-editor"
 
@@ -24,6 +25,7 @@ function generateQuoteNumber() {
 
 export function QuoteForm({ clients, products }: Props) {
   const router = useRouter()
+  const t = useTranslations("quotes")
   const [isPending, startTransition] = useTransition()
   const [items, setItems] = useState<LineItem[]>([])
   const formRef = useRef<HTMLFormElement>(null)
@@ -37,26 +39,26 @@ export function QuoteForm({ clients, products }: Props) {
     startTransition(async () => {
       const result = await createQuoteAction(null, formData)
       if (result.success && result.data) {
-        toast.success("Quote created")
+        toast.success(t("quoteCreated"))
         router.push(`/quotes/${result.data.id}`)
       } else {
-        toast.error(result.error || "Failed to create quote")
+        toast.error(result.error || t("failedToCreate"))
       }
     })
   }
 
   return (
-    <form ref={formRef} onSubmit={handleSubmit} className="space-y-6">
+    <form suppressHydrationWarning ref={formRef} onSubmit={handleSubmit} className="space-y-6">
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-1">
-          <Label htmlFor="number">Quote Number *</Label>
+          <Label htmlFor="number">{t("quoteNumber")}</Label>
           <Input id="number" name="number" defaultValue={generateQuoteNumber()} required />
         </div>
         <div className="space-y-1">
-          <Label htmlFor="clientId">Client</Label>
+          <Label htmlFor="clientId">{t("client")}</Label>
           <Select name="clientId">
             <SelectTrigger>
-              <SelectValue placeholder="Select client..." />
+              <SelectValue placeholder={t("selectClient")} />
             </SelectTrigger>
             <SelectContent>
               {clients.map((c) => (
@@ -71,45 +73,45 @@ export function QuoteForm({ clients, products }: Props) {
 
       <div className="grid grid-cols-3 gap-4">
         <div className="space-y-1">
-          <Label htmlFor="issueDate">Issue Date *</Label>
+          <Label htmlFor="issueDate">{t("issueDate")}</Label>
           <Input id="issueDate" name="issueDate" type="date" defaultValue={today} required />
         </div>
         <div className="space-y-1">
-          <Label htmlFor="expiryDate">Expiry Date</Label>
+          <Label htmlFor="expiryDate">{t("expiryDate")}</Label>
           <Input id="expiryDate" name="expiryDate" type="date" />
         </div>
         <div className="space-y-1">
-          <Label htmlFor="status">Status</Label>
+          <Label htmlFor="status">{t("status")}</Label>
           <Select name="status" defaultValue="draft">
             <SelectTrigger>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="draft">Draft</SelectItem>
-              <SelectItem value="sent">Sent</SelectItem>
-              <SelectItem value="accepted">Accepted</SelectItem>
-              <SelectItem value="rejected">Rejected</SelectItem>
+              <SelectItem value="draft">{t("draft")}</SelectItem>
+              <SelectItem value="sent">{t("sent")}</SelectItem>
+              <SelectItem value="accepted">{t("accepted")}</SelectItem>
+              <SelectItem value="rejected">{t("rejected")}</SelectItem>
             </SelectContent>
           </Select>
         </div>
       </div>
 
       <div className="space-y-2">
-        <Label>Line Items *</Label>
+        <Label>{t("lineItems")}</Label>
         <LineItemsEditor products={products} onChange={setItems} />
       </div>
 
       <div className="space-y-1">
-        <Label htmlFor="notes">Notes</Label>
-        <Input id="notes" name="notes" placeholder="Terms and conditions, validity period, etc." />
+        <Label htmlFor="notes">{t("notes")}</Label>
+        <Input id="notes" name="notes" placeholder={t("notesPlaceholder")} />
       </div>
 
       <div className="flex gap-2 justify-end">
         <Button type="button" variant="outline" onClick={() => router.back()}>
-          Cancel
+          {t("cancel")}
         </Button>
         <Button type="submit" disabled={isPending}>
-          {isPending ? "Creating..." : "Create Quote"}
+          {isPending ? t("creating") : t("createQuote")}
         </Button>
       </div>
     </form>

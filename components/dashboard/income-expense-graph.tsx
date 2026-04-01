@@ -3,7 +3,7 @@
 import { formatCurrency, formatPeriodLabel } from "@/lib/utils"
 import type { DetailedTimeSeriesData } from "@/models/stats"
 import { addDays, endOfMonth, format, startOfMonth } from "date-fns"
-import { useRouter } from "next/navigation"
+import { useRouter } from "@/lib/navigation"
 import { useEffect, useRef, useState } from "react"
 import { IncomeExpenceGraphTooltip } from "./income-expense-graph-tooltip"
 

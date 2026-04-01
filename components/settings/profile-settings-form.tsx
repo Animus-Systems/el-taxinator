@@ -1,47 +1,43 @@
 "use client"
 
-import { saveProfileAction } from "@/app/(app)/settings/actions"
+import { saveProfileAction } from "@/actions/settings"
 import { FormError } from "@/components/forms/error"
 import { FormAvatar, FormInput } from "@/components/forms/simple"
 import { Button } from "@/components/ui/button"
-import { User } from "@/prisma/client"
+import type { User } from "@/lib/db-types"
 import { CircleCheckBig } from "lucide-react"
 import { useActionState } from "react"
-import { SubscriptionPlan } from "./subscription-plan"
-
+import { useTranslations } from "next-intl"
 export default function ProfileSettingsForm({ user }: { user: User }) {
   const [saveState, saveAction, pending] = useActionState(saveProfileAction, null)
+  const t = useTranslations("settings")
 
   return (
     <div>
-      <form action={saveAction} className="space-y-4">
+      <form suppressHydrationWarning action={saveAction} className="space-y-4">
         <FormAvatar
-          title="Avatar"
+          title={t("avatar")}
           name="avatar"
           className="w-24 h-24"
           defaultValue={user.avatar ? user.avatar + "?" + user.id : ""}
         />
 
-        <FormInput title="Account Name" name="name" defaultValue={user.name || ""} />
+        <FormInput title={t("accountName")} name="name" defaultValue={user.name || ""} />
 
         <div className="flex flex-row items-center gap-4">
           <Button type="submit" disabled={pending}>
-            {pending ? "Saving..." : "Save"}
+            {pending ? t("saving") : t("save")}
           </Button>
           {saveState?.success && (
             <p className="text-green-500 flex flex-row items-center gap-2">
               <CircleCheckBig />
-              Saved!
+              {t("saved")}
             </p>
           )}
         </div>
 
         {saveState?.error && <FormError>{saveState.error}</FormError>}
       </form>
-
-      <div className="mt-10">
-        <SubscriptionPlan user={user} />
-      </div>
     </div>
   )
 }

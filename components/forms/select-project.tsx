@@ -1,5 +1,9 @@
-import { Project } from "@/prisma/client"
+"use client"
+
+import type { Project } from "@/lib/db-types"
+import { getLocalizedValue } from "@/lib/i18n-db"
 import { SelectProps } from "@radix-ui/react-select"
+import { useLocale } from "next-intl"
 import { FormSelect } from "./simple"
 
 export const FormSelectProject = ({
@@ -18,10 +22,11 @@ export const FormSelectProject = ({
   hideIfEmpty?: boolean
   isRequired?: boolean
 } & SelectProps) => {
+  const locale = useLocale()
   return (
     <FormSelect
       title={title}
-      items={projects.map((project) => ({ code: project.code, name: project.name, color: project.color }))}
+      items={projects.map((project) => ({ code: project.code, name: getLocalizedValue(project.name, locale), color: project.color }))}
       emptyValue={emptyValue}
       placeholder={placeholder}
       hideIfEmpty={hideIfEmpty}

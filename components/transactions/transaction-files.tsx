@@ -1,11 +1,11 @@
 "use client"
 
-import { deleteTransactionFileAction, uploadTransactionFilesAction } from "@/app/(app)/transactions/actions"
+import { deleteTransactionFileAction, uploadTransactionFilesAction } from "@/actions/transactions"
 import { FilePreview } from "@/components/files/preview"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import config from "@/lib/config"
-import { File, Transaction } from "@/prisma/client"
+import type { File, Transaction } from "@/lib/db-types"
 import { Loader2, Upload, X } from "lucide-react"
 import { useState } from "react"
 

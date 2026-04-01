@@ -1,13 +1,16 @@
 "use client"
 
-import { useNotification } from "@/app/(app)/context"
-import { uploadFilesAction } from "@/app/(app)/files/actions"
-import { uploadTransactionFilesAction } from "@/app/(app)/transactions/actions"
+import { useNotification } from "@/lib/context"
+import { uploadFilesAction } from "@/actions/files"
+import { uploadTransactionFilesAction } from "@/actions/transactions"
 import { AlertCircle, CloudUpload, Loader2 } from "lucide-react"
-import { useParams, useRouter } from "next/navigation"
+import { useParams } from "next/navigation"
+import { useRouter } from "@/lib/navigation"
 import { useCallback, useEffect, useRef, useState } from "react"
+import { useTranslations } from "next-intl"
 
 export default function ScreenDropArea({ children }: { children: React.ReactNode }) {
+  const t = useTranslations("files")
   const router = useRouter()
   const { showNotification } = useNotification()
   const [isDragging, setIsDragging] = useState(false)
@@ -131,9 +134,9 @@ export default function ScreenDropArea({ children }: { children: React.ReactNode
           <div className="bg-white dark:bg-gray-800 p-8 rounded-lg shadow-xl text-center">
             <CloudUpload className="h-16 w-16 mx-auto mb-4 text-primary" />
             <h3 className="text-xl font-semibold mb-2">
-              {transactionId ? "Drop Files to Add to Transaction" : "Drop Files to Upload"}
+              {transactionId ? t("dropFilesToAdd") : t("dropFilesToUpload")}
             </h3>
-            <p className="text-gray-600 dark:text-gray-400">Drop anywhere on the screen</p>
+            <p className="text-gray-600 dark:text-gray-400">{t("dropAnywhere")}</p>
           </div>
         </div>
       )}
@@ -143,7 +146,7 @@ export default function ScreenDropArea({ children }: { children: React.ReactNode
           <div className="bg-white dark:bg-gray-800 p-8 rounded-lg shadow-xl text-center">
             <Loader2 className="h-16 w-16 mx-auto mb-4 text-primary animate-spin" />
             <h3 className="text-xl font-semibold mb-2">
-              {transactionId ? "Adding files to transaction..." : "Uploading..."}
+              {transactionId ? t("addingFilesToTransaction") : t("uploading")}
             </h3>
           </div>
         </div>
@@ -153,7 +156,7 @@ export default function ScreenDropArea({ children }: { children: React.ReactNode
         <div className="fixed inset-0 bg-opacity-20 backdrop-blur-sm z-50 flex items-center justify-center">
           <div className="bg-white dark:bg-gray-800 p-8 rounded-lg shadow-xl text-center">
             <AlertCircle className="h-16 w-16 mx-auto mb-4 text-red-500" />
-            <h3 className="text-xl font-semibold mb-2">Upload Error</h3>
+            <h3 className="text-xl font-semibold mb-2">{t("uploadError")}</h3>
             <p className="text-gray-600 dark:text-gray-400">{uploadError}</p>
           </div>
         </div>

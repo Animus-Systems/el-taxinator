@@ -1,17 +1,18 @@
-import { prisma } from "@/lib/db"
+import { getPool } from "@/lib/pg"
+import { buildInsert, mapRow } from "@/lib/sql"
 
 type BackupSetting = {
   filename: string
-  model: any
+  tableName: string
   backup: (userId: string, row: any) => Record<string, any>
-  restore: (userId: string, json: Record<string, any>) => any
+  restore: (userId: string, json: Record<string, any>) => Record<string, any>
 }
 
 // Ordering is important here
 export const MODEL_BACKUP: BackupSetting[] = [
   {
     filename: "settings.json",
-    model: prisma.setting,
+    tableName: "settings",
     backup: (userId: string, row: any) => {
       return {
         id: row.id,
@@ -27,17 +28,13 @@ export const MODEL_BACKUP: BackupSetting[] = [
         name: json.name,
         description: json.description,
         value: json.value,
-        user: {
-          connect: {
-            id: userId,
-          },
-        },
+        userId,
       }
     },
   },
   {
     filename: "currencies.json",
-    model: prisma.currency,
+    tableName: "currencies",
     backup: (userId: string, row: any) => {
       return {
         id: row.id,
@@ -49,24 +46,20 @@ export const MODEL_BACKUP: BackupSetting[] = [
       return {
         code: json.code,
         name: json.name,
-        user: {
-          connect: {
-            id: userId,
-          },
-        },
+        userId,
       }
     },
   },
   {
     filename: "categories.json",
-    model: prisma.category,
+    tableName: "categories",
     backup: (userId: string, row: any) => {
       return {
         id: row.id,
         code: row.code,
         name: row.name,
         color: row.color,
-        llm_prompt: row.llm_prompt,
+        llmPrompt: row.llmPrompt,
         createdAt: row.createdAt,
       }
     },
@@ -75,26 +68,22 @@ export const MODEL_BACKUP: BackupSetting[] = [
         code: json.code,
         name: json.name,
         color: json.color,
-        llm_prompt: json.llm_prompt,
+        llmPrompt: json.llm_prompt ?? json.llmPrompt,
         createdAt: json.createdAt,
-        user: {
-          connect: {
-            id: userId,
-          },
-        },
+        userId,
       }
     },
   },
   {
     filename: "projects.json",
-    model: prisma.project,
+    tableName: "projects",
     backup: (userId: string, row: any) => {
       return {
         id: row.id,
         code: row.code,
         name: row.name,
         color: row.color,
-        llm_prompt: row.llm_prompt,
+        llmPrompt: row.llmPrompt,
         createdAt: row.createdAt,
       }
     },
@@ -103,26 +92,22 @@ export const MODEL_BACKUP: BackupSetting[] = [
         code: json.code,
         name: json.name,
         color: json.color,
-        llm_prompt: json.llm_prompt,
+        llmPrompt: json.llm_prompt ?? json.llmPrompt,
         createdAt: json.createdAt,
-        user: {
-          connect: {
-            id: userId,
-          },
-        },
+        userId,
       }
     },
   },
   {
     filename: "fields.json",
-    model: prisma.field,
+    tableName: "fields",
     backup: (userId: string, row: any) => {
       return {
         id: row.id,
         code: row.code,
         name: row.name,
         type: row.type,
-        llm_prompt: row.llm_prompt,
+        llmPrompt: row.llmPrompt,
         options: row.options,
         isVisibleInList: row.isVisibleInList,
         isVisibleInAnalysis: row.isVisibleInAnalysis,
@@ -135,23 +120,19 @@ export const MODEL_BACKUP: BackupSetting[] = [
         code: json.code,
         name: json.name,
         type: json.type,
-        llm_prompt: json.llm_prompt,
+        llmPrompt: json.llm_prompt ?? json.llmPrompt,
         options: json.options,
         isVisibleInList: json.isVisibleInList,
         isVisibleInAnalysis: json.isVisibleInAnalysis,
         isRequired: json.isRequired,
         isExtra: json.isExtra,
-        user: {
-          connect: {
-            id: userId,
-          },
-        },
+        userId,
       }
     },
   },
   {
     filename: "files.json",
-    model: prisma.file,
+    tableName: "files",
     backup: (userId: string, row: any) => {
       return {
         id: row.id,
@@ -171,17 +152,13 @@ export const MODEL_BACKUP: BackupSetting[] = [
         metadata: json.metadata,
         isReviewed: json.isReviewed,
         mimetype: json.mimetype,
-        user: {
-          connect: {
-            id: userId,
-          },
-        },
+        userId,
       }
     },
   },
   {
     filename: "transactions.json",
-    model: prisma.transaction,
+    tableName: "transactions",
     backup: (userId: string, row: any) => {
       return {
         id: row.id,
@@ -219,45 +196,45 @@ export const MODEL_BACKUP: BackupSetting[] = [
         files: json.files,
         extra: json.extra,
         issuedAt: json.issuedAt,
-        user: {
-          connect: {
-            id: userId,
-          },
-        },
-        category: {
-          connect: {
-            userId_code: { userId, code: json.categoryCode },
-          },
-        },
-        project: {
-          connect: {
-            userId_code: { userId, code: json.projectCode },
-          },
-        },
+        categoryCode: json.categoryCode,
+        projectCode: json.projectCode,
+        userId,
       }
     },
   },
 ]
 
-export async function modelToJSON(userId: string, backupSettings: BackupSetting): Promise<string> {
-  const data = await backupSettings.model.findMany({ where: { userId } })
+const SAFE_TABLE_NAME = /^[a-zA-Z_][a-zA-Z0-9_]*$/
 
-  if (!data || data.length === 0) {
+export async function modelToJSON(userId: string, backupSettings: BackupSetting): Promise<string> {
+  const pool = await getPool()
+  if (!SAFE_TABLE_NAME.test(backupSettings.tableName)) {
+    throw new Error(`Unsafe table name: ${backupSettings.tableName}`)
+  }
+  const result = await pool.query(
+    `SELECT * FROM ${backupSettings.tableName} WHERE user_id = $1`,
+    [userId],
+  )
+
+  if (!result.rows || result.rows.length === 0) {
     return "[]"
   }
+
+  const data = result.rows.map((row) => mapRow<Record<string, any>>(row))
 
   return JSON.stringify(
     data.map((row: any) => backupSettings.backup(userId, row)),
     null,
-    2
+    2,
   )
 }
 
 export async function modelFromJSON(
   userId: string,
   backupSettings: BackupSetting,
-  jsonContent: string
+  jsonContent: string,
 ): Promise<number> {
+  const pool = await getPool()
   if (!jsonContent) return 0
 
   try {
@@ -272,12 +249,13 @@ export async function modelFromJSON(
       const record = preprocessRowData(rawRecord)
 
       try {
-        const data = await backupSettings.restore(userId, record)
-        await backupSettings.model.create({ data })
+        const data = backupSettings.restore(userId, record)
+        const insertQuery = buildInsert(backupSettings.tableName, data)
+        await pool.query(insertQuery.text, insertQuery.values)
+        insertedCount++
       } catch (error) {
         console.error(`Error importing record:`, error)
       }
-      insertedCount++
     }
 
     return insertedCount

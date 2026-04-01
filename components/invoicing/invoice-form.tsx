@@ -1,19 +1,19 @@
 "use client"
 
-import { createInvoiceAction } from "@/app/(app)/invoices/actions"
+import { createInvoiceAction } from "@/actions/invoices"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Client, Product, TimeEntry, Project } from "@/prisma/client"
+import type { Client, Product } from "@/lib/db-types"
+import type { TimeEntryWithRelations } from "@/models/time-entries"
 import { format } from "date-fns"
-import { useRouter } from "next/navigation"
+import { useRouter } from "@/lib/navigation"
 import { useRef, useState, useTransition } from "react"
+import { useTranslations } from "next-intl"
 import { toast } from "sonner"
 import { LineItem, LineItemsEditor } from "./line-items-editor"
 import { ImportTimeEntries } from "./import-time-entries"
-
-type TimeEntryWithRelations = TimeEntry & { project: Project | null; client: Client | null }
 
 type Props = {
   clients: Client[]
@@ -28,6 +28,8 @@ function generateInvoiceNumber() {
 
 export function InvoiceForm({ clients, products, timeEntries = [] }: Props) {
   const router = useRouter()
+  const t = useTranslations("invoices")
+  const tSettings = useTranslations("settings")
   const [isPending, startTransition] = useTransition()
   const [items, setItems] = useState<LineItem[]>([])
   const formRef = useRef<HTMLFormElement>(null)
@@ -41,26 +43,26 @@ export function InvoiceForm({ clients, products, timeEntries = [] }: Props) {
     startTransition(async () => {
       const result = await createInvoiceAction(null, formData)
       if (result.success && result.data) {
-        toast.success("Invoice created")
+        toast.success(t("invoiceCreated"))
         router.push(`/invoices/${result.data.id}`)
       } else {
-        toast.error(result.error || "Failed to create invoice")
+        toast.error(result.error || t("failedToCreate"))
       }
     })
   }
 
   return (
-    <form ref={formRef} onSubmit={handleSubmit} className="space-y-6">
+    <form suppressHydrationWarning ref={formRef} onSubmit={handleSubmit} className="space-y-6">
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-1">
-          <Label htmlFor="number">Invoice Number *</Label>
+          <Label htmlFor="number">{t("invoiceNumber")}</Label>
           <Input id="number" name="number" defaultValue={generateInvoiceNumber()} required />
         </div>
         <div className="space-y-1">
-          <Label htmlFor="clientId">Client</Label>
+          <Label htmlFor="clientId">{t("client")}</Label>
           <Select name="clientId">
             <SelectTrigger>
-              <SelectValue placeholder="Select client..." />
+              <SelectValue placeholder={t("selectClient")} />
             </SelectTrigger>
             <SelectContent>
               {clients.map((c) => (
@@ -75,25 +77,25 @@ export function InvoiceForm({ clients, products, timeEntries = [] }: Props) {
 
       <div className="grid grid-cols-3 gap-4">
         <div className="space-y-1">
-          <Label htmlFor="issueDate">Issue Date *</Label>
+          <Label htmlFor="issueDate">{t("issueDate")}</Label>
           <Input id="issueDate" name="issueDate" type="date" defaultValue={today} required />
         </div>
         <div className="space-y-1">
-          <Label htmlFor="dueDate">Due Date</Label>
+          <Label htmlFor="dueDate">{t("dueDate")}</Label>
           <Input id="dueDate" name="dueDate" type="date" />
         </div>
         <div className="space-y-1">
-          <Label htmlFor="status">Status</Label>
+          <Label htmlFor="status">{t("statusLabel")}</Label>
           <Select name="status" defaultValue="draft">
             <SelectTrigger>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="draft">Draft</SelectItem>
-              <SelectItem value="sent">Sent</SelectItem>
-              <SelectItem value="paid">Paid</SelectItem>
-              <SelectItem value="overdue">Overdue</SelectItem>
-              <SelectItem value="cancelled">Cancelled</SelectItem>
+              <SelectItem value="draft">{t("draft")}</SelectItem>
+              <SelectItem value="sent">{t("sent")}</SelectItem>
+              <SelectItem value="paid">{t("paid")}</SelectItem>
+              <SelectItem value="overdue">{t("overdue")}</SelectItem>
+              <SelectItem value="cancelled">{t("cancelled")}</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -101,7 +103,7 @@ export function InvoiceForm({ clients, products, timeEntries = [] }: Props) {
 
       <div className="space-y-2">
         <div className="flex items-center justify-between">
-          <Label>Line Items *</Label>
+          <Label>{t("lineItems")}</Label>
           <ImportTimeEntries
             timeEntries={timeEntries}
             onImport={(newItems) => setItems((prev) => [...prev, ...newItems.map((item, i) => ({ ...item, position: prev.length + i }))])}
@@ -112,32 +114,32 @@ export function InvoiceForm({ clients, products, timeEntries = [] }: Props) {
 
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-1">
-          <Label htmlFor="irpfRate">Retención IRPF (%)</Label>
+          <Label htmlFor="irpfRate">{t("irpfRate")}</Label>
           <Select name="irpfRate" defaultValue="0">
             <SelectTrigger>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="0">0% — Sin retención</SelectItem>
-              <SelectItem value="7">7% — Nuevos autónomos (1er año)</SelectItem>
-              <SelectItem value="15">15% — General autónomos</SelectItem>
-              <SelectItem value="19">19% — Rendimientos capital</SelectItem>
+              <SelectItem value="0">{tSettings("noWithholding")}</SelectItem>
+              <SelectItem value="7">{tSettings("newAutonomoRate")}</SelectItem>
+              <SelectItem value="15">{tSettings("generalAutonomoRate")}</SelectItem>
+              <SelectItem value="19">{tSettings("capitalRate")}</SelectItem>
             </SelectContent>
           </Select>
-          <p className="text-xs text-muted-foreground">Retención a cuenta del IRPF aplicada sobre la base imponible</p>
+          <p className="text-xs text-muted-foreground">{tSettings("irpfDesc")}</p>
         </div>
         <div className="space-y-1">
-          <Label htmlFor="notes">Notes</Label>
-          <Input id="notes" name="notes" placeholder="Payment terms, bank details, etc." />
+          <Label htmlFor="notes">{t("notes")}</Label>
+          <Input id="notes" name="notes" placeholder={t("paymentTerms")} />
         </div>
       </div>
 
       <div className="flex gap-2 justify-end">
         <Button type="button" variant="outline" onClick={() => router.back()}>
-          Cancel
+          {t("cancel")}
         </Button>
         <Button type="submit" disabled={isPending}>
-          {isPending ? "Creating..." : "Create Invoice"}
+          {isPending ? t("creating") : t("createInvoice")}
         </Button>
       </div>
     </form>

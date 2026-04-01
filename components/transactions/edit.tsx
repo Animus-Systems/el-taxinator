@@ -1,6 +1,6 @@
 "use client"
 
-import { deleteTransactionAction, saveTransactionAction } from "@/app/(app)/transactions/actions"
+import { deleteTransactionAction, saveTransactionAction } from "@/actions/transactions"
 import { ItemsDetectTool } from "@/components/agents/items-detect"
 import ToolWindow from "@/components/agents/tool-window"
 import { FormError } from "@/components/forms/error"
@@ -11,11 +11,13 @@ import { FormSelectType } from "@/components/forms/select-type"
 import { FormInput, FormTextarea } from "@/components/forms/simple"
 import { Button } from "@/components/ui/button"
 import type { TransactionData } from "@/models/transactions"
-import { Category, Currency, Field, Project, Transaction } from "@/prisma/client"
+import type { Category, Currency, Field, Project, Transaction } from "@/lib/db-types"
 import { format } from "date-fns"
 import { Loader2, Save, Trash2 } from "lucide-react"
-import { useRouter } from "next/navigation"
+import { useRouter } from "@/lib/navigation"
 import { startTransition, useActionState, useEffect, useMemo, useState } from "react"
+import { useTranslations, useLocale } from "next-intl"
+import { getLocalizedValue } from "@/lib/i18n-db"
 
 export default function TransactionEditForm({
   transaction,
@@ -33,6 +35,8 @@ export default function TransactionEditForm({
   settings: Record<string, string>
 }) {
   const router = useRouter()
+  const t = useTranslations("transactions")
+  const locale = useLocale()
   const [deleteState, deleteAction, isDeleting] = useActionState(deleteTransactionAction, null)
   const [saveState, saveAction, isSaving] = useActionState(saveTransactionAction, null)
 
@@ -71,7 +75,7 @@ export default function TransactionEditForm({
   }, [fields])
 
   const handleDelete = async () => {
-    if (confirm("Are you sure? This will delete the transaction with all the files permanently")) {
+    if (confirm(t("confirmDeletePermanent"))) {
       startTransition(async () => {
         await deleteAction(transaction.id)
         router.back()
@@ -86,25 +90,25 @@ export default function TransactionEditForm({
   }, [saveState, router])
 
   return (
-    <form action={saveAction} className="space-y-4">
+    <form suppressHydrationWarning action={saveAction} className="space-y-4">
       <input type="hidden" name="transactionId" value={transaction.id} />
 
       <FormInput
-        title={fieldMap.name.name}
+        title={getLocalizedValue(fieldMap.name.name, locale)}
         name="name"
         defaultValue={formData.name}
         isRequired={fieldMap.name.isRequired}
       />
 
       <FormInput
-        title={fieldMap.merchant.name}
+        title={getLocalizedValue(fieldMap.merchant.name, locale)}
         name="merchant"
         defaultValue={formData.merchant}
         isRequired={fieldMap.merchant.isRequired}
       />
 
       <FormInput
-        title={fieldMap.description.name}
+        title={getLocalizedValue(fieldMap.description.name, locale)}
         name="description"
         defaultValue={formData.description}
         isRequired={fieldMap.description.isRequired}
@@ -112,7 +116,7 @@ export default function TransactionEditForm({
 
       <div className="flex flex-row gap-4">
         <FormInput
-          title={fieldMap.total.name}
+          title={getLocalizedValue(fieldMap.total.name, locale)}
           type="number"
           step="0.01"
           name="total"
@@ -122,7 +126,7 @@ export default function TransactionEditForm({
         />
 
         <FormSelectCurrency
-          title={fieldMap.currencyCode.name}
+          title={getLocalizedValue(fieldMap.currencyCode.name, locale)}
           name="currencyCode"
           value={formData.currencyCode}
           onValueChange={(value) => {
@@ -133,7 +137,7 @@ export default function TransactionEditForm({
         />
 
         <FormSelectType
-          title={fieldMap.type.name}
+          title={getLocalizedValue(fieldMap.type.name, locale)}
           name="type"
           defaultValue={formData.type}
           isRequired={fieldMap.type.isRequired}
@@ -142,7 +146,7 @@ export default function TransactionEditForm({
 
       <div className="flex flex-row flex-grow gap-4">
         <FormInput
-          title={fieldMap.issuedAt.name}
+          title={getLocalizedValue(fieldMap.issuedAt.name, locale)}
           type="date"
           name="issuedAt"
           defaultValue={formData.issuedAt}
@@ -163,7 +167,7 @@ export default function TransactionEditForm({
             )}
             {(!formData.convertedCurrencyCode || formData.convertedCurrencyCode !== settings.default_currency) && (
               <FormSelectCurrency
-                title="Convert to"
+                title={t("convertedTotal")}
                 name="convertedCurrencyCode"
                 defaultValue={formData.convertedCurrencyCode || settings.default_currency}
                 currencies={currencies}
@@ -178,7 +182,7 @@ export default function TransactionEditForm({
 
       <div className="flex flex-row gap-4">
         <FormSelectCategory
-          title={fieldMap.categoryCode.name}
+          title={getLocalizedValue(fieldMap.categoryCode.name, locale)}
           categories={categories}
           name="categoryCode"
           defaultValue={formData.categoryCode}
@@ -186,7 +190,7 @@ export default function TransactionEditForm({
         />
 
         <FormSelectProject
-          title={fieldMap.projectCode.name}
+          title={getLocalizedValue(fieldMap.projectCode.name, locale)}
           projects={projects}
           name="projectCode"
           defaultValue={formData.projectCode}
@@ -195,7 +199,7 @@ export default function TransactionEditForm({
       </div>
 
       <FormTextarea
-        title={fieldMap.note.name}
+        title={getLocalizedValue(fieldMap.note.name, locale)}
         name="note"
         defaultValue={formData.note}
         className="h-24"
@@ -207,7 +211,7 @@ export default function TransactionEditForm({
           <FormInput
             key={field.code}
             type="text"
-            title={field.name}
+            title={getLocalizedValue(field.name, locale)}
             name={field.code}
             defaultValue={(formData[field.code as keyof typeof formData] as string) || ""}
             isRequired={field.isRequired}
@@ -217,7 +221,7 @@ export default function TransactionEditForm({
       </div>
 
       {formData.items && Array.isArray(formData.items) && formData.items.length > 0 && (
-        <ToolWindow title="Detected items">
+        <ToolWindow title={t("detectedItems")}>
           <ItemsDetectTool data={formData as TransactionData} />
         </ToolWindow>
       )}
@@ -226,7 +230,7 @@ export default function TransactionEditForm({
         <Button type="button" onClick={handleDelete} variant="destructive" disabled={isDeleting}>
           <>
             <Trash2 className="h-4 w-4" />
-            {isDeleting ? "⏳ Deleting..." : "Delete "}
+            {isDeleting ? t("deleting") : t("delete")}
           </>
         </Button>
 
@@ -234,12 +238,12 @@ export default function TransactionEditForm({
           {isSaving ? (
             <>
               <Loader2 className="h-4 w-4 animate-spin" />
-              Saving...
+              {t("saving")}
             </>
           ) : (
             <>
               <Save className="h-4 w-4" />
-              Save Transaction
+              {t("saveTransaction")}
             </>
           )}
         </Button>

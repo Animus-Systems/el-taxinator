@@ -1,6 +1,7 @@
 import { TransactionFilters } from "@/models/transactions"
 import { format } from "date-fns"
-import { useRouter, useSearchParams } from "next/navigation"
+import { useSearchParams } from "next/navigation"
+import { useRouter } from "@/lib/navigation"
 import { useEffect, useState } from "react"
 
 const filterKeys = ["search", "dateFrom", "dateTo", "ordering", "categoryCode", "projectCode"]

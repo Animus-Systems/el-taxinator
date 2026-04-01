@@ -1,5 +1,5 @@
 "use client"
-import { useState, useRef, useEffect, useCallback } from "react"
+import { useState, useRef, useEffect } from "react"
 import { FormSelectCurrency } from "@/components/forms/select-currency"
 import { FormInput } from "@/components/forms/simple"
 import { Button } from "@/components/ui/button"
@@ -10,7 +10,7 @@ import { PROVIDERS } from "@/lib/llm-providers"
 
 type Props = {
   defaultProvider: string
-  defaultApiKeys: Record<string, string>
+  configuredKeys: Record<string, boolean>
 }
 
 type AuthStatus = {
@@ -18,13 +18,12 @@ type AuthStatus = {
   codex?: { loggedIn: boolean; email?: string }
 }
 
-export default function SelfHostedSetupFormClient({ defaultProvider, defaultApiKeys }: Props) {
+export default function SelfHostedSetupFormClient({ defaultProvider, configuredKeys }: Props) {
   const [mode, setMode] = useState<"subscription" | "apikey">("subscription")
   const [provider, setProvider] = useState(defaultProvider)
   const selected = PROVIDERS.find(p => p.key === provider)!
-  const getDefaultApiKey = useCallback((providerKey: string) => defaultApiKeys[providerKey] ?? "", [defaultApiKeys])
 
-  const [apiKey, setApiKey] = useState(getDefaultApiKey(provider))
+  const [apiKey, setApiKey] = useState("")
   const userTyped = useRef(false)
 
   // CLI auth state
@@ -36,10 +35,10 @@ export default function SelfHostedSetupFormClient({ defaultProvider, defaultApiK
 
   useEffect(() => {
     if (!userTyped.current) {
-      setApiKey(getDefaultApiKey(provider))
+      setApiKey("")
     }
     userTyped.current = false
-  }, [provider, getDefaultApiKey])
+  }, [provider])
 
   // Check CLI auth status on mount
   useEffect(() => {
@@ -262,7 +261,7 @@ export default function SelfHostedSetupFormClient({ defaultProvider, defaultApiK
                 setApiKey(e.target.value)
                 userTyped.current = true
               }}
-              placeholder={selected.placeholder}
+              placeholder={configuredKeys[provider] ? "Key already configured (leave blank to keep)" : selected.placeholder}
             />
             <small className="text-xs text-muted-foreground flex justify-center mt-2">
               Get key from

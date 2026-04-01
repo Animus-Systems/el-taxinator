@@ -7,9 +7,11 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { isFiltered, useTransactionFilters } from "@/hooks/use-transaction-filters"
 import type { TransactionFilters } from "@/models/transactions"
-import { Category, Field, Project } from "@/prisma/client"
+import type { Category, Field, Project } from "@/lib/db-types"
 import { format } from "date-fns"
 import { X } from "lucide-react"
+import { useTranslations, useLocale } from "next-intl"
+import { getLocalizedValue } from "@/lib/i18n-db"
 
 export function TransactionSearchAndFilters({
   categories,
@@ -20,6 +22,8 @@ export function TransactionSearchAndFilters({
   projects: Project[]
   fields: Field[]
 }) {
+  const t = useTranslations("transactions")
+  const locale = useLocale()
   const [filters, setFilters] = useTransactionFilters()
 
   const handleFilterChange = (name: keyof TransactionFilters, value: TransactionFilters[keyof TransactionFilters]) => {
@@ -55,7 +59,7 @@ export function TransactionSearchAndFilters({
               <SelectItem key={category.code} value={category.code}>
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 rounded-full" style={{ backgroundColor: category.color }} />
-                  {category.name}
+                  {getLocalizedValue(category.name, locale)}
                 </div>
               </SelectItem>
             ))}
@@ -73,7 +77,7 @@ export function TransactionSearchAndFilters({
                 <SelectItem key={project.code} value={project.code}>
                   <div className="flex items-center gap-2">
                     <div className="w-2 h-2 rounded-full" style={{ backgroundColor: project.color }} />
-                    {project.name}
+                    {getLocalizedValue(project.name, locale)}
                   </div>
                 </SelectItem>
               ))}
@@ -100,7 +104,7 @@ export function TransactionSearchAndFilters({
               setFilters({})
             }}
             className="text-muted-foreground hover:text-foreground"
-            title="Clear all filters"
+            title={t("clearFilters")}
           >
             <X className="h-4 w-4" />
           </Button>

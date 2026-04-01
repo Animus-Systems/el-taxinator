@@ -24,6 +24,10 @@ export interface ProviderConfig {
   placeholder: string
   help: { url: string; label: string }
   logo: string
+  /** Setting key for custom base URL (OpenRouter, custom providers) */
+  baseUrlName?: string
+  /** Whether the model name is a free-text input instead of a dropdown */
+  freeformModel?: boolean
 }
 
 export const PROVIDERS: ProviderConfig[] = [
@@ -74,6 +78,33 @@ export const PROVIDERS: ProviderConfig[] = [
     placeholder: "",
     help: { url: "https://platform.openai.com", label: "OpenAI Platform" },
     logo: "/logo/openai.svg",
+  },
+  {
+    key: "openrouter",
+    label: "OpenRouter",
+    isSubscription: false,
+    apiKeyName: "openrouter_api_key",
+    modelName: "openrouter_model_name",
+    defaultModelName: "anthropic/claude-sonnet-4",
+    models: [
+      { id: "anthropic/claude-sonnet-4", name: "Claude Sonnet 4 (recommended)" },
+      { id: "anthropic/claude-haiku-4", name: "Claude Haiku 4 (fast)" },
+      { id: "openai/gpt-4o-mini", name: "GPT-4o Mini" },
+      { id: "openai/gpt-4o", name: "GPT-4o" },
+      { id: "google/gemini-2.5-flash", name: "Gemini 2.5 Flash" },
+      { id: "google/gemini-2.5-pro", name: "Gemini 2.5 Pro" },
+      { id: "meta-llama/llama-4-maverick", name: "Llama 4 Maverick" },
+      { id: "deepseek/deepseek-r1", name: "DeepSeek R1" },
+    ],
+    freeformModel: true,
+    supportsThinking: false,
+    thinkingOptions: [],
+    thinkingSettingName: "",
+    apiDoc: "https://openrouter.ai/settings/keys",
+    apiDocLabel: "OpenRouter Dashboard",
+    placeholder: "sk-or-...",
+    help: { url: "https://openrouter.ai/settings/keys", label: "OpenRouter Dashboard" },
+    logo: "/logo/openrouter.svg",
   },
   {
     key: "google",
@@ -137,5 +168,24 @@ export const PROVIDERS: ProviderConfig[] = [
     placeholder: "...",
     help: { url: "https://admin.mistral.ai/organization/api-keys", label: "Mistral Admin Console" },
     logo: "/logo/mistral.svg",
+  },
+  {
+    key: "custom",
+    label: "Custom (OpenAI-compatible)",
+    isSubscription: false,
+    apiKeyName: "custom_api_key",
+    modelName: "custom_model_name",
+    defaultModelName: "",
+    baseUrlName: "custom_base_url",
+    freeformModel: true,
+    models: [],
+    supportsThinking: false,
+    thinkingOptions: [],
+    thinkingSettingName: "",
+    apiDoc: "",
+    apiDocLabel: "",
+    placeholder: "sk-...",
+    help: { url: "", label: "" },
+    logo: "/logo/logo.webp",
   },
 ]

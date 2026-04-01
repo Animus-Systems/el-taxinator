@@ -1,18 +1,21 @@
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { getLocalizedValue } from "@/lib/i18n-db"
 import { formatCurrency } from "@/lib/utils"
 import { ProjectStats } from "@/models/stats"
-import { Project } from "@/prisma/client"
+import type { Project } from "@/lib/db-types"
 import { Plus } from "lucide-react"
 import Link from "next/link"
+import { getLocale } from "next-intl/server"
 
-export function ProjectsWidget({
+export async function ProjectsWidget({
   projects,
   statsPerProject,
 }: {
   projects: Project[]
   statsPerProject: Record<string, ProjectStats>
 }) {
+  const locale = await getLocale()
   return (
     <div className="grid gap-4 md:grid-cols-2">
       {projects.map((project) => (
@@ -24,7 +27,7 @@ export function ProjectsWidget({
                   className="text-lg shadow-md hover:shadow-lg transition-all duration-300"
                   style={{ backgroundColor: project.color }}
                 >
-                  {project.name}
+                  {getLocalizedValue(project.name, locale)}
                 </Badge>
               </CardTitle>
             </CardHeader>

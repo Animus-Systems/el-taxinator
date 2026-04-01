@@ -4,268 +4,152 @@
 
 <br>
 
-# Taxinator — self-hosted AI accountant
-
-[![GitHub Stars](https://img.shields.io/github/stars/vas3k/Taxinator?color=ffcb47&labelColor=black&style=flat-square)](https://github.com/vas3k/Taxinator/stargazers)
-[![License](https://img.shields.io/badge/license-MIT-ffcb47?labelColor=black&style=flat-square)](https://github.com/vas3k/Taxinator/blob/main/LICENSE)
-[![GitHub Issues](https://img.shields.io/github/issues/vas3k/Taxinator?color=ff80eb&labelColor=black&style=flat-square)](https://github.com/vas3k/Taxinator/issues)
-[![Donate](https://img.shields.io/badge/-Donate-f04f88?logo=githubsponsors&logoColor=white&style=flat-square)](https://vas3k.com/donate/)
+# El Taxinator — Self-hosted back office for Canary Islands businesses
 
 </div>
 
-> 🙏 I'm currently looking for a job! Here's [my CV](https://raw.githubusercontent.com/vas3k/vas3k/master/cv.pdf) and my [Github profile](https://github.com/vas3k).
+> **Note:** This project is a fork of [Taxinator by vas3k](https://github.com/vas3k/Taxinator). We are grateful to the original creators for building the foundation — their work on AI-powered receipt scanning, transaction management, and the overall architecture made this fork possible. El Taxinator takes the project in a different direction, focusing specifically on the Canary Islands tax regime (IGIC), multi-company management, and a fully self-hosted experience without cloud dependencies.
 
-Taxinator is a self-hosted accounting app designed for freelancers, indie hackers, and small businesses who want to save time and automate expense and income tracking using the power of modern AI.
+El Taxinator is a self-hosted accounting and tax management app built for freelancers (autónomos) and small companies (Sociedad Limitada) in the Canary Islands. Upload receipts, invoices, or bank statements — AI extracts and categorizes everything automatically. Manage multiple companies from a single instance, each with its own database. Calculate IGIC (Modelo 420/425), IRPF (Modelo 130), and corporate tax (Modelo 202/200) with built-in tax calculators.
 
-Upload photos of receipts, invoices, or PDFs, and Taxinator will automatically recognize and extract all the important data you need for accounting: product names, amounts, items, dates, merchants, taxes, and save it into a structured Excel-like database. You can even create custom fields with your own AI prompts to extract any specific information you need.
+## Features
 
-The app features automatic currency conversion (including crypto!) based on historical exchange rates from the transaction date. With built-in filtering, multi-project support, import/export capabilities, and custom categories, Taxinator simplifies reporting and makes tax filing a bit easier.
+- **AI-powered document processing** — Upload photos of receipts, invoices, or bank statement PDFs. AI extracts transactions, categorizes them, and matches bank entries to invoices automatically.
+- **Canary Islands tax calculators** — Modelo 420 (quarterly IGIC), Modelo 425 (annual IGIC summary), Modelo 130 (quarterly IRPF for autónomos), Modelo 202/200 (corporate tax for SLs). All with IGIC rates (0%, 3%, 7%, 9.5%, 15%).
+- **Multi-company support** — Manage multiple businesses from one instance. Each company has its own PostgreSQL database. Switch between them from the sidebar. Supports both Autónomo and Sociedad Limitada entity types.
+- **Invoicing & quotes** — Create, track, and export professional invoices with IGIC and IRPF withholding. Convert quotes to invoices. Import billable time entries.
+- **Time tracking** — Log billable hours, track by project and client, import into invoices.
+- **Multi-language** — Full English and Spanish UI with locale-aware database content (category names, field names, etc. stored in both languages).
+- **Multiple AI providers** — Claude, OpenAI, Google Gemini, Mistral, OpenRouter, or any custom OpenAI-compatible API (Ollama, vLLM, etc.).
+- **Accountant data export** — Generate organized ZIP bundles with transactions, invoices, tax calculations, time entries, and receipt attachments — by quarter or full year.
+- **Portable backups** — Full database dump + uploaded files in a single `.taxinator.zip`. Import on any instance. Auto-backup to Google Drive with configurable frequency.
+- **Bank statement processing** — Upload a bank statement PDF, AI splits it into individual transactions, auto-categorizes, and matches to existing invoices.
+- **Currency conversion** — Automatic multi-currency support with historical exchange rates, including crypto (BTC, ETH, etc.).
+- **Docker auto-provisioning** — Add a new company and auto-create a PostgreSQL database via Docker with one click.
 
-> 🎥 [Watch demo video](https://taxhacker.app/landing/video.mp4)
+## Quick Start
 
-![Dashboard](public/landing/main-page.webp)
-
-> \[!IMPORTANT]
->
-> This project is still in early development. Use at your own risk! **Star us** to get notified about new features and bugfixes ⭐️
-
-## ✨ Features
-
-### `1` Analyze photos and invoices with AI
-
-![Currency Conversion](public/landing/ai-scanner-big.webp)
-
-Snap a photo of any receipt or upload an invoice PDF, and Taxinator will automatically recognize, extract, categorize, and store all the information in a structured database.
-
-- **Upload and organize your docs**: Store multiple documents in "unsorted" until you're ready to process them manually or with AI assistance
-- **AI data extraction**: Use AI to automatically pull key information like dates, amounts, vendors, and line items
-- **Auto-categorization**: Transactions are automatically sorted into relevant categories based on their content
-- **Item splitting**: Extract individual items from invoices and split them into separate transactions when needed
-- **Structured storage**: Everything gets saved in an organized database for easy filtering and retrieval
-- **Customizable AI providers**: Choose from OpenAI, Google Gemini, or Mistral (local LLM support coming soon)
-
-Taxinator works with a wide variety of documents, including store receipts, restaurant bills, invoices, bank statements, letters, even handwritten receipts. It handles any language and any currency with ease.
-
-### `2` Multi-currency support with automatic conversion (even crypto!)
-
-![Currency Conversion](public/landing/multi-currency.webp)
-
-Taxinator automatically detects currencies in your documents and converts them to your base currency using historical exchange rates.
-
-- **Foreight currency detection**: Automatically identify the currency used in any document
-- **Historical rates**: Get conversion rates from the actual transaction date
-- **All-world coverage**: Support for 170+ world currencies and 14 popular cryptocurrencies (BTC, ETH, LTC, DOT, and more)
-- **Flexible input**: Manual entry is always available when you need more control
-
-### `3` Organize your transactions using fully customizable categories, projects and fields
-
-![Transactions Table](public/landing/transactions-big.webp)
-
-Adapt Taxinator to your unique needs with unlimited customization options. Create custom fields, projects, and categories that better suit your specific needs, idustry standards or country.
-
-- **Custom categories and projecst**: Create your own categories and projects to group your transactions in any convenient way
-- **Custom fields**: You can create unlimited number of custom fields to extraxt more information from your invoices (it's like creating extra columns in Excel)
-- **Full-text search**: Search through the actual content of recognized documents
-- **Advanced filtering**: Find exactly what you need with search and filter options
-- **AI-powered extraction**: Write your own prompts to extract any custom information from documents
-- **Bulk operations**: Process multiple documents or transactions at once
-
-### `4` Customize any LLM prompt. Even system ones
-
-![Custom Categories](public/landing/custom-llm.webp)
-
-Take full control of how Taxinator's AI processes your documents. Write custom AI prompts for fields, categories, and projects, or modify the built-in ones to match your specific needs.
-
-- **Customizable system prompts**: Modify the general prompt template in settings to suit your business
-- **Field or project-specific prompts**: Create custom extraction rules for your industry-specific documents
-- **Full control**: Adjust field extraction priorities and naming conventions to match your workflow
-- **Industry optimization**: Fine-tune the AI to understand your specific type of business documents
-- **Full transparency**: Every aspect of the AI extraction process is under your control and can be changed right in settings
-
-Taxinator is 100% adaptable and tunable to your unique requirements — whether you need to extract emails, addresses, project codes, or any other custom information from your documents.
-
-### `5` Flexible data filtering and export
-
-![Data Export](public/landing/export.webp)
-
-Once your documents are processed, easily view, filter, and export your complete transaction history exactly how you need it.
-
-- **Advanced filtering**: Filter by date ranges, categories, projects, amounts, and any custom fields
-- **Flexible exports**: Export filtered transactions to CSV with all attached documents included
-- **Tax-ready reports**: Generate comprehensive reports for your accountant or tax advisor
-- **Data portability**: Download complete data archives to migrate to other services—your data stays yours
-
-### `6` Self-hosted mode for data privacy
-
-![Self-hosting](docs/screenshots/exported_archive.png)
-
-Keep complete control over your financial data with local storage and self-hosting options. Taxinator respects your privacy and gives you full ownership of your information.
-
-- **Home server ready**: Host on your own infrastructure for maximum privacy and control
-- **Docker native**: Simple setup with provided Docker containers and compose files
-- **Data ownership**: Your financial documents never leaves your control
-- **No vendor lock-in**: Export everything and migrate whenever you want
-- **Transparent operations**: Full access to source code and complete operational transparency
-
-## 🛳 Deployment and Self-hosting
-
-Taxinator can be easily self-hosted on your own infrastructure for complete control over your data and application environment. We provide a [Docker image](./Dockerfile) and [Docker Compose](./docker-compose.yml) setup that makes deployment simple:
+### Using Docker Compose
 
 ```bash
-curl -O https://raw.githubusercontent.com/vas3k/Taxinator/main/docker-compose.yml
+git clone https://github.com/animusystems/el-taxinator.git
+cd el-taxinator
 
-docker compose up
-```
+# Start the database
+docker compose up -d
 
-The Docker Compose setup includes:
-
-- Taxinator application container
-- PostgreSQL 17 database (or connect to your existing database)
-- Automatic database migrations on startup
-- Volume mounts for persistent data storage
-- Production-ready configuration
-
-New Docker images are automatically built and published with every release. You can use specific version tags (e.g., `v1.0.0`) or `latest` for the most recent version.
-
-For advanced setups, you can customize the Docker Compose configuration to fit your infrastructure. The default configuration uses the pre-built image from GitHub Container Registry, but you can also build locally using the provided [Dockerfile](./Dockerfile).
-
-Example custom configuration:
-
-```yaml
-services:
-  app:
-    image: ghcr.io/vas3k/taxhacker:latest
-    ports:
-      - "7331:7331"
-    environment:
-      - SELF_HOSTED_MODE=true
-      - UPLOAD_PATH=/app/data/uploads
-      - DATABASE_URL=postgresql://postgres:postgres@localhost:5432/taxhacker
-    volumes:
-      - ./data:/app/data
-    restart: unless-stopped
-```
-
-### Environment Variables
-
-Configure Taxinator for your specific needs with these environment variables:
-
-| Variable | Required | Description | Example |
-|----------|----------|-------------|---------|
-| `UPLOAD_PATH` | Yes | Local directory for file uploads and storage | `./data/uploads` |
-| `DATABASE_URL` | Yes | PostgreSQL connection string | `postgresql://user@localhost:5432/taxhacker` |
-| `PORT` | No | Port to run the application on | `7331` (default) |
-| `BASE_URL` | No | Base URL for the application | `http://localhost:7331` |
-| `SELF_HOSTED_MODE` | No | Set to "true" for self-hosting: enables auto-login, custom API keys, and additional features | `true` |
-| `DISABLE_SIGNUP` | No | Disable new user registration on your instance | `false` |
-| `BETTER_AUTH_SECRET` | Yes | Secret key for authentication (minimum 16 characters) | `your-secure-random-key` |
-
-You can also configure LLM provider settings in the application or via environment variables:
-
-- **OpenAI**: `OPENAI_MODEL_NAME` and `OPENAI_API_KEY`
-- **Google Gemini**: `GOOGLE_MODEL_NAME` and `GOOGLE_API_KEY`
-- **Mistral**: `MISTRAL_MODEL_NAME` and `MISTRAL_API_KEY`
-
-## ⌨️ Local Development
-
-We use:
-
-- **Next.js 15+** for the frontend and API
-- **Prisma** for database models and migrations
-- **PostgreSQL** as the database (PostgreSQL 17+ recommended)
-- **Node.js 20.19+** recommended for dependency compatibility
-- **Ghostscript and GraphicsMagick** for PDF processing (install on macOS via `brew install gs graphicsmagick`)
-
-Set up your local development environment:
-
-```bash
-# Clone the repository
-git clone https://github.com/vas3k/Taxinator.git
-cd Taxinator
-
-# Install dependencies
+# Install dependencies and start the app
 yarn install
-
-# Set up environment variables
 cp .env.example .env
-
-# Edit .env with your configuration
-# The default development database runs on localhost:5435
-# Example: postgresql://postgres:postgres@localhost:5435/taxhacker
-
-# Start the development database
-yarn db:dev:up
-
-# Initialize the database
-yarn prisma generate
-yarn prisma migrate dev
-
-# Start the development server
 yarn dev
 ```
 
-Visit `http://localhost:7331` to see your local Taxinator instance in action.
+Visit `http://localhost:7331`. You'll see the entity picker — click **Add New Company**, enter your database credentials, and you're in.
 
-### Development Workflow
+### Environment Variables
 
-For active development, the recommended setup is:
+| Variable | Required | Description | Default |
+|----------|----------|-------------|---------|
+| `DATABASE_URL` | Yes | PostgreSQL connection string for the default entity | — |
+| `UPLOAD_PATH` | No | Directory for uploaded files | `./uploads` |
+| `PORT` | No | Application port | `7331` |
+| `BASE_URL` | No | Public URL of the app | `http://localhost:7331` |
+| `SELF_HOSTED_MODE` | No | Enable self-hosted mode | `true` |
 
-- run only PostgreSQL in Docker
-- run the Next.js app on the host with `yarn dev`
+AI providers are configured in the app UI (Settings > LLM Settings), or via environment variables:
 
-Useful commands:
+- `OPENAI_API_KEY` / `OPENAI_MODEL_NAME`
+- `GOOGLE_API_KEY` / `GOOGLE_MODEL_NAME`
+- `MISTRAL_API_KEY` / `MISTRAL_MODEL_NAME`
+- `ANTHROPIC_API_KEY` / `ANTHROPIC_MODEL_NAME`
+- `OPENROUTER_API_KEY` / `OPENROUTER_MODEL_NAME`
+
+For Google Drive auto-backup, configure in Settings > Backups (no env vars needed).
+
+## Multi-Company Setup
+
+El Taxinator supports multiple companies, each with its own database. There are two ways to configure entities:
+
+### Option 1: Through the UI (recommended)
+
+1. Visit `http://localhost:7331`
+2. Click **Add New Company**
+3. Enter the company name, type (Autónomo or SL), and database credentials
+4. Or click **Auto (Docker)** to create a PostgreSQL container automatically
+
+Entities are saved to `data/entities.json` and persist across restarts.
+
+### Option 2: Via environment variable
 
 ```bash
-# Start only the development database
-yarn db:dev:up
-
-# Stop the development database
-yarn db:dev:down
-
-# Tail database logs
-yarn db:dev:logs
+ENTITIES='[
+  {"id":"seth","name":"Seth (Autónomo)","type":"autonomo","db":"postgresql://taxinator:taxinator@localhost:5435/taxinator"},
+  {"id":"acme","name":"Acme SL","type":"sl","db":"postgresql://taxinator:taxinator@localhost:5436/taxinator"}
+]'
 ```
 
-The development database is exposed on `127.0.0.1:5435` to avoid conflicts with other local PostgreSQL services.
+## Tax Calculators
 
-If you were previously running the full Docker app stack and want to switch to host development, stop the app container first so port `7331` is free:
+Built for the Canary Islands tax regime (REF — Régimen Económico y Fiscal):
+
+| Entity Type | Quarterly | Annual |
+|-------------|-----------|--------|
+| **Autónomo** | Modelo 420 (IGIC) + Modelo 130 (IRPF) | Modelo 425 (IGIC summary) |
+| **Sociedad Limitada** | Modelo 420 (IGIC) + Modelo 202 (Corporate tax) | Modelo 425 + Modelo 200 (Corporate annual) |
+
+IGIC rates: 0% (zero), 3% (reduced), 7% (general), 9.5% (increased), 15% (special)
+
+Filing deadlines: Q1 → April 20, Q2 → July 20, Q3 → October 20, Q4 → January 30
+
+## Tech Stack
+
+- **Next.js 16** — Frontend and API
+- **PostgreSQL 17** — Database (one per company)
+- **Raw SQL** — No ORM, direct parameterized queries via `pg`
+- **tRPC** — Type-safe API layer
+- **next-intl** — Internationalization (English + Spanish)
+- **LangChain** — AI provider abstraction
+- **JSZip** — Backup/export bundles
+- **sharp** — Image processing
+- **googleapis** — Google Drive auto-backup
+
+## Local Development
 
 ```bash
-docker compose -f docker-compose.build.yml stop app
+# Prerequisites: Node.js 20.19+, PostgreSQL 17+, Ghostscript, GraphicsMagick
+# macOS: brew install gs graphicsmagick
+
+# Clone and install
+git clone https://github.com/animusystems/el-taxinator.git
+cd el-taxinator
+yarn install
+
+# Set up environment
+cp .env.example .env
+# Edit .env with your DATABASE_URL
+
+# Start database
+docker compose up -d
+
+# Start dev server
+yarn dev
 ```
 
-Then keep PostgreSQL running via `docker-compose.dev.yml` and use `yarn dev` for the app.
+The schema is applied automatically when you connect to a new database — no migrations to run.
 
-For a production build, instead of `yarn dev` use the following commands:
+## Acknowledgments
 
-```bash
-# Build the application
-yarn build
+This project is a fork of [Taxinator](https://github.com/vas3k/Taxinator) by [vas3k](https://github.com/vas3k). The original project provided an excellent foundation for AI-powered receipt scanning and transaction management. We're taking it in a new direction focused on:
 
-# Start the production server
-yarn start
-```
+- Canary Islands tax compliance (IGIC instead of IVA)
+- Multi-company management with separate databases
+- Self-hosted-first with no cloud dependencies
+- DB-credential-based authentication (no email/password accounts)
+- Portable backup bundles with Google Drive auto-backup
+- Full English/Spanish bilingual support
 
-## 🤝 Contributing
+Thank you to vas3k and all original contributors for making this possible.
 
-We welcome contributions to Taxinator! Here's how you can help make it even better:
+## License
 
-- **🐛 Bug Reports**: File detailed issues when you encounter problems
-- **💡 Feature Requests**: Share your ideas for new features and improvements
-- **🔧 Code Contributions**: Submit pull requests to improve the application
-- **📚 Documentation**: Help improve documentation and guides
-- **🎥 Content Creation**: Videos, tutorials, and reviews help us reach more users!
-
-All development happens on GitHub through issues and pull requests. We appreciate any help.
-
-[![PRs Welcome](https://img.shields.io/badge/🤯_PRs-welcome-ffcb47?labelColor=black&style=for-the-badge)](https://github.com/vas3k/Taxinator/pulls)
-
-## ❤️ Support the Project
-
-If Taxinator has helped you save time or manage your finances better, consider supporting its continued development! Your donations help us maintain the project, add new features, and keep it free and open source. Every contribution helps ensure we can keep improving and maintaining this tool for the community.
-
-[![Thank the Taxinator devs](https://img.shields.io/badge/❤️-donate%20to%20Taxhacker%20devs-f08080?labelColor=black&style=for-the-badge)](https://vas3k.com/donate/)
-
-## 📄 License
-
-Taxinator is licensed under the [MIT License](LICENSE).
+El Taxinator is licensed under the [MIT License](LICENSE).

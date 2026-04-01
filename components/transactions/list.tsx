@@ -6,11 +6,15 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { calcNetTotalPerCurrency, calcTotalPerCurrency, isTransactionIncomplete } from "@/lib/stats"
 import { cn, formatCurrency } from "@/lib/utils"
-import { Category, Field, Project, Transaction } from "@/prisma/client"
+import type { Category, Field, Project, Transaction } from "@/lib/db-types"
 import { formatDate } from "date-fns"
 import { ArrowDownIcon, ArrowUpIcon, File } from "lucide-react"
-import { useRouter, useSearchParams } from "next/navigation"
+import { useSearchParams } from "next/navigation"
+import { useRouter } from "@/lib/navigation"
 import { useEffect, useMemo, useState } from "react"
+import { L } from "@/components/ui/localized-text"
+import { getLocalizedValue } from "@/lib/i18n-db"
+import { useLocale } from "next-intl"
 
 type FieldRenderer = {
   name: string
@@ -58,7 +62,7 @@ export const standardFieldRenderers: Record<string, FieldRenderer> = {
     formatValue: (transaction: TransactionWithRelations) =>
       transaction.projectCode ? (
         <Badge className="whitespace-nowrap" style={{ backgroundColor: transaction.project?.color }}>
-          {transaction.project?.name || ""}
+          <L>{transaction.project?.name}</L>
         </Badge>
       ) : (
         "-"
@@ -71,7 +75,7 @@ export const standardFieldRenderers: Record<string, FieldRenderer> = {
     formatValue: (transaction: TransactionWithRelations) =>
       transaction.categoryCode ? (
         <Badge className="whitespace-nowrap" style={{ backgroundColor: transaction.category?.color }}>
-          {transaction.category?.name || ""}
+          <L>{transaction.category?.name}</L>
         </Badge>
       ) : (
         "-"
@@ -176,7 +180,7 @@ const getFieldRenderer = (field: Field): FieldRenderer => {
     return standardFieldRenderers[field.code as keyof typeof standardFieldRenderers]
   } else {
     return {
-      name: field.name,
+      name: getLocalizedValue(field.name, "en"),
       code: field.code,
       classes: "",
       sortable: false,
@@ -187,6 +191,7 @@ const getFieldRenderer = (field: Field): FieldRenderer => {
 export function TransactionList({ transactions, fields = [] }: { transactions: TransactionWithRelations[]; fields?: Field[] }) {
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const router = useRouter()
+  const locale = useLocale()
   const searchParams = useSearchParams()
 
   const [sorting, setSorting] = useState<{ field: string | null; direction: "asc" | "desc" | null }>(() => {
@@ -292,7 +297,7 @@ export function TransactionList({ transactions, fields = [] }: { transactions: T
                 )}
                 onClick={() => field.renderer.sortable && handleSort(field.code)}
               >
-                {field.name || field.renderer.name}
+                {getLocalizedValue(field.name, locale) || field.renderer.name}
                 {field.renderer.sortable && getSortIcon(field.code)}
               </TableHead>
             ))}

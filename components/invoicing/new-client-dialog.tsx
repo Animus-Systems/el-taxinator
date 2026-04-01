@@ -1,6 +1,6 @@
 "use client"
 
-import { createClientAction } from "@/app/(app)/clients/actions"
+import { createClientAction } from "@/actions/clients"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,

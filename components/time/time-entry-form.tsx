@@ -1,16 +1,18 @@
 "use client"
 
-import { createTimeEntryAction, deleteTimeEntryAction, updateTimeEntryAction } from "@/app/(app)/time/actions"
+import { createTimeEntryAction, deleteTimeEntryAction, updateTimeEntryAction } from "@/actions/time"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
-import { Client, Project, TimeEntry } from "@/prisma/client"
+import type { Client, Project, TimeEntry } from "@/lib/db-types"
 import { format } from "date-fns"
-import { useRouter } from "next/navigation"
+import { useRouter } from "@/lib/navigation"
 import { useState, useTransition } from "react"
+import { useTranslations, useLocale } from "next-intl"
+import { getLocalizedValue } from "@/lib/i18n-db"
 import { toast } from "sonner"
 
 type Props = {
@@ -24,6 +26,8 @@ type Props = {
 
 export function TimeEntryForm({ entry, projects, clients, defaultStartedAt, defaultEndedAt, onSaved }: Props) {
   const router = useRouter()
+  const t = useTranslations("time")
+  const locale = useLocale()
   const [isPending, startTransition] = useTransition()
   const [isBillable, setIsBillable] = useState(entry?.isBillable ?? true)
   const [manualDuration, setManualDuration] = useState(!entry?.endedAt)
@@ -46,70 +50,70 @@ export function TimeEntryForm({ entry, projects, clients, defaultStartedAt, defa
       const action = entry ? updateTimeEntryAction : createTimeEntryAction
       const result = await action(null, formData)
       if (result.success) {
-        toast.success(entry ? "Time entry updated" : "Time entry logged")
+        toast.success(entry ? t("timeEntryUpdated") : t("timeEntryLogged"))
         if (onSaved) {
           onSaved()
         } else {
           router.push("/time")
         }
       } else {
-        toast.error(result.error || "Failed to save time entry")
+        toast.error(result.error || t("failedToSaveTimeEntry"))
       }
     })
   }
 
   async function handleDelete() {
-    if (!entry || !confirm("Delete this time entry?")) return
+    if (!entry || !confirm(t("deleteTimeEntry"))) return
     startTransition(async () => {
       const result = await deleteTimeEntryAction(null, entry.id)
       if (result.success) {
-        toast.success("Time entry deleted")
+        toast.success(t("timeEntryDeleted"))
         router.push("/time")
       } else {
-        toast.error(result.error || "Failed to delete")
+        toast.error(result.error || t("failedToDelete"))
       }
     })
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-5">
+    <form suppressHydrationWarning onSubmit={handleSubmit} className="space-y-5">
       {entry && <input type="hidden" name="id" value={entry.id} />}
 
       <div className="space-y-1">
-        <Label htmlFor="description">Description</Label>
+        <Label htmlFor="description">{t("description")}</Label>
         <Input
           id="description"
           name="description"
-          placeholder="What did you work on?"
+          placeholder={t("whatDidYouWorkOn")}
           defaultValue={entry?.description ?? ""}
         />
       </div>
 
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-1">
-          <Label htmlFor="projectCode">Project</Label>
+          <Label htmlFor="projectCode">{t("projectLabel")}</Label>
           <Select name="projectCode" defaultValue={entry?.projectCode ?? ""}>
             <SelectTrigger>
-              <SelectValue placeholder="Select project..." />
+              <SelectValue placeholder={t("selectProject")} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">None</SelectItem>
+              <SelectItem value="">{t("none")}</SelectItem>
               {projects.map((p) => (
                 <SelectItem key={p.code} value={p.code}>
-                  {p.name}
+                  {getLocalizedValue(p.name, locale)}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
         </div>
         <div className="space-y-1">
-          <Label htmlFor="clientId">Client</Label>
+          <Label htmlFor="clientId">{t("clientLabel")}</Label>
           <Select name="clientId" defaultValue={entry?.clientId ?? ""}>
             <SelectTrigger>
-              <SelectValue placeholder="Select client..." />
+              <SelectValue placeholder={t("selectClient")} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">None</SelectItem>
+              <SelectItem value="">{t("none")}</SelectItem>
               {clients.map((c) => (
                 <SelectItem key={c.id} value={c.id}>
                   {c.name}
@@ -128,7 +132,7 @@ export function TimeEntryForm({ entry, projects, clients, defaultStartedAt, defa
             onCheckedChange={(v) => setManualDuration(!!v)}
           />
           <Label htmlFor="manualDuration" className="cursor-pointer">
-            Enter duration manually (instead of start/end times)
+            {t("enterDurationManually")}
           </Label>
         </div>
       </div>
@@ -136,7 +140,7 @@ export function TimeEntryForm({ entry, projects, clients, defaultStartedAt, defa
       {manualDuration ? (
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-1">
-            <Label htmlFor="startedAt">Date *</Label>
+            <Label htmlFor="startedAt">{t("dateLabel")}</Label>
             <Input
               id="startedAt"
               name="startedAt"
@@ -146,13 +150,13 @@ export function TimeEntryForm({ entry, projects, clients, defaultStartedAt, defa
             />
           </div>
           <div className="space-y-1">
-            <Label htmlFor="durationMinutes">Duration (minutes) *</Label>
+            <Label htmlFor="durationMinutes">{t("durationMinutes")}</Label>
             <Input
               id="durationMinutes"
               name="durationMinutes"
               type="number"
               min="1"
-              placeholder="e.g. 90"
+              placeholder={t("durationPlaceholder")}
               defaultValue={entry?.durationMinutes ?? ""}
               required
             />
@@ -161,7 +165,7 @@ export function TimeEntryForm({ entry, projects, clients, defaultStartedAt, defa
       ) : (
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-1">
-            <Label htmlFor="startedAt">Start Time *</Label>
+            <Label htmlFor="startedAt">{t("startTime")}</Label>
             <Input
               id="startedAt"
               name="startedAt"
@@ -171,7 +175,7 @@ export function TimeEntryForm({ entry, projects, clients, defaultStartedAt, defa
             />
           </div>
           <div className="space-y-1">
-            <Label htmlFor="endedAt">End Time</Label>
+            <Label htmlFor="endedAt">{t("endTime")}</Label>
             <Input
               id="endedAt"
               name="endedAt"
@@ -184,19 +188,19 @@ export function TimeEntryForm({ entry, projects, clients, defaultStartedAt, defa
 
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-1">
-          <Label htmlFor="hourlyRate">Hourly Rate</Label>
+          <Label htmlFor="hourlyRate">{t("hourlyRate")}</Label>
           <Input
             id="hourlyRate"
             name="hourlyRate"
             type="number"
             min="0"
             step="0.01"
-            placeholder="e.g. 75.00"
+            placeholder={t("ratePlaceholder")}
             defaultValue={entry?.hourlyRate != null ? (entry.hourlyRate / 100).toFixed(2) : ""}
           />
         </div>
         <div className="space-y-1">
-          <Label htmlFor="currencyCode">Currency</Label>
+          <Label htmlFor="currencyCode">{t("currency")}</Label>
           <Input
             id="currencyCode"
             name="currencyCode"
@@ -213,16 +217,16 @@ export function TimeEntryForm({ entry, projects, clients, defaultStartedAt, defa
           onCheckedChange={(v) => setIsBillable(!!v)}
         />
         <Label htmlFor="isBillable" className="cursor-pointer">
-          Billable
+          {t("billable")}
         </Label>
       </div>
 
       <div className="space-y-1">
-        <Label htmlFor="notes">Notes</Label>
+        <Label htmlFor="notes">{t("notes")}</Label>
         <Textarea
           id="notes"
           name="notes"
-          placeholder="Additional notes..."
+          placeholder={t("notesPlaceholder")}
           rows={3}
           defaultValue={entry?.notes ?? ""}
         />
@@ -230,11 +234,11 @@ export function TimeEntryForm({ entry, projects, clients, defaultStartedAt, defa
 
       <div className="flex gap-2 justify-between">
         <Button type="submit" disabled={isPending}>
-          {entry ? "Save Changes" : "Log Time"}
+          {entry ? t("saveChanges") : t("logTime")}
         </Button>
         {entry && (
           <Button type="button" variant="destructive" onClick={handleDelete} disabled={isPending}>
-            Delete
+            {t("delete")}
           </Button>
         )}
       </div>

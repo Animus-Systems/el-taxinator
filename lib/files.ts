@@ -1,4 +1,4 @@
-import { File, Transaction, User } from "@/prisma/client"
+import type { File, Transaction, User } from "@/lib/db-types"
 import { access, constants, readdir, stat } from "fs/promises"
 import path from "path"
 import config from "./config"

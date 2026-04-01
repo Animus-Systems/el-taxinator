@@ -1,9 +1,9 @@
 "use client"
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { File } from "@/prisma/client"
+import type { File } from "@/lib/db-types"
 import { Cake, FilePlus } from "lucide-react"
-import Link from "next/link"
+import { Link } from "@/lib/navigation"
 
 export default function DashboardUnsortedWidget({ files }: { files: File[] }) {
   return (

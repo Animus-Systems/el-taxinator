@@ -1,6 +1,6 @@
 "use client"
 
-import { useNotification } from "@/app/(app)/context"
+import { useNotification } from "@/lib/context"
 import { UploadButton } from "@/components/files/upload-button"
 import {
   Sidebar,
@@ -13,48 +13,49 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarRail,
-  SidebarTrigger,
   useSidebar,
 } from "@/components/ui/sidebar"
-import { UserProfile } from "@/lib/auth"
 import config from "@/lib/config"
 import {
+  ArrowLeftRight,
   Calculator,
   Clock,
   ClockArrowUp,
   FileText,
-  Gift,
   House,
-  Import,
+  LogOut,
   Package,
   Receipt,
   ScrollText,
   Settings,
   Upload,
-  UserCog,
   Users,
 } from "lucide-react"
 import Image from "next/image"
-import Link from "next/link"
-import { usePathname } from "next/navigation"
+import { Link, usePathname } from "@/lib/navigation"
+import { useTranslations } from "next-intl"
 import { useEffect } from "react"
 import { ColoredText } from "../ui/colored-text"
 import { Blinker } from "./blinker"
+import { LanguageSwitcher } from "./language-switcher"
 import { SidebarMenuItemWithHighlight } from "./sidebar-item"
-import SidebarUser from "./sidebar-user"
+import { disconnectAction } from "@/actions/auth"
+import type { Entity } from "@/lib/entities"
 
 export function AppSidebar({
-  profile,
   unsortedFilesCount,
-  isSelfHosted,
+  entities,
+  activeEntityId,
 }: {
-  profile: UserProfile
   unsortedFilesCount: number
-  isSelfHosted: boolean
+  entities?: Entity[]
+  activeEntityId?: string
 }) {
+  const t = useTranslations("sidebar")
   const { open, setOpenMobile } = useSidebar()
   const pathname = usePathname()
   const { notification } = useNotification()
+  const activeEntity = entities?.find((e) => e.id === activeEntityId)
 
   // Hide sidebar on mobile when clicking an item
   useEffect(() => {
@@ -65,7 +66,7 @@ export function AppSidebar({
     <>
       <Sidebar variant="inset" collapsible="icon">
         <SidebarHeader>
-          <Link href="/" className="flex items-center gap-2">
+          <Link href="/dashboard" className="flex items-center gap-2">
             <Image src="/logo/logo.webp" alt="Logo" className="h-10 w-10 rounded-lg" width={40} height={40} />
             <div className="grid flex-1 text-left leading-tight">
               <span className="truncate font-semibold text-lg">
@@ -78,7 +79,7 @@ export function AppSidebar({
           <SidebarGroup>
             <UploadButton className="w-full mt-4 mb-2">
               <Upload className="h-4 w-4" />
-              {open ? <span>Upload</span> : ""}
+              {open ? <span>{t("upload")}</span> : ""}
             </UploadButton>
           </SidebarGroup>
           <SidebarGroup>
@@ -88,7 +89,7 @@ export function AppSidebar({
                   <SidebarMenuButton asChild>
                     <Link href="/dashboard">
                       <House />
-                      <span>Home</span>
+                      <span>{t("home")}</span>
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItemWithHighlight>
@@ -97,7 +98,7 @@ export function AppSidebar({
                   <SidebarMenuButton asChild>
                     <Link href="/transactions">
                       <FileText />
-                      <span>Transactions</span>
+                      <span>{t("transactions")}</span>
                       {notification && notification.code === "sidebar.transactions" && notification.message && (
                         <Blinker />
                       )}
@@ -110,7 +111,7 @@ export function AppSidebar({
                   <SidebarMenuButton asChild>
                     <Link href="/unsorted">
                       <ClockArrowUp />
-                      <span>Inbox</span>
+                      <span>{t("inbox")}</span>
                       {unsortedFilesCount > 0 && (
                         <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary text-xs font-medium text-primary-foreground">
                           {unsortedFilesCount}
@@ -125,7 +126,7 @@ export function AppSidebar({
                   <SidebarMenuButton asChild>
                     <Link href="/invoices">
                       <Receipt />
-                      <span>Invoices</span>
+                      <span>{t("invoices")}</span>
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItemWithHighlight>
@@ -133,7 +134,7 @@ export function AppSidebar({
                   <SidebarMenuButton asChild>
                     <Link href="/quotes">
                       <ScrollText />
-                      <span>Quotes</span>
+                      <span>{t("quotes")}</span>
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItemWithHighlight>
@@ -141,7 +142,7 @@ export function AppSidebar({
                   <SidebarMenuButton asChild>
                     <Link href="/clients">
                       <Users />
-                      <span>Clients</span>
+                      <span>{t("clients")}</span>
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItemWithHighlight>
@@ -149,7 +150,7 @@ export function AppSidebar({
                   <SidebarMenuButton asChild>
                     <Link href="/products">
                       <Package />
-                      <span>Products</span>
+                      <span>{t("products")}</span>
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItemWithHighlight>
@@ -157,7 +158,7 @@ export function AppSidebar({
                   <SidebarMenuButton asChild>
                     <Link href="/time">
                       <Clock />
-                      <span>Time Tracking</span>
+                      <span>{t("timeTracking")}</span>
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItemWithHighlight>
@@ -165,15 +166,7 @@ export function AppSidebar({
                   <SidebarMenuButton asChild>
                     <Link href="/tax">
                       <Calculator />
-                      <span>Impuestos</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItemWithHighlight>
-                <SidebarMenuItemWithHighlight href="/settings/accountant">
-                  <SidebarMenuButton asChild>
-                    <Link href="/settings/accountant">
-                      <UserCog />
-                      <span>Accountant</span>
+                      <span>{t("tax")}</span>
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItemWithHighlight>
@@ -181,7 +174,7 @@ export function AppSidebar({
                   <SidebarMenuButton asChild>
                     <Link href="/settings">
                       <Settings />
-                      <span>Settings</span>
+                      <span>{t("settings")}</span>
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItemWithHighlight>
@@ -195,36 +188,25 @@ export function AppSidebar({
             <SidebarGroupContent>
               <SidebarMenu>
                 <SidebarMenuItem>
+                  <LanguageSwitcher />
+                </SidebarMenuItem>
+                <SidebarMenuItem>
                   <SidebarMenuButton asChild>
-                    <Link href="/import/csv">
-                      <Import />
-                      Import from CSV
-                    </Link>
+                    <a href="/?switch=1">
+                      <ArrowLeftRight className="h-4 w-4" />
+                      <span>{activeEntity?.name ?? t("switchCompany")}</span>
+                    </a>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
-                {isSelfHosted && (
-                  <SidebarMenuItem>
-                    <SidebarMenuButton asChild>
-                      <Link href="https://vas3k.com/donate/" target="_blank">
-                        <Gift />
-                        Thank the author
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                )}
-                {!open && (
-                  <SidebarMenuItem>
-                    <SidebarTrigger />
-                  </SidebarMenuItem>
-                )}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-          <SidebarGroup>
-            <SidebarGroupContent>
-              <SidebarMenu>
                 <SidebarMenuItem>
-                  <SidebarUser profile={profile} isSelfHosted={isSelfHosted} />
+                  <form suppressHydrationWarning action={disconnectAction}>
+                    <SidebarMenuButton asChild>
+                      <button type="submit" className="w-full text-red-600">
+                        <LogOut className="h-4 w-4" />
+                        <span>{t("disconnect")}</span>
+                      </button>
+                    </SidebarMenuButton>
+                  </form>
                 </SidebarMenuItem>
               </SidebarMenu>
             </SidebarGroupContent>

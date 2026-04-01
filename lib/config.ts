@@ -12,6 +12,8 @@ const envSchema = z.object({
   MISTRAL_MODEL_NAME: z.string().default("mistral-medium-latest"),
   ANTHROPIC_API_KEY: z.string().optional(),
   ANTHROPIC_MODEL_NAME: z.string().default("claude-sonnet-4-6"),
+  OPENROUTER_API_KEY: z.string().optional(),
+  OPENROUTER_MODEL_NAME: z.string().default("anthropic/claude-sonnet-4"),
   BETTER_AUTH_SECRET: z
     .string()
     .min(16, "Auth secret must be at least 16 characters")
@@ -22,6 +24,8 @@ const envSchema = z.object({
   RESEND_AUDIENCE_ID: z.string().default(""),
   STRIPE_SECRET_KEY: z.string().default(""),
   STRIPE_WEBHOOK_SECRET: z.string().default(""),
+  GOOGLE_DRIVE_CLIENT_ID: z.string().optional(),
+  GOOGLE_DRIVE_CLIENT_SECRET: z.string().optional(),
 })
 
 const env = envSchema.parse(process.env)
@@ -48,10 +52,14 @@ const config = {
       maxWidth: 1500,
       maxHeight: 1500,
     },
+    csv: {
+      maxFileSize: 50 * 1024 * 1024, // 50 MB
+      maxRows: 100000,
+      streamingThreshold: 5 * 1024 * 1024, // Use streaming for files > 5MB
+    },
   },
   selfHosted: {
     isEnabled: env.SELF_HOSTED_MODE === "true",
-    redirectUrl: "/self-hosted/redirect",
     welcomeUrl: "/self-hosted",
   },
   ai: {
@@ -63,6 +71,8 @@ const config = {
     mistralModelName: env.MISTRAL_MODEL_NAME,
     anthropicApiKey: env.ANTHROPIC_API_KEY,
     anthropicModelName: env.ANTHROPIC_MODEL_NAME,
+    openrouterApiKey: env.OPENROUTER_API_KEY,
+    openrouterModelName: env.OPENROUTER_MODEL_NAME,
   },
   auth: {
     secret: env.BETTER_AUTH_SECRET,
@@ -81,5 +91,9 @@ const config = {
     audienceId: env.RESEND_AUDIENCE_ID,
   },
 } as const
+
+if (env.BETTER_AUTH_SECRET === "please-set-your-key-here" && process.env.NODE_ENV === "production") {
+  console.warn("WARNING: Using default auth secret. Set BETTER_AUTH_SECRET for production.")
+}
 
 export default config

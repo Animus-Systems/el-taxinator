@@ -17,9 +17,11 @@ import { Separator } from "@/components/ui/separator"
 import { useDownload } from "@/hooks/use-download"
 import { useProgress } from "@/hooks/use-progress"
 import { useTransactionFilters } from "@/hooks/use-transaction-filters"
-import { Category, Field, Project } from "@/prisma/client"
+import type { Category, Field, Project } from "@/lib/db-types"
 import { formatDate } from "date-fns"
 import { useState } from "react"
+import { useTranslations, useLocale } from "next-intl"
+import { getLocalizedValue } from "@/lib/i18n-db"
 
 const deselectedFields = ["files", "text"]
 
@@ -36,6 +38,8 @@ export function ExportTransactionsDialog({
   total: number
   children: React.ReactNode
 }) {
+  const t = useTranslations("export")
+  const locale = useLocale()
   const [exportFilters, setExportFilters] = useTransactionFilters()
   const [exportFields, setExportFields] = useState<string[]>(
     fields.map((field) => (deselectedFields.includes(field.code) ? "" : field.code))
@@ -77,24 +81,24 @@ export function ExportTransactionsDialog({
   return (
     <Dialog>
       <DialogTrigger asChild>
-        <Button variant="outline">{children}</Button>
+        {children}
       </DialogTrigger>
       <DialogContent className="max-w-xl">
         <DialogHeader>
-          <DialogTitle className="text-2xl font-bold">Export {total} Transactions</DialogTitle>
-          <DialogDescription>Export selected transactions and files as a CSV file or a ZIP archive</DialogDescription>
+          <DialogTitle className="text-2xl font-bold">{t("exportNTransactions", { count: total })}</DialogTitle>
+          <DialogDescription>{t("description")}</DialogDescription>
         </DialogHeader>
         <div className="flex flex-col gap-4">
           <div className="flex flex-col gap-4">
             {exportFilters.search && (
               <div className="flex flex-row items-center gap-2">
-                <span className="text-sm font-medium">Search query:</span>
+                <span className="text-sm font-medium">{t("searchQuery")}</span>
                 <span className="text-sm">{exportFilters.search}</span>
               </div>
             )}
 
             <div className="flex flex-row items-center gap-2">
-              <span className="text-sm font-medium">Time range:</span>
+              <span className="text-sm font-medium">{t("timeRange")}</span>
 
               <DateRangePicker
                 defaultDate={{
@@ -137,7 +141,7 @@ export function ExportTransactionsDialog({
 
           <Separator />
 
-          <div className="text-lg font-bold">Fields to be included in CSV</div>
+          <div className="text-lg font-bold">{t("fieldsToInclude")}</div>
 
           <div className="grid grid-cols-2 gap-2">
             {fields.map((field) => (
@@ -153,7 +157,7 @@ export function ExportTransactionsDialog({
                       )
                     }
                   />
-                  <span>{field.name}</span>
+                  <span>{getLocalizedValue(field.name, locale)}</span>
                 </label>
               </div>
             ))}
@@ -169,8 +173,8 @@ export function ExportTransactionsDialog({
                 onChange={(e) => setIncludeAttachments(e.target.checked)}
               />
               <span className="flex flex-col">
-                <span className="font-medium">Include attached files</span>
-                <span className="text-sm">(create a zip archive)</span>
+                <span className="font-medium">{t("includeAttachedFiles")}</span>
+                <span className="text-sm">{t("createZipArchive")}</span>
               </span>
             </label>
           </div>
@@ -179,11 +183,11 @@ export function ExportTransactionsDialog({
           <Button type="button" onClick={handleSubmit} disabled={isLoading || isDownloading}>
             {isLoading
               ? progress?.current
-                ? `Archiving ${progress.current}/${progress.total} files`
-                : "Exporting..."
+                ? t("archivingProgress", { current: progress.current, total: progress.total })
+                : t("exporting")
               : isDownloading
-                ? "Archive is created. Downloading..."
-                : "Export Transactions"}
+                ? t("downloading")
+                : t("exportTransactions")}
           </Button>
         </DialogFooter>
       </DialogContent>

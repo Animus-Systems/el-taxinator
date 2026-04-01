@@ -1,25 +1,19 @@
 "use client"
 
-import { deleteQuoteAction } from "@/app/(app)/quotes/actions"
-import { convertQuoteToInvoiceAction } from "@/app/(app)/invoices/actions"
+import { deleteQuoteAction } from "@/actions/quotes"
+import { convertQuoteToInvoiceAction } from "@/actions/invoices"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { calcInvoiceTotals } from "@/lib/invoice-calculations"
 import { formatCurrency } from "@/lib/utils"
-import { Client, Invoice, Product, Quote, QuoteItem } from "@/prisma/client"
+import type { QuoteWithRelations } from "@/models/invoices"
 import { format } from "date-fns"
 import { ArrowLeft, ArrowRight, Trash2 } from "lucide-react"
-import Link from "next/link"
-import { useRouter } from "next/navigation"
+import { Link, useRouter } from "@/lib/navigation"
 import { useTransition } from "react"
+import { useTranslations } from "next-intl"
 import { toast } from "sonner"
-
-type QuoteWithRelations = Quote & {
-  client: Client | null
-  items: (QuoteItem & { product: Product | null })[]
-  invoice: Invoice | null
-}
 
 export function QuoteDetail({
   quote,
@@ -27,25 +21,26 @@ export function QuoteDetail({
   quote: QuoteWithRelations
 }) {
   const router = useRouter()
+  const t = useTranslations("quotes")
   const [isPending, startTransition] = useTransition()
   const { subtotal, vatTotal, total } = calcInvoiceTotals(quote.items)
 
   async function handleDelete() {
-    if (!confirm("Delete this quote?")) return
+    if (!confirm(t("deleteConfirm"))) return
     startTransition(async () => {
       const result = await deleteQuoteAction(null, quote.id)
       if (result.success) {
-        toast.success("Quote deleted")
+        toast.success(t("quoteDeleted"))
         router.push("/quotes")
       } else {
-        toast.error(result.error || "Failed to delete quote")
+        toast.error(result.error || t("failedToDelete"))
       }
     })
   }
 
   function handleConvert() {
     const invoiceNumber = prompt(
-      "Enter invoice number:",
+      t("enterInvoiceNumber"),
       `F-${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}${String(new Date().getDate()).padStart(2, "0")}-001`
     )
     if (!invoiceNumber) return
@@ -55,10 +50,10 @@ export function QuoteDetail({
     startTransition(async () => {
       const result = await convertQuoteToInvoiceAction(null, formData)
       if (result.success && result.data) {
-        toast.success("Quote converted to invoice")
+        toast.success(t("quoteConverted"))
         router.push(`/invoices/${result.data.id}`)
       } else {
-        toast.error(result.error || "Failed to convert quote")
+        toast.error(result.error || t("failedToConvert"))
       }
     })
   }
@@ -80,12 +75,12 @@ export function QuoteDetail({
         <div className="flex gap-2">
           {canConvert && (
             <Button variant="outline" onClick={handleConvert} disabled={isPending}>
-              <ArrowRight className="h-4 w-4 mr-1" /> Convert to Invoice
+              <ArrowRight className="h-4 w-4 mr-1" /> {t("convertToInvoice")}
             </Button>
           )}
           {quote.invoice && (
             <Button asChild variant="outline">
-              <Link href={`/invoices/${quote.invoice.id}`}>View Invoice</Link>
+              <Link href={`/invoices/${quote.invoice.id}`}>{t("viewInvoice")}</Link>
             </Button>
           )}
           <Button variant="ghost" size="icon" onClick={handleDelete} disabled={isPending}>
@@ -103,12 +98,12 @@ export function QuoteDetail({
         </div>
         <div className="space-y-1 text-right">
           <div>
-            <p className="text-sm text-muted-foreground">Issue Date</p>
+            <p className="text-sm text-muted-foreground">{t("issueDate")}</p>
             <p className="font-medium">{format(quote.issueDate, "dd/MM/yyyy")}</p>
           </div>
           {quote.expiryDate && (
             <div>
-              <p className="text-sm text-muted-foreground">Expiry Date</p>
+              <p className="text-sm text-muted-foreground">{t("expiryDate")}</p>
               <p className="font-medium">{format(quote.expiryDate, "dd/MM/yyyy")}</p>
             </div>
           )}
@@ -118,11 +113,11 @@ export function QuoteDetail({
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>Description</TableHead>
-            <TableHead className="text-right">Qty</TableHead>
-            <TableHead className="text-right">Unit Price</TableHead>
-            <TableHead className="text-right">VAT %</TableHead>
-            <TableHead className="text-right">Amount</TableHead>
+            <TableHead>{t("description")}</TableHead>
+            <TableHead className="text-right">{t("qty")}</TableHead>
+            <TableHead className="text-right">{t("unitPrice")}</TableHead>
+            <TableHead className="text-right">{t("vatPercent")}</TableHead>
+            <TableHead className="text-right">{t("amount")}</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -138,15 +133,15 @@ export function QuoteDetail({
         </TableBody>
         <TableFooter>
           <TableRow>
-            <TableCell colSpan={4}>Subtotal</TableCell>
+            <TableCell colSpan={4}>{t("subtotal")}</TableCell>
             <TableCell className="text-right">{formatCurrency(subtotal, "EUR")}</TableCell>
           </TableRow>
           <TableRow>
-            <TableCell colSpan={4}>VAT</TableCell>
+            <TableCell colSpan={4}>{t("vat")}</TableCell>
             <TableCell className="text-right">{formatCurrency(vatTotal, "EUR")}</TableCell>
           </TableRow>
           <TableRow className="font-bold">
-            <TableCell colSpan={4}>Total</TableCell>
+            <TableCell colSpan={4}>{t("total")}</TableCell>
             <TableCell className="text-right">{formatCurrency(total, "EUR")}</TableCell>
           </TableRow>
         </TableFooter>
@@ -154,7 +149,7 @@ export function QuoteDetail({
 
       {quote.notes && (
         <div className="p-4 border rounded-lg">
-          <p className="text-sm text-muted-foreground mb-1">Notes</p>
+          <p className="text-sm text-muted-foreground mb-1">{t("notes")}</p>
           <p className="text-sm whitespace-pre-wrap">{quote.notes}</p>
         </div>
       )}

@@ -3,119 +3,100 @@ import { Card, CardDescription, CardTitle } from "@/components/ui/card"
 import { ColoredText } from "@/components/ui/colored-text"
 import { getCurrentUser } from "@/lib/auth"
 import { getSettings, updateSettings } from "@/models/settings"
-import { Banknote, ChartBarStacked, FolderOpenDot, Key, TextCursorInput, X } from "lucide-react"
+import { Banknote, Brain, Building2, Calculator, ChartBarStacked, FileText, FolderOpenDot, Key, Receipt, TextCursorInput, X } from "lucide-react"
 import { revalidatePath } from "next/cache"
 import Image from "next/image"
-import Link from "next/link"
+import { Link } from "@/lib/navigation"
+import { getTranslations } from "next-intl/server"
 
 export async function WelcomeWidget() {
   const user = await getCurrentUser()
   const settings = await getSettings(user.id)
 
+  const t = await getTranslations("welcome")
+  const tSettings = await getTranslations("settings")
+  const hasLLMKey = settings.openai_api_key || settings.google_api_key || settings.mistral_api_key || settings.anthropic_api_key || settings.openrouter_api_key
+
   return (
     <Card className="flex flex-col lg:flex-row items-start gap-10 p-10 w-full">
-      <Image src="/logo/logo.webp" alt="Logo" width={256} height={256} className="w-64 h-64" />
+      <Image src="/logo/logo.webp" alt="Logo" width={256} height={256} className="w-64 h-64 shrink-0" />
       <div className="flex flex-col">
         <CardTitle className="flex items-center justify-between">
           <span className="text-2xl font-bold">
-            <ColoredText>Hey, I&apos;m Taxinator 👋</ColoredText>
+            <ColoredText>{t("welcomeToTaxinator")}</ColoredText>
           </span>
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={async () => {
-              "use server"
-              await updateSettings(user.id, "is_welcome_message_hidden", "true")
-              revalidatePath("/")
-            }}
-          >
-            <X className="h-4 w-4" />
-          </Button>
+          <form suppressHydrationWarning action={async () => {
+            "use server"
+            await updateSettings(user.id, "is_welcome_message_hidden", "true")
+            revalidatePath("/dashboard")
+          }}>
+            <Button variant="outline" size="icon" type="submit">
+              <X className="h-4 w-4" />
+            </Button>
+          </form>
         </CardTitle>
         <CardDescription className="mt-5">
           <p className="mb-3">
-            I&apos;m a little accountant app that helps you deal with endless receipts, checks and invoices with (you
-            guessed it) AI. Here&apos;s what I can do:
+            {t("welcomeDescription")}
           </p>
           <ul className="mb-5 list-disc pl-5 space-y-1">
             <li>
-              <strong>Upload me a photo or a PDF</strong> and I will recognize, categorize and save it as a transaction
-              for your tax advisor.
+              <strong>{t("welcomeUpload")}</strong>{t("welcomeUploadDesc")}
             </li>
             <li>
-              I can <strong>automatically convert currencies</strong> and look up exchange rates for a given date.
+              <strong>{t("welcomeBankStatement")}</strong>{t("welcomeBankStatementDesc")}
             </li>
             <li>
-              I even <strong>support crypto!</strong> Historical exchange rates for staking too.
+              <strong>{t("welcomeIgic")}</strong>{t("welcomeIgicDesc")}
             </li>
             <li>
-              All <strong>LLM prompts are configurable</strong>: for fields, categories and projects. You can go to
-              settings and change them however you want.
+              <strong>{t("welcomeMultiCompany")}</strong>{t("welcomeMultiCompanyDesc")}
             </li>
             <li>
-              I save data in a <strong>local SQLite database</strong> and can export it to CSV and ZIP archives.
+              <strong>{t("welcomeInvoicing")}</strong>{t("welcomeInvoicingDesc")}
             </li>
             <li>
-              You can even <strong>create your own new fields</strong> to be analyzed and they will be included in the
-              CSV export for your tax advisor.
+              <strong>{t("welcomeTime")}</strong>{t("welcomeTimeDesc")}
             </li>
             <li>
-              I&apos;m still <strong>very young</strong> and can make mistakes. Use me at your own risk!
+              <strong>{t("welcomeExport")}</strong>{t("welcomeExportDesc")}
+            </li>
+            <li>
+              <strong>{t("welcomeAi")}</strong>{t("welcomeAiDesc")}
             </li>
           </ul>
-          <p className="mb-3">
-            While I can save you a lot of time in categorizing transactions and generating reports, I still highly
-            recommend giving the results to a professional tax advisor for review when filing your taxes!
-          </p>
         </CardDescription>
-        <div className="mt-2">
-          <Link href="https://github.com/vas3k/Taxinator" className="text-blue-500 hover:underline">
-            Source Code
-          </Link>
-          <span className="mx-2">|</span>
-          <Link href="https://github.com/vas3k/Taxinator/issues" className="text-blue-500 hover:underline">
-            Request New Feature
-          </Link>
-          <span className="mx-2">|</span>
-          <Link href="https://github.com/vas3k/Taxinator/issues" className="text-blue-500 hover:underline">
-            Report a Bug
-          </Link>
-          <span className="mx-2">|</span>
-          <Link href="mailto:me@vas3k.ru" className="text-blue-500 hover:underline">
-            Contact the Author
-          </Link>
-        </div>
-        <div className="flex flex-wrap gap-2 mt-8">
-          {settings.openai_api_key === "" && (
+        <div className="flex flex-wrap gap-2 mt-2">
+          {!hasLLMKey && (
             <Link href="/settings/llm">
               <Button>
-                <Key className="h-4 w-4" />
-                Please give your ChatGPT key here
+                <Brain className="h-4 w-4" />
+                {t("setUpAiProvider")}
               </Button>
             </Link>
           )}
           <Link href="/settings">
             <Button variant="outline">
               <Banknote className="h-4 w-4" />
-              Default Currency: {settings.default_currency}
+              {t("currency", { code: settings.default_currency || "EUR" })}
             </Button>
           </Link>
           <Link href="/settings/categories">
             <Button variant="outline">
               <ChartBarStacked className="h-4 w-4" />
-              Categories
+              {tSettings("categories")}
             </Button>
           </Link>
           <Link href="/settings/projects">
             <Button variant="outline">
               <FolderOpenDot className="h-4 w-4" />
-              Projects
+              {tSettings("projects")}
             </Button>
           </Link>
           <Link href="/settings/fields">
             <Button variant="outline">
               <TextCursorInput className="h-4 w-4" />
-              Custom Fields
+              {t("customFieldsLabel")}
             </Button>
           </Link>
         </div>

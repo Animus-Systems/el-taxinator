@@ -17,7 +17,12 @@ export const settingsFormSchema = z.object({
   anthropic_thinking: z.string().default("medium"),
   codex_api_key: z.string().optional(),
   codex_model_name: z.string().default("gpt-5.3-codex"),
-  llm_providers: z.string().default('anthropic,codex,google,openai,mistral'),
+  openrouter_api_key: z.string().optional(),
+  openrouter_model_name: z.string().default("anthropic/claude-sonnet-4"),
+  custom_api_key: z.string().optional(),
+  custom_model_name: z.string().optional(),
+  custom_base_url: z.string().optional(),
+  llm_providers: z.string().default('anthropic,codex,openrouter,google,openai,mistral,custom'),
   llm_primary_provider: z.string().default('anthropic'),
   llm_backup_provider: z.string().default('google'),
   prompt_analyse_new_file: z.string().optional(),
@@ -31,20 +36,20 @@ export const currencyFormSchema = z.object({
 
 export const projectFormSchema = z.object({
   name: z.string().max(128),
-  llm_prompt: z.string().max(512).nullable().optional(),
+  llmPrompt: z.string().max(512).nullable().optional(),
   color: z.string().max(7).default(randomHexColor()).nullable().optional(),
 })
 
 export const categoryFormSchema = z.object({
   name: z.string().max(128),
-  llm_prompt: z.string().max(512).nullable().optional(),
+  llmPrompt: z.string().max(512).nullable().optional(),
   color: z.string().max(7).default(randomHexColor()).nullable().optional(),
 })
 
 export const fieldFormSchema = z.object({
   name: z.string().max(128),
   type: z.string().max(128).default("string"),
-  llm_prompt: z.string().max(512).nullable().optional(),
+  llmPrompt: z.string().max(512).nullable().optional(),
   isVisibleInList: z.boolean().optional(),
   isVisibleInAnalysis: z.boolean().optional(),
   isRequired: z.boolean().optional(),

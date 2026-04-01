@@ -1,4 +1,5 @@
-import { prisma } from "@/lib/db"
+import { sql, queryMany, queryOne, buildInsert, buildUpdate } from "@/lib/sql"
+import type { Product } from "@/lib/db-types"
 import { cache } from "react"
 
 export type ProductData = {
@@ -11,24 +12,31 @@ export type ProductData = {
 }
 
 export const getProducts = cache(async (userId: string) => {
-  return prisma.product.findMany({
-    where: { userId },
-    orderBy: { name: "asc" },
-  })
+  return queryMany<Product>(
+    sql`SELECT * FROM products WHERE user_id = ${userId} ORDER BY name ASC`
+  )
 })
 
 export const getProductById = cache(async (id: string, userId: string) => {
-  return prisma.product.findFirst({ where: { id, userId } })
+  return queryOne<Product>(
+    sql`SELECT * FROM products WHERE id = ${id} AND user_id = ${userId}`
+  )
 })
 
 export async function createProduct(userId: string, data: ProductData) {
-  return prisma.product.create({ data: { ...data, userId } })
+  return queryOne<Product>(
+    buildInsert("products", { ...data, userId })
+  )
 }
 
 export async function updateProduct(id: string, userId: string, data: ProductData) {
-  return prisma.product.update({ where: { id, userId }, data })
+  return queryOne<Product>(
+    buildUpdate("products", { ...data, updatedAt: new Date() }, "id = $1 AND user_id = $2", [id, userId])
+  )
 }
 
 export async function deleteProduct(id: string, userId: string) {
-  return prisma.product.delete({ where: { id, userId } })
+  return queryOne<Product>(
+    sql`DELETE FROM products WHERE id = ${id} AND user_id = ${userId} RETURNING *`
+  )
 }

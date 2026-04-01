@@ -1,3 +1,4 @@
+import { getLocalizedValue } from "@/lib/i18n-db"
 import { formatCurrency, formatPeriodLabel } from "@/lib/utils"
 import type { DetailedTimeSeriesData } from "@/models/stats"
 
@@ -7,9 +8,10 @@ interface ChartTooltipProps {
   position: { x: number; y: number }
   visible: boolean
   containerWidth?: number
+  locale?: string
 }
 
-export function IncomeExpenceGraphTooltip({ data, defaultCurrency, position, visible }: ChartTooltipProps) {
+export function IncomeExpenceGraphTooltip({ data, defaultCurrency, position, visible, locale = "en" }: ChartTooltipProps) {
   if (!visible || !data) {
     return null
   }
@@ -67,7 +69,7 @@ export function IncomeExpenceGraphTooltip({ data, defaultCurrency, position, vis
               <div key={`income-${category.code}`} className="flex items-center justify-between">
                 <div className="flex items-center gap-2 flex-1 min-w-0">
                   <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: category.color }} />
-                  <span className="text-xs text-gray-700 truncate">{category.name}</span>
+                  <span className="text-xs text-gray-700 truncate">{getLocalizedValue(category.name, locale)}</span>
                 </div>
                 <span className="text-xs font-medium text-green-600 ml-2">
                   {formatCurrency(category.income, defaultCurrency)}
@@ -87,7 +89,7 @@ export function IncomeExpenceGraphTooltip({ data, defaultCurrency, position, vis
               <div key={`expense-${category.code}`} className="flex items-center justify-between">
                 <div className="flex items-center gap-2 flex-1 min-w-0">
                   <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: category.color }} />
-                  <span className="text-xs text-gray-700 truncate">{category.name}</span>
+                  <span className="text-xs text-gray-700 truncate">{getLocalizedValue(category.name, locale)}</span>
                 </div>
                 <span className="text-xs font-medium text-red-600 ml-2">
                   {formatCurrency(category.expenses, defaultCurrency)}

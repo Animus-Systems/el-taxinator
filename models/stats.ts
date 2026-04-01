@@ -1,8 +1,13 @@
-import { prisma } from "@/lib/db"
-import { calcTotalPerCurrency } from "@/lib/stats"
-import { Prisma } from "@/prisma/client"
+import { getPool } from "@/lib/pg"
+import { mapRow } from "@/lib/sql"
+import { getLocalizedValue } from "@/lib/i18n-db"
+import type { Category } from "@/lib/db-types"
 import { cache } from "react"
-import { TransactionFilters } from "./transactions"
+import { TransactionFilters, buildTransactionWhere } from "./transactions"
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
 
 export type DashboardStats = {
   totalIncomePerCurrency: Record<string, number>
@@ -11,74 +16,12 @@ export type DashboardStats = {
   invoicesProcessed: number
 }
 
-export const getDashboardStats = cache(
-  async (userId: string, filters: TransactionFilters = {}): Promise<DashboardStats> => {
-    const where: Prisma.TransactionWhereInput = {}
-
-    if (filters.dateFrom || filters.dateTo) {
-      where.issuedAt = {
-        gte: filters.dateFrom ? new Date(filters.dateFrom) : undefined,
-        lte: filters.dateTo ? new Date(filters.dateTo) : undefined,
-      }
-    }
-
-    const transactions = await prisma.transaction.findMany({ where: { ...where, userId } })
-    const totalIncomePerCurrency = calcTotalPerCurrency(transactions.filter((t) => t.type === "income"))
-    const totalExpensesPerCurrency = calcTotalPerCurrency(transactions.filter((t) => t.type === "expense"))
-    const profitPerCurrency = Object.fromEntries(
-      Object.keys(totalIncomePerCurrency).map((currency) => [
-        currency,
-        totalIncomePerCurrency[currency] - totalExpensesPerCurrency[currency],
-      ])
-    )
-    const invoicesProcessed = transactions.length
-
-    return {
-      totalIncomePerCurrency,
-      totalExpensesPerCurrency,
-      profitPerCurrency,
-      invoicesProcessed,
-    }
-  }
-)
-
 export type ProjectStats = {
   totalIncomePerCurrency: Record<string, number>
   totalExpensesPerCurrency: Record<string, number>
   profitPerCurrency: Record<string, number>
   invoicesProcessed: number
 }
-
-export const getProjectStats = cache(async (userId: string, projectId: string, filters: TransactionFilters = {}) => {
-  const where: Prisma.TransactionWhereInput = {
-    projectCode: projectId,
-  }
-
-  if (filters.dateFrom || filters.dateTo) {
-    where.issuedAt = {
-      gte: filters.dateFrom ? new Date(filters.dateFrom) : undefined,
-      lte: filters.dateTo ? new Date(filters.dateTo) : undefined,
-    }
-  }
-
-  const transactions = await prisma.transaction.findMany({ where: { ...where, userId } })
-  const totalIncomePerCurrency = calcTotalPerCurrency(transactions.filter((t) => t.type === "income"))
-  const totalExpensesPerCurrency = calcTotalPerCurrency(transactions.filter((t) => t.type === "expense"))
-  const profitPerCurrency = Object.fromEntries(
-    Object.keys(totalIncomePerCurrency).map((currency) => [
-      currency,
-      totalIncomePerCurrency[currency] - totalExpensesPerCurrency[currency],
-    ])
-  )
-
-  const invoicesProcessed = transactions.length
-  return {
-    totalIncomePerCurrency,
-    totalExpensesPerCurrency,
-    profitPerCurrency,
-    invoicesProcessed,
-  }
-})
 
 export type TimeSeriesData = {
   period: string
@@ -105,219 +48,360 @@ export type DetailedTimeSeriesData = {
   totalTransactions: number
 }
 
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+type CurrencyAggregate = {
+  currency: string
+  total: number
+}
+
+/** Convenience wrapper: builds WHERE for stats queries (no table alias, no search). */
+function buildStatsWhere(
+  userId: string,
+  filters: TransactionFilters = {},
+  extraConditions?: string[],
+): { clause: string; values: unknown[] } {
+  const { clause, values } = buildTransactionWhere(userId, filters, {
+    alias: "",
+    extraConditions,
+  })
+  return { clause, values }
+}
+
+/**
+ * Aggregates totals per currency via SQL SUM/GROUP BY.
+ * Uses converted_total + converted_currency_code when available, else total + currency_code.
+ */
+async function aggregatePerCurrency(
+  userId: string,
+  type: string,
+  filters: TransactionFilters = {},
+  extraConditions?: string[],
+): Promise<Record<string, number>> {
+  const pool = await getPool()
+  const { clause, values } = buildStatsWhere(userId, filters, extraConditions)
+  const typeIdx = values.length + 1
+  values.push(type)
+
+  const result = await pool.query(
+    `SELECT
+       UPPER(COALESCE(converted_currency_code, currency_code)) AS currency,
+       SUM(COALESCE(
+         CASE WHEN converted_currency_code IS NOT NULL THEN converted_total END,
+         total,
+         0
+       ))::float AS total
+     FROM transactions
+     ${clause} AND type = $${typeIdx}
+     GROUP BY UPPER(COALESCE(converted_currency_code, currency_code))`,
+    values,
+  )
+
+  const map: Record<string, number> = {}
+  for (const row of result.rows) {
+    if (row.currency) {
+      map[row.currency] = row.total ?? 0
+    }
+  }
+  return map
+}
+
+// ---------------------------------------------------------------------------
+// Dashboard stats (SQL aggregation)
+// ---------------------------------------------------------------------------
+
+export const getDashboardStats = cache(
+  async (userId: string, filters: TransactionFilters = {}): Promise<DashboardStats> => {
+    const pool = await getPool()
+    const { clause, values } = buildStatsWhere(userId, filters)
+
+    const [totalIncomePerCurrency, totalExpensesPerCurrency, countResult] = await Promise.all([
+      aggregatePerCurrency(userId, "income", filters),
+      aggregatePerCurrency(userId, "expense", filters),
+      pool.query(`SELECT COUNT(*)::int AS count FROM transactions ${clause}`, values),
+    ])
+
+    // Compute profit
+    const allCurrencies = new Set([
+      ...Object.keys(totalIncomePerCurrency),
+      ...Object.keys(totalExpensesPerCurrency),
+    ])
+    const profitPerCurrency: Record<string, number> = {}
+    for (const currency of allCurrencies) {
+      profitPerCurrency[currency] =
+        (totalIncomePerCurrency[currency] ?? 0) - (totalExpensesPerCurrency[currency] ?? 0)
+    }
+
+    return {
+      totalIncomePerCurrency,
+      totalExpensesPerCurrency,
+      profitPerCurrency,
+      invoicesProcessed: countResult.rows[0]?.count ?? 0,
+    }
+  },
+)
+
+// ---------------------------------------------------------------------------
+// Project stats (SQL aggregation)
+// ---------------------------------------------------------------------------
+
+export const getProjectStats = cache(
+  async (
+    userId: string,
+    projectId: string,
+    filters: TransactionFilters = {},
+  ): Promise<ProjectStats> => {
+    const pool = await getPool()
+    const projectFilters = { ...filters, projectCode: projectId }
+    const { clause, values } = buildStatsWhere(userId, projectFilters)
+
+    const [totalIncomePerCurrency, totalExpensesPerCurrency, countResult] = await Promise.all([
+      aggregatePerCurrency(userId, "income", projectFilters),
+      aggregatePerCurrency(userId, "expense", projectFilters),
+      pool.query(`SELECT COUNT(*)::int AS count FROM transactions ${clause}`, values),
+    ])
+
+    const allCurrencies = new Set([
+      ...Object.keys(totalIncomePerCurrency),
+      ...Object.keys(totalExpensesPerCurrency),
+    ])
+    const profitPerCurrency: Record<string, number> = {}
+    for (const currency of allCurrencies) {
+      profitPerCurrency[currency] =
+        (totalIncomePerCurrency[currency] ?? 0) - (totalExpensesPerCurrency[currency] ?? 0)
+    }
+
+    return {
+      totalIncomePerCurrency,
+      totalExpensesPerCurrency,
+      profitPerCurrency,
+      invoicesProcessed: countResult.rows[0]?.count ?? 0,
+    }
+  },
+)
+
+// ---------------------------------------------------------------------------
+// Time series stats
+// ---------------------------------------------------------------------------
+
 export const getTimeSeriesStats = cache(
   async (
     userId: string,
     filters: TransactionFilters = {},
-    defaultCurrency: string = "EUR"
+    defaultCurrency: string = "EUR",
   ): Promise<TimeSeriesData[]> => {
-    const where: Prisma.TransactionWhereInput = { userId }
+    const pool = await getPool()
+    const { clause, values } = buildStatsWhere(userId, filters)
 
-    if (filters.dateFrom || filters.dateTo) {
-      where.issuedAt = {
-        gte: filters.dateFrom ? new Date(filters.dateFrom) : undefined,
-        lte: filters.dateTo ? new Date(filters.dateTo) : undefined,
-      }
-    }
+    // First determine date range and whether to group by day or month
+    const rangeResult = await pool.query(
+      `SELECT MIN(issued_at) AS min_date, MAX(issued_at) AS max_date
+       FROM transactions ${clause} AND issued_at IS NOT NULL`,
+      values,
+    )
 
-    if (filters.categoryCode) {
-      where.categoryCode = filters.categoryCode
-    }
+    if (!rangeResult.rows[0]?.min_date) return []
 
-    if (filters.projectCode) {
-      where.projectCode = filters.projectCode
-    }
-
-    if (filters.type) {
-      where.type = filters.type
-    }
-
-    const transactions = await prisma.transaction.findMany({
-      where,
-      orderBy: { issuedAt: "asc" },
-    })
-
-    if (transactions.length === 0) {
-      return []
-    }
-
-    // Determine if we should group by day or month
-    const dateFrom = filters.dateFrom ? new Date(filters.dateFrom) : new Date(transactions[0].issuedAt!)
-    const dateTo = filters.dateTo ? new Date(filters.dateTo) : new Date(transactions[transactions.length - 1].issuedAt!)
+    const dateFrom = filters.dateFrom
+      ? new Date(filters.dateFrom)
+      : new Date(rangeResult.rows[0].min_date)
+    const dateTo = filters.dateTo
+      ? new Date(filters.dateTo)
+      : new Date(rangeResult.rows[0].max_date)
     const daysDiff = Math.ceil((dateTo.getTime() - dateFrom.getTime()) / (1000 * 60 * 60 * 24))
     const groupByDay = daysDiff <= 50
 
-    // Group transactions by time period
-    const grouped = transactions.reduce(
-      (acc, transaction) => {
-        if (!transaction.issuedAt) return acc
+    const periodExpr = groupByDay
+      ? `TO_CHAR(issued_at, 'YYYY-MM-DD')`
+      : `TO_CHAR(issued_at, 'YYYY-MM')`
 
-        const date = new Date(transaction.issuedAt)
-        const period = groupByDay
-          ? date.toISOString().split("T")[0] // YYYY-MM-DD
-          : `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}` // YYYY-MM
+    const upperCurrency = defaultCurrency.toUpperCase()
+    const currIdx = values.length + 1
+    values.push(upperCurrency)
 
-        if (!acc[period]) {
-          acc[period] = { period, income: 0, expenses: 0, date }
-        }
-
-        // Get amount in default currency
-        const amount =
-          transaction.convertedCurrencyCode?.toUpperCase() === defaultCurrency.toUpperCase()
-            ? transaction.convertedTotal || 0
-            : transaction.currencyCode?.toUpperCase() === defaultCurrency.toUpperCase()
-              ? transaction.total || 0
-              : 0 // Skip transactions not in default currency for simplicity
-
-        if (transaction.type === "income") {
-          acc[period].income += amount
-        } else if (transaction.type === "expense") {
-          acc[period].expenses += amount
-        }
-
-        return acc
-      },
-      {} as Record<string, TimeSeriesData>
+    const result = await pool.query(
+      `SELECT
+         ${periodExpr} AS period,
+         MIN(issued_at) AS period_date,
+         SUM(CASE WHEN type = 'income' THEN
+           CASE
+             WHEN UPPER(converted_currency_code) = $${currIdx} THEN COALESCE(converted_total, 0)
+             WHEN UPPER(currency_code) = $${currIdx} THEN COALESCE(total, 0)
+             ELSE 0
+           END ELSE 0 END)::float AS income,
+         SUM(CASE WHEN type = 'expense' THEN
+           CASE
+             WHEN UPPER(converted_currency_code) = $${currIdx} THEN COALESCE(converted_total, 0)
+             WHEN UPPER(currency_code) = $${currIdx} THEN COALESCE(total, 0)
+             ELSE 0
+           END ELSE 0 END)::float AS expenses
+       FROM transactions
+       ${clause} AND issued_at IS NOT NULL
+       GROUP BY ${periodExpr}
+       ORDER BY ${periodExpr} ASC`,
+      values,
     )
 
-    return Object.values(grouped).sort((a, b) => a.date.getTime() - b.date.getTime())
-  }
+    return result.rows.map((row) => ({
+      period: row.period,
+      income: row.income ?? 0,
+      expenses: row.expenses ?? 0,
+      date: new Date(row.period_date),
+    }))
+  },
 )
+
+// ---------------------------------------------------------------------------
+// Detailed time series stats (with category breakdowns)
+// ---------------------------------------------------------------------------
 
 export const getDetailedTimeSeriesStats = cache(
   async (
     userId: string,
     filters: TransactionFilters = {},
-    defaultCurrency: string = "EUR"
+    defaultCurrency: string = "EUR",
   ): Promise<DetailedTimeSeriesData[]> => {
-    const where: Prisma.TransactionWhereInput = { userId }
+    const pool = await getPool()
+    const { clause, values } = buildStatsWhere(userId, filters)
 
-    if (filters.dateFrom || filters.dateTo) {
-      where.issuedAt = {
-        gte: filters.dateFrom ? new Date(filters.dateFrom) : undefined,
-        lte: filters.dateTo ? new Date(filters.dateTo) : undefined,
-      }
-    }
+    // Determine grouping
+    const rangeResult = await pool.query(
+      `SELECT MIN(issued_at) AS min_date, MAX(issued_at) AS max_date
+       FROM transactions ${clause} AND issued_at IS NOT NULL`,
+      values,
+    )
 
-    if (filters.categoryCode) {
-      where.categoryCode = filters.categoryCode
-    }
+    if (!rangeResult.rows[0]?.min_date) return []
 
-    if (filters.projectCode) {
-      where.projectCode = filters.projectCode
-    }
-
-    if (filters.type) {
-      where.type = filters.type
-    }
-
-    const [transactions, categories] = await Promise.all([
-      prisma.transaction.findMany({
-        where,
-        include: {
-          category: true,
-        },
-        orderBy: { issuedAt: "asc" },
-      }),
-      prisma.category.findMany({
-        where: { userId },
-        orderBy: { name: "asc" },
-      }),
-    ])
-
-    if (transactions.length === 0) {
-      return []
-    }
-
-    // Determine if we should group by day or month
-    const dateFrom = filters.dateFrom ? new Date(filters.dateFrom) : new Date(transactions[0].issuedAt!)
-    const dateTo = filters.dateTo ? new Date(filters.dateTo) : new Date(transactions[transactions.length - 1].issuedAt!)
+    const dateFrom = filters.dateFrom
+      ? new Date(filters.dateFrom)
+      : new Date(rangeResult.rows[0].min_date)
+    const dateTo = filters.dateTo
+      ? new Date(filters.dateTo)
+      : new Date(rangeResult.rows[0].max_date)
     const daysDiff = Math.ceil((dateTo.getTime() - dateFrom.getTime()) / (1000 * 60 * 60 * 24))
     const groupByDay = daysDiff <= 50
 
-    // Create category lookup
-    const categoryLookup = new Map(categories.map((cat) => [cat.code, cat]))
+    const periodExpr = groupByDay
+      ? `TO_CHAR(t.issued_at, 'YYYY-MM-DD')`
+      : `TO_CHAR(t.issued_at, 'YYYY-MM')`
 
-    // Group transactions by time period
-    const grouped = transactions.reduce(
-      (acc, transaction) => {
-        if (!transaction.issuedAt) return acc
-
-        const date = new Date(transaction.issuedAt)
-        const period = groupByDay
-          ? date.toISOString().split("T")[0] // YYYY-MM-DD
-          : `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}` // YYYY-MM
-
-        if (!acc[period]) {
-          acc[period] = {
-            period,
-            income: 0,
-            expenses: 0,
-            date,
-            categories: new Map<string, CategoryBreakdown>(),
-            totalTransactions: 0,
-          }
-        }
-
-        // Get amount in default currency
-        const amount =
-          transaction.convertedCurrencyCode?.toUpperCase() === defaultCurrency.toUpperCase()
-            ? transaction.convertedTotal || 0
-            : transaction.currencyCode?.toUpperCase() === defaultCurrency.toUpperCase()
-              ? transaction.total || 0
-              : 0 // Skip transactions not in default currency for simplicity
-
-        const categoryCode = transaction.categoryCode || "other"
-        const category = categoryLookup.get(categoryCode) || {
-          code: "other",
-          name: "Other",
-          color: "#6b7280",
-        }
-
-        // Initialize category if not exists
-        if (!acc[period].categories.has(categoryCode)) {
-          acc[period].categories.set(categoryCode, {
-            code: category.code,
-            name: category.name,
-            color: category.color || "#6b7280",
-            income: 0,
-            expenses: 0,
-            transactionCount: 0,
-          })
-        }
-
-        const categoryData = acc[period].categories.get(categoryCode)!
-        categoryData.transactionCount++
-        acc[period].totalTransactions++
-
-        if (transaction.type === "income") {
-          acc[period].income += amount
-          categoryData.income += amount
-        } else if (transaction.type === "expense") {
-          acc[period].expenses += amount
-          categoryData.expenses += amount
-        }
-
-        return acc
-      },
-      {} as Record<
-        string,
-        {
-          period: string
-          income: number
-          expenses: number
-          date: Date
-          categories: Map<string, CategoryBreakdown>
-          totalTransactions: number
-        }
-      >
+    // Fetch categories for lookup
+    const categoriesResult = await pool.query(
+      `SELECT * FROM categories WHERE user_id = $1 ORDER BY name ASC`,
+      [userId],
+    )
+    const categoryLookup = new Map<string, Category>(
+      categoriesResult.rows.map((r) => {
+        const c = mapRow<Category>(r)
+        return [c.code, c]
+      }),
     )
 
-    return Object.values(grouped)
+    // Build the grouped query with category breakdown
+    const upperCurrency = defaultCurrency.toUpperCase()
+    const { clause: tWhere, values: tValues, nextIdx } = buildTransactionWhere(
+      userId,
+      filters,
+      { alias: "t", extraConditions: ["t.issued_at IS NOT NULL"] },
+    )
+
+    const currIdx2 = nextIdx
+    tValues.push(upperCurrency)
+
+    const detailResult = await pool.query(
+      `SELECT
+         ${periodExpr} AS period,
+         MIN(t.issued_at) AS period_date,
+         COALESCE(t.category_code, 'other') AS cat_code,
+         SUM(CASE WHEN t.type = 'income' THEN
+           CASE
+             WHEN UPPER(t.converted_currency_code) = $${currIdx2} THEN COALESCE(t.converted_total, 0)
+             WHEN UPPER(t.currency_code) = $${currIdx2} THEN COALESCE(t.total, 0)
+             ELSE 0
+           END ELSE 0 END)::float AS income,
+         SUM(CASE WHEN t.type = 'expense' THEN
+           CASE
+             WHEN UPPER(t.converted_currency_code) = $${currIdx2} THEN COALESCE(t.converted_total, 0)
+             WHEN UPPER(t.currency_code) = $${currIdx2} THEN COALESCE(t.total, 0)
+             ELSE 0
+           END ELSE 0 END)::float AS expenses,
+         COUNT(*)::int AS transaction_count
+       FROM transactions t
+       ${tWhere}
+       GROUP BY ${periodExpr}, COALESCE(t.category_code, 'other')
+       ORDER BY ${periodExpr} ASC`,
+      tValues,
+    )
+
+    // Aggregate into periods
+    const periodMap = new Map<
+      string,
+      {
+        period: string
+        income: number
+        expenses: number
+        date: Date
+        categories: Map<string, CategoryBreakdown>
+        totalTransactions: number
+      }
+    >()
+
+    for (const row of detailResult.rows) {
+      const period = row.period as string
+      if (!periodMap.has(period)) {
+        periodMap.set(period, {
+          period,
+          income: 0,
+          expenses: 0,
+          date: new Date(row.period_date),
+          categories: new Map(),
+          totalTransactions: 0,
+        })
+      }
+
+      const entry = periodMap.get(period)!
+      const catCode = row.cat_code as string
+      const income = row.income ?? 0
+      const expenses = row.expenses ?? 0
+      const txCount = row.transaction_count ?? 0
+
+      entry.income += income
+      entry.expenses += expenses
+      entry.totalTransactions += txCount
+
+      const catInfo = categoryLookup.get(catCode) ?? {
+        code: "other",
+        name: "Other",
+        color: "#6b7280",
+      }
+
+      if (!entry.categories.has(catCode)) {
+        entry.categories.set(catCode, {
+          code: catInfo.code,
+          name: getLocalizedValue(catInfo.name, "en"),
+          color: catInfo.color || "#6b7280",
+          income: 0,
+          expenses: 0,
+          transactionCount: 0,
+        })
+      }
+
+      const catData = entry.categories.get(catCode)!
+      catData.income += income
+      catData.expenses += expenses
+      catData.transactionCount += txCount
+    }
+
+    return Array.from(periodMap.values())
       .map((item) => ({
         ...item,
-        categories: Array.from(item.categories.values()).filter((cat) => cat.income > 0 || cat.expenses > 0),
+        categories: Array.from(item.categories.values()).filter(
+          (cat) => cat.income > 0 || cat.expenses > 0,
+        ),
       }))
       .sort((a, b) => a.date.getTime() - b.date.getTime())
-  }
+  },
 )

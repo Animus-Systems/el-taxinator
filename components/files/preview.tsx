@@ -1,9 +1,9 @@
 "use client"
 
 import { formatBytes } from "@/lib/utils"
-import { File } from "@/prisma/client"
+import type { File } from "@/lib/db-types"
 import Image from "next/image"
-import Link from "next/link"
+import { Link } from "@/lib/navigation"
 import { useState } from "react"
 
 export function FilePreview({ file }: { file: File }) {

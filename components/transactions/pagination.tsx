@@ -7,7 +7,8 @@ import {
   PaginationLink,
   Pagination as PaginationRoot,
 } from "@/components/ui/pagination"
-import { useRouter, useSearchParams } from "next/navigation"
+import { useSearchParams } from "next/navigation"
+import { useRouter } from "@/lib/navigation"
 
 const MAX_VISIBLE_PAGES = 5
 

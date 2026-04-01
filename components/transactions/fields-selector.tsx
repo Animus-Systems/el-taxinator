@@ -1,6 +1,6 @@
 "use client"
 
-import { updateFieldVisibilityAction } from "@/app/(app)/transactions/actions"
+import { updateFieldVisibilityAction } from "@/actions/transactions"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -10,13 +10,17 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Field } from "@/prisma/client"
+import type { Field } from "@/lib/db-types"
 import { ColumnsIcon, Loader2 } from "lucide-react"
-import { useRouter } from "next/navigation"
+import { useRouter } from "@/lib/navigation"
 import { useState } from "react"
+import { useTranslations, useLocale } from "next-intl"
+import { getLocalizedValue } from "@/lib/i18n-db"
 
 export function ColumnSelector({ fields, onChange }: { fields: Field[]; onChange?: () => void }) {
   const router = useRouter()
+  const t = useTranslations("transactions")
+  const locale = useLocale()
   const [isLoading, setIsLoading] = useState(false)
 
   const handleToggle = async (fieldCode: string, isCurrentlyVisible: boolean) => {
@@ -41,7 +45,7 @@ export function ColumnSelector({ fields, onChange }: { fields: Field[]; onChange
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="outline" size="icon" title="Select table columns">
+        <Button variant="outline" size="icon" title={t("selectColumns")}>
           {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ColumnsIcon className="h-4 w-4" />}
         </Button>
       </DropdownMenuTrigger>
@@ -55,7 +59,7 @@ export function ColumnSelector({ fields, onChange }: { fields: Field[]; onChange
             onCheckedChange={() => handleToggle(field.code, field.isVisibleInList)}
             disabled={isLoading}
           >
-            {field.name}
+            {getLocalizedValue(field.name, locale)}
           </DropdownMenuCheckboxItem>
         ))}
       </DropdownMenuContent>

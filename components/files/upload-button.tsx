@@ -1,11 +1,11 @@
 "use client"
 
-import { useNotification } from "@/app/(app)/context"
-import { uploadFilesAction } from "@/app/(app)/files/actions"
+import { useNotification } from "@/lib/context"
+import { uploadFilesAction } from "@/actions/files"
 import { Button } from "@/components/ui/button"
 import config from "@/lib/config"
 import { Loader2 } from "lucide-react"
-import { useRouter } from "next/navigation"
+import { useRouter } from "@/lib/navigation"
 import { ComponentProps, startTransition, useRef, useState } from "react"
 import { FormError } from "../forms/error"
 

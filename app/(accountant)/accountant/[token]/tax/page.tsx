@@ -29,9 +29,9 @@ export default async function AccountantTaxPage({
   ])
 
   // Compute annual totals from quarterly data
-  const totalIvaRepercutido = quarters.reduce((s, q) => s + q.modelo303.totalIvaRepercutido, 0)
-  const totalIvaDeducible = quarters.reduce((s, q) => s + q.modelo303.casilla29_cuotaDeducible, 0)
-  const totalVatResult = quarters.reduce((s, q) => s + q.modelo303.casilla46_resultado, 0)
+  const totalIgicDevengado = quarters.reduce((s, q) => s + q.modelo420.totalIgicDevengado, 0)
+  const totalIgicDeducible = quarters.reduce((s, q) => s + q.modelo420.cuotaDeducible, 0)
+  const totalIgicResult = quarters.reduce((s, q) => s + q.modelo420.resultado, 0)
   const totalIrpf = quarters.reduce((s, q) => s + q.modelo130.casilla06_aIngresar, 0)
 
   return (
@@ -58,18 +58,18 @@ export default async function AccountantTaxPage({
           <div key={q.quarter} className="rounded-lg border p-4">
             <h3 className="font-semibold mb-3">{q.label}</h3>
             <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-              <dt className="text-muted-foreground">IVA repercutido</dt>
-              <dd className="text-right font-mono">€{(q.modelo303.totalIvaRepercutido / 100).toFixed(2)}</dd>
-              <dt className="text-muted-foreground">IVA deducible</dt>
-              <dd className="text-right font-mono">€{(q.modelo303.casilla29_cuotaDeducible / 100).toFixed(2)}</dd>
-              <dt className="text-muted-foreground font-medium">Resultado 303</dt>
+              <dt className="text-muted-foreground">IGIC devengado</dt>
+              <dd className="text-right font-mono">&euro;{(q.modelo420.totalIgicDevengado / 100).toFixed(2)}</dd>
+              <dt className="text-muted-foreground">IGIC deducible</dt>
+              <dd className="text-right font-mono">&euro;{(q.modelo420.cuotaDeducible / 100).toFixed(2)}</dd>
+              <dt className="text-muted-foreground font-medium">Resultado 420</dt>
               <dd className={`text-right font-mono font-semibold ${
-                q.modelo303.casilla46_resultado >= 0 ? "text-red-600 dark:text-red-400" : "text-green-600 dark:text-green-400"
+                q.modelo420.resultado >= 0 ? "text-red-600 dark:text-red-400" : "text-green-600 dark:text-green-400"
               }`}>
-                €{(q.modelo303.casilla46_resultado / 100).toFixed(2)}
+                &euro;{(q.modelo420.resultado / 100).toFixed(2)}
               </dd>
               <dt className="text-muted-foreground">IRPF a ingresar (130)</dt>
-              <dd className="text-right font-mono">€{(q.modelo130.casilla06_aIngresar / 100).toFixed(2)}</dd>
+              <dd className="text-right font-mono">&euro;{(q.modelo130.casilla06_aIngresar / 100).toFixed(2)}</dd>
             </dl>
           </div>
         ))}
@@ -78,18 +78,18 @@ export default async function AccountantTaxPage({
       <div className="rounded-lg border p-4 mb-8">
         <h3 className="font-semibold mb-3">Annual Summary {year}</h3>
         <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm max-w-sm">
-          <dt className="text-muted-foreground">Total IVA repercutido</dt>
-          <dd className="text-right font-mono">€{(totalIvaRepercutido / 100).toFixed(2)}</dd>
-          <dt className="text-muted-foreground">Total IVA deducible</dt>
-          <dd className="text-right font-mono">€{(totalIvaDeducible / 100).toFixed(2)}</dd>
-          <dt className="text-muted-foreground font-medium">Net VAT to AEAT</dt>
+          <dt className="text-muted-foreground">Total IGIC devengado</dt>
+          <dd className="text-right font-mono">&euro;{(totalIgicDevengado / 100).toFixed(2)}</dd>
+          <dt className="text-muted-foreground">Total IGIC deducible</dt>
+          <dd className="text-right font-mono">&euro;{(totalIgicDeducible / 100).toFixed(2)}</dd>
+          <dt className="text-muted-foreground font-medium">Net IGIC to ATC</dt>
           <dd className={`text-right font-mono font-semibold ${
-            totalVatResult >= 0 ? "text-red-600 dark:text-red-400" : "text-green-600 dark:text-green-400"
+            totalIgicResult >= 0 ? "text-red-600 dark:text-red-400" : "text-green-600 dark:text-green-400"
           }`}>
-            €{(totalVatResult / 100).toFixed(2)}
+            &euro;{(totalIgicResult / 100).toFixed(2)}
           </dd>
           <dt className="text-muted-foreground">Total IRPF (130)</dt>
-          <dd className="text-right font-mono">€{(totalIrpf / 100).toFixed(2)}</dd>
+          <dd className="text-right font-mono">&euro;{(totalIrpf / 100).toFixed(2)}</dd>
         </dl>
       </div>
 

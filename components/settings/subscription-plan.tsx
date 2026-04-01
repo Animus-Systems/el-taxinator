@@ -1,4 +1,4 @@
-import { User } from "@/prisma/client"
+import type { User } from "@/lib/db-types"
 
 import { PricingCard } from "@/components/auth/pricing-card"
 import { Button } from "@/components/ui/button"

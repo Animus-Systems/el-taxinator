@@ -20,6 +20,7 @@ export interface LLMConfig {
   apiKey: string
   model: string
   thinking?: string
+  baseUrl?: string
 }
 
 export interface LLMSettings {
@@ -151,6 +152,23 @@ async function requestLLMUnified(config: LLMConfig, req: LLMRequest): Promise<LL
 
     if (config.provider === "openai") {
       model = new ChatOpenAI({ apiKey: config.apiKey, model: config.model, temperature })
+    } else if (config.provider === "openrouter") {
+      model = new ChatOpenAI({
+        apiKey: config.apiKey,
+        model: config.model,
+        temperature,
+        configuration: { baseURL: "https://openrouter.ai/api/v1" },
+      })
+    } else if (config.provider === "custom") {
+      if (!config.baseUrl) {
+        return { output: {}, provider: config.provider, error: "Custom provider requires a base URL" }
+      }
+      model = new ChatOpenAI({
+        apiKey: config.apiKey,
+        model: config.model,
+        temperature,
+        configuration: { baseURL: config.baseUrl },
+      })
     } else if (config.provider === "google") {
       model = new ChatGoogleGenerativeAI({ apiKey: config.apiKey, model: config.model, temperature })
     } else if (config.provider === "mistral") {

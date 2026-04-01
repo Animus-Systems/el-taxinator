@@ -1,38 +1,27 @@
-import { prisma } from "@/lib/db"
-import { Prisma } from "@/prisma/client"
+import { sql, queryMany, queryOne, buildInsert, buildUpdate } from "@/lib/sql"
+import type { Currency, CurrencyCreateInput } from "@/lib/db-types"
 import { cache } from "react"
 
 export const getCurrencies = cache(async (userId: string) => {
-  return await prisma.currency.findMany({
-    where: { userId },
-    orderBy: {
-      code: "asc",
-    },
-  })
+  return await queryMany<Currency>(
+    sql`SELECT * FROM currencies WHERE user_id = ${userId} ORDER BY code ASC`
+  )
 })
 
-export const createCurrency = async (userId: string, currency: Prisma.CurrencyCreateInput) => {
-  return await prisma.currency.create({
-    data: {
-      ...currency,
-      user: {
-        connect: {
-          id: userId,
-        },
-      },
-    },
-  })
+export const createCurrency = async (userId: string, currency: CurrencyCreateInput) => {
+  return await queryOne<Currency>(
+    buildInsert("currencies", { ...currency, userId })
+  )
 }
 
-export const updateCurrency = async (userId: string, code: string, currency: Prisma.CurrencyUpdateInput) => {
-  return await prisma.currency.update({
-    where: { userId_code: { code, userId } },
-    data: currency,
-  })
+export const updateCurrency = async (userId: string, code: string, currency: Partial<CurrencyCreateInput>) => {
+  return await queryOne<Currency>(
+    buildUpdate("currencies", currency, "user_id = $1 AND code = $2", [userId, code])
+  )
 }
 
 export const deleteCurrency = async (userId: string, code: string) => {
-  return await prisma.currency.delete({
-    where: { userId_code: { code, userId } },
-  })
+  return await queryOne<Currency>(
+    sql`DELETE FROM currencies WHERE user_id = ${userId} AND code = ${code} RETURNING *`
+  )
 }

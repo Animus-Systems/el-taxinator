@@ -1,5 +1,6 @@
-import { prisma } from "@/lib/db"
+import { sql, queryMany, queryOne } from "@/lib/sql"
 import { PROVIDERS } from "@/lib/llm-providers"
+import type { Setting } from "@/lib/db-types"
 import { cache } from "react"
 import { LLMProvider } from "@/ai/providers/llmProvider"
 
@@ -33,6 +34,9 @@ export function getLLMSettings(settings: SettingsMap) {
       thinking: providerMeta.thinkingSettingName
         ? (settings[providerMeta.thinkingSettingName] || "medium")
         : undefined,
+      baseUrl: providerMeta.baseUrlName
+        ? (settings[providerMeta.baseUrlName] || undefined)
+        : undefined,
     }
   }).filter((provider): provider is NonNullable<typeof provider> => provider !== null)
 
@@ -42,9 +46,9 @@ export function getLLMSettings(settings: SettingsMap) {
 }
 
 export const getSettings = cache(async (userId: string): Promise<SettingsMap> => {
-  const settings = await prisma.setting.findMany({
-    where: { userId },
-  })
+  const settings = await queryMany<Setting>(
+    sql`SELECT * FROM settings WHERE user_id = ${userId}`
+  )
 
   return settings.reduce((acc, setting) => {
     acc[setting.code] = setting.value || ""
@@ -53,14 +57,11 @@ export const getSettings = cache(async (userId: string): Promise<SettingsMap> =>
 })
 
 export const updateSettings = async (userId: string, code: string, value: string | undefined) => {
-  return await prisma.setting.upsert({
-    where: { userId_code: { code, userId } },
-    update: { value },
-    create: {
-      code,
-      value,
-      name: code,
-      userId,
-    },
-  })
+  return await queryOne<Setting>(
+    sql`INSERT INTO settings (user_id, code, name, value)
+        VALUES (${userId}, ${code}, ${code}, ${value ?? null})
+        ON CONFLICT (user_id, code)
+        DO UPDATE SET value = ${value ?? null}
+        RETURNING *`
+  )
 }

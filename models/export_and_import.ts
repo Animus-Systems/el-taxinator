@@ -1,4 +1,5 @@
-import { prisma } from "@/lib/db"
+import { sql, queryOne } from "@/lib/sql"
+import type { Project, Category } from "@/lib/db-types"
 import { codeFromName } from "@/lib/utils"
 import { formatDate } from "date-fns"
 import { createCategory, getCategoryByCode } from "./categories"
@@ -133,11 +134,9 @@ export const EXPORT_AND_IMPORT_FIELD_MAP: Record<string, ExportImportFieldSettin
 export const importProject = async (userId: string, name: string) => {
   const code = codeFromName(name)
 
-  const existingProject = await prisma.project.findFirst({
-    where: {
-      OR: [{ code }, { name }],
-    },
-  })
+  const existingProject = await queryOne<Project>(
+    sql`SELECT * FROM projects WHERE user_id = ${userId} AND (code = ${code} OR name = ${name})`,
+  )
 
   if (existingProject) {
     return existingProject
@@ -149,11 +148,9 @@ export const importProject = async (userId: string, name: string) => {
 export const importCategory = async (userId: string, name: string) => {
   const code = codeFromName(name)
 
-  const existingCategory = await prisma.category.findFirst({
-    where: {
-      OR: [{ code }, { name }],
-    },
-  })
+  const existingCategory = await queryOne<Category>(
+    sql`SELECT * FROM categories WHERE user_id = ${userId} AND (code = ${code} OR name = ${name})`,
+  )
 
   if (existingCategory) {
     return existingCategory

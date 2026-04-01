@@ -1,6 +1,6 @@
 "use client"
 
-import { createTransactionAction } from "@/app/(app)/transactions/actions"
+import { createTransactionAction } from "@/actions/transactions"
 import { FormError } from "@/components/forms/error"
 import { FormSelectCategory } from "@/components/forms/select-category"
 import { FormSelectCurrency } from "@/components/forms/select-currency"
@@ -8,12 +8,13 @@ import { FormSelectProject } from "@/components/forms/select-project"
 import { FormSelectType } from "@/components/forms/select-type"
 import { FormInput, FormTextarea } from "@/components/forms/simple"
 import { Button } from "@/components/ui/button"
-import { Category, Currency, Project } from "@/prisma/client"
+import type { Category, Currency, Project } from "@/lib/db-types"
 import { format } from "date-fns"
 import { Import, Loader2 } from "lucide-react"
-import Link from "next/link"
-import { useRouter } from "next/navigation"
+import { Link } from "@/lib/navigation"
+import { useRouter } from "@/lib/navigation"
 import { useActionState, useEffect, useState } from "react"
+import { useTranslations } from "next-intl"
 
 export default function TransactionCreateForm({
   categories,
@@ -27,6 +28,7 @@ export default function TransactionCreateForm({
   settings: Record<string, string>
 }) {
   const router = useRouter()
+  const t = useTranslations("transactions")
   const [createState, createAction, isCreating] = useActionState(createTransactionAction, null)
   const [formData, setFormData] = useState({
     name: "",
@@ -50,18 +52,18 @@ export default function TransactionCreateForm({
   }, [createState, router])
 
   return (
-    <form action={createAction} className="space-y-4">
-      <FormInput title="Name" name="name" defaultValue={formData.name} />
+    <form suppressHydrationWarning action={createAction} className="space-y-4">
+      <FormInput title={t("name")} name="name" defaultValue={formData.name} />
 
-      <FormInput title="Merchant" name="merchant" defaultValue={formData.merchant} />
+      <FormInput title={t("merchant")} name="merchant" defaultValue={formData.merchant} />
 
-      <FormInput title="Description" name="description" defaultValue={formData.description} />
+      <FormInput title={t("description")} name="description" defaultValue={formData.description} />
 
       <div className="flex flex-row gap-4">
-        <FormInput title="Total" type="number" step="0.01" name="total" defaultValue={formData.total.toFixed(2)} />
+        <FormInput title={t("total")} type="number" step="0.01" name="total" defaultValue={formData.total.toFixed(2)} />
 
         <FormSelectCurrency
-          title="Currency"
+          title={t("currency")}
           name="currencyCode"
           currencies={currencies}
           placeholder="Select Currency"
@@ -71,7 +73,7 @@ export default function TransactionCreateForm({
           }}
         />
 
-        <FormSelectType title="Type" name="type" defaultValue={formData.type} />
+        <FormSelectType title={t("type")} name="type" defaultValue={formData.type} />
       </div>
 
       {formData.currencyCode !== settings.default_currency ? (
@@ -94,7 +96,7 @@ export default function TransactionCreateForm({
 
       <div className="flex flex-row gap-4">
         <FormSelectCategory
-          title="Category"
+          title={t("category")}
           categories={categories}
           name="categoryCode"
           defaultValue={formData.categoryCode}
@@ -102,7 +104,7 @@ export default function TransactionCreateForm({
         />
 
         <FormSelectProject
-          title="Project"
+          title={t("project")}
           projects={projects}
           name="projectCode"
           defaultValue={formData.projectCode}
@@ -110,7 +112,7 @@ export default function TransactionCreateForm({
         />
       </div>
 
-      <FormTextarea title="Note" name="note" defaultValue={formData.note} />
+      <FormTextarea title={t("note")} name="note" defaultValue={formData.note} />
 
       <div className="flex justify-between space-x-4 pt-6">
         <Button type="button" variant="outline" className="aspect-square">

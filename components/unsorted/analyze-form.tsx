@@ -1,7 +1,7 @@
 "use client"
 
-import { useNotification } from "@/app/(app)/context"
-import { analyzeFileAction, deleteUnsortedFileAction, saveFileAsTransactionAction } from "@/app/(app)/unsorted/actions"
+import { useNotification } from "@/lib/context"
+import { analyzeFileAction, deleteUnsortedFileAction, saveFileAsTransactionAction } from "@/actions/unsorted"
 import { CurrencyConverterTool } from "@/components/agents/currency-converter"
 import { ItemsDetectTool } from "@/components/agents/items-detect"
 import ToolWindow from "@/components/agents/tool-window"
@@ -13,10 +13,14 @@ import { FormSelectType } from "@/components/forms/select-type"
 import { FormInput, FormTextarea } from "@/components/forms/simple"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Category, Currency, Field, File, Project } from "@/prisma/client"
+import type { Category, Currency, Field, File, Project } from "@/lib/db-types"
+import type { InvoiceWithRelations } from "@/models/invoices"
+import { findInvoiceMatches } from "@/ai/invoice-matcher"
 import { format } from "date-fns"
 import { ArrowDownToLine, Brain, Loader2, Trash2 } from "lucide-react"
 import { startTransition, useActionState, useMemo, useState } from "react"
+import { useTranslations, useLocale } from "next-intl"
+import { getLocalizedValue } from "@/lib/i18n-db"
 
 export default function AnalyzeForm({
   file,
@@ -25,6 +29,7 @@ export default function AnalyzeForm({
   currencies,
   fields,
   settings,
+  invoices,
 }: {
   file: File
   categories: Category[]
@@ -32,8 +37,11 @@ export default function AnalyzeForm({
   currencies: Currency[]
   fields: Field[]
   settings: Record<string, string>
+  invoices?: InvoiceWithRelations[]
 }) {
   const { showNotification } = useNotification()
+  const t = useTranslations("unsorted")
+  const locale = useLocale()
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [analyzeStep, setAnalyzeStep] = useState<string>("")
   const [analyzeError, setAnalyzeError] = useState<string>("")
@@ -166,10 +174,10 @@ export default function AnalyzeForm({
 
       <div>{analyzeError && <FormError>{analyzeError}</FormError>}</div>
 
-      <form className="space-y-4" action={saveAsTransaction}>
+      <form suppressHydrationWarning className="space-y-4" action={saveAsTransaction}>
         <input type="hidden" name="fileId" value={file.id} />
         <FormInput
-          title={fieldMap.name.name}
+          title={getLocalizedValue(fieldMap.name.name, locale)}
           name="name"
           value={formData.name}
           onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
@@ -177,7 +185,7 @@ export default function AnalyzeForm({
         />
 
         <FormInput
-          title={fieldMap.merchant.name}
+          title={getLocalizedValue(fieldMap.merchant.name, locale)}
           name="merchant"
           value={formData.merchant}
           onChange={(e) => setFormData((prev) => ({ ...prev, merchant: e.target.value }))}
@@ -186,7 +194,7 @@ export default function AnalyzeForm({
         />
 
         <FormInput
-          title={fieldMap.description.name}
+          title={getLocalizedValue(fieldMap.description.name, locale)}
           name="description"
           value={formData.description}
           onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value }))}
@@ -196,7 +204,7 @@ export default function AnalyzeForm({
 
         <div className="flex flex-wrap gap-4">
           <FormInput
-            title={fieldMap.total.name}
+            title={getLocalizedValue(fieldMap.total.name, locale)}
             name="total"
             type="number"
             step="0.01"
@@ -212,7 +220,7 @@ export default function AnalyzeForm({
           />
 
           <FormSelectCurrency
-            title={fieldMap.currencyCode.name}
+            title={getLocalizedValue(fieldMap.currencyCode.name, locale)}
             currencies={currencies}
             name="currencyCode"
             value={formData.currencyCode}
@@ -222,7 +230,7 @@ export default function AnalyzeForm({
           />
 
           <FormSelectType
-            title={fieldMap.type.name}
+            title={getLocalizedValue(fieldMap.type.name, locale)}
             name="type"
             value={formData.type}
             onValueChange={(value) => setFormData((prev) => ({ ...prev, type: value }))}
@@ -246,7 +254,7 @@ export default function AnalyzeForm({
 
         <div className="flex flex-row gap-4">
           <FormInput
-            title={fieldMap.issuedAt.name}
+            title={getLocalizedValue(fieldMap.issuedAt.name, locale)}
             type="date"
             name="issuedAt"
             value={formData.issuedAt}
@@ -258,7 +266,7 @@ export default function AnalyzeForm({
 
         <div className="flex flex-row gap-4">
           <FormSelectCategory
-            title={fieldMap.categoryCode.name}
+            title={getLocalizedValue(fieldMap.categoryCode.name, locale)}
             categories={categories}
             name="categoryCode"
             value={formData.categoryCode}
@@ -270,7 +278,7 @@ export default function AnalyzeForm({
 
           {projects.length > 0 && (
             <FormSelectProject
-              title={fieldMap.projectCode.name}
+              title={getLocalizedValue(fieldMap.projectCode.name, locale)}
               projects={projects}
               name="projectCode"
               value={formData.projectCode}
@@ -283,7 +291,7 @@ export default function AnalyzeForm({
         </div>
 
         <FormInput
-          title={fieldMap.note.name}
+          title={getLocalizedValue(fieldMap.note.name, locale)}
           name="note"
           value={formData.note}
           onChange={(e) => setFormData((prev) => ({ ...prev, note: e.target.value }))}
@@ -295,7 +303,7 @@ export default function AnalyzeForm({
           <FormInput
             key={field.code}
             type="text"
-            title={field.name}
+            title={getLocalizedValue(field.name, locale)}
             name={field.code}
             value={formData[field.code as keyof typeof formData]}
             onChange={(e) => setFormData((prev) => ({ ...prev, [field.code]: e.target.value }))}
@@ -305,15 +313,21 @@ export default function AnalyzeForm({
         ))}
 
         {formData.items && formData.items.length > 0 && (
-          <ToolWindow title="Detected items">
-            <ItemsDetectTool file={file} data={formData} />
+          <ToolWindow title={`Detected ${formData.items.length} transactions`}>
+            <ItemsDetectTool
+              file={file}
+              data={formData}
+              invoiceMatches={invoices ? Object.fromEntries(
+                formData.items.map((item, i) => [i, findInvoiceMatches(item, invoices)])
+              ) : undefined}
+            />
           </ToolWindow>
         )}
 
         <div className="hidden">
           <input type="text" name="items" value={JSON.stringify(formData.items)} readOnly />
           <FormTextarea
-            title={fieldMap.text.name}
+            title={getLocalizedValue(fieldMap.text.name, locale)}
             name="text"
             value={formData.text}
             onChange={(e) => setFormData((prev) => ({ ...prev, text: e.target.value }))}
@@ -329,19 +343,19 @@ export default function AnalyzeForm({
             disabled={isDeleting}
           >
             <Trash2 className="h-4 w-4" />
-            {isDeleting ? "⏳ Deleting..." : "Delete"}
+            {isDeleting ? t("deleting") : t("delete")}
           </Button>
 
           <Button type="submit" disabled={isSaving} data-save-button>
             {isSaving ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Saving...
+                {t("saving")}
               </>
             ) : (
               <>
                 <ArrowDownToLine className="h-4 w-4" />
-                Save as Transaction
+                {t("saveAsTransaction")}
               </>
             )}
           </Button>

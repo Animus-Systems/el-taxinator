@@ -5,13 +5,13 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { calcBillableAmount } from "@/lib/time-entry-calculations"
-import { Client, Project, TimeEntry } from "@/prisma/client"
+import type { TimeEntryWithRelations } from "@/models/time-entries"
 import { format } from "date-fns"
 import { Clock } from "lucide-react"
 import { useState } from "react"
+import { useTranslations, useLocale } from "next-intl"
+import { getLocalizedValue } from "@/lib/i18n-db"
 import { LineItem } from "./line-items-editor"
-
-type TimeEntryWithRelations = TimeEntry & { project: Project | null; client: Client | null }
 
 type Props = {
   timeEntries: TimeEntryWithRelations[]
@@ -26,6 +26,8 @@ function formatDuration(minutes: number | null): string {
 }
 
 export function ImportTimeEntries({ timeEntries, onImport }: Props) {
+  const t = useTranslations("invoices")
+  const locale = useLocale()
   const [open, setOpen] = useState(false)
   const [selected, setSelected] = useState<Set<string>>(new Set())
 
@@ -47,7 +49,7 @@ export function ImportTimeEntries({ timeEntries, onImport }: Props) {
       const unitPrice = entry.hourlyRate ?? 0
       const description = [
         entry.description || "Time entry",
-        entry.project ? `(${entry.project.name})` : "",
+        entry.project ? `(${getLocalizedValue(entry.project.name, locale)})` : "",
         format(entry.startedAt, "yyyy-MM-dd"),
       ]
         .filter(Boolean)
@@ -58,7 +60,7 @@ export function ImportTimeEntries({ timeEntries, onImport }: Props) {
         description,
         quantity: parseFloat(hours.toFixed(2)),
         unitPrice,
-        vatRate: 21,
+        vatRate: 7,
         position: i,
       }
     })
@@ -74,12 +76,12 @@ export function ImportTimeEntries({ timeEntries, onImport }: Props) {
       <DialogTrigger asChild>
         <Button type="button" variant="outline" size="sm">
           <Clock className="h-4 w-4 mr-1" />
-          Import Time Entries
+          {t("importTimeEntries")}
         </Button>
       </DialogTrigger>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>Import Billable Time Entries</DialogTitle>
+          <DialogTitle>{t("importBillableTimeEntries")}</DialogTitle>
         </DialogHeader>
         <div className="space-y-3 max-h-[400px] overflow-y-auto py-2">
           {billableUnbilled.map((entry) => {
@@ -100,7 +102,7 @@ export function ImportTimeEntries({ timeEntries, onImport }: Props) {
                   <div className="text-xs text-muted-foreground flex gap-3">
                     <span>{format(entry.startedAt, "yyyy-MM-dd")}</span>
                     <span>{formatDuration(entry.durationMinutes)}</span>
-                    {entry.project && <span>{entry.project.name}</span>}
+                    {entry.project && <span>{getLocalizedValue(entry.project.name, locale)}</span>}
                     {amount && (
                       <span>
                         {(amount / 100).toFixed(2)} {entry.currencyCode || "EUR"}
@@ -113,9 +115,9 @@ export function ImportTimeEntries({ timeEntries, onImport }: Props) {
           })}
         </div>
         <div className="flex justify-between items-center pt-2">
-          <span className="text-sm text-muted-foreground">{selected.size} selected</span>
+          <span className="text-sm text-muted-foreground">{t("selected", { count: selected.size })}</span>
           <Button onClick={handleImport} disabled={selected.size === 0}>
-            Add to Invoice
+            {t("addToInvoice")}
           </Button>
         </div>
       </DialogContent>

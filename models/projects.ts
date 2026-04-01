@@ -1,6 +1,6 @@
-import { prisma } from "@/lib/db"
+import { sql, queryMany, queryOne, buildInsert, buildUpdate, execute } from "@/lib/sql"
 import { codeFromName } from "@/lib/utils"
-import { Prisma } from "@/prisma/client"
+import type { Project } from "@/lib/db-types"
 import { cache } from "react"
 
 export type ProjectData = {
@@ -8,55 +8,39 @@ export type ProjectData = {
 }
 
 export const getProjects = cache(async (userId: string) => {
-  return await prisma.project.findMany({
-    where: { userId },
-    orderBy: {
-      name: "asc",
-    },
-  })
+  return queryMany<Project>(
+    sql`SELECT * FROM projects WHERE user_id = ${userId} ORDER BY name ASC`
+  )
 })
 
 export const getProjectByCode = cache(async (userId: string, code: string) => {
-  return await prisma.project.findUnique({
-    where: { userId_code: { code, userId } },
-  })
+  return queryOne<Project>(
+    sql`SELECT * FROM projects WHERE user_id = ${userId} AND code = ${code}`
+  )
 })
 
 export const createProject = async (userId: string, project: ProjectData) => {
   if (!project.code) {
     project.code = codeFromName(project.name as string)
   }
-  return await prisma.project.create({
-    data: {
-      ...project,
-      user: {
-        connect: {
-          id: userId,
-        },
-      },
-    } as Prisma.ProjectCreateInput,
-  })
+  return queryOne<Project>(
+    buildInsert("projects", { ...project, userId })
+  )
 }
 
 export const updateProject = async (userId: string, code: string, project: ProjectData) => {
-  return await prisma.project.update({
-    where: { userId_code: { code, userId } },
-    data: project,
-  })
+  return queryOne<Project>(
+    buildUpdate("projects", project, "user_id = $1 AND code = $2", [userId, code])
+  )
 }
 
 export const deleteProject = async (userId: string, code: string) => {
-  await prisma.transaction.updateMany({
-    where: {
-      userId,
-      projectCode: code,
-    },
-    data: {
-      projectCode: null,
-    },
-  })
+  // Set project_code to null on related transactions
+  await execute(
+    sql`UPDATE transactions SET project_code = NULL WHERE user_id = ${userId} AND project_code = ${code}`
+  )
 
-  return await prisma.project.delete({
-    where: { userId_code: { code, userId } },
-  })
+  return queryOne<Project>(
+    sql`DELETE FROM projects WHERE user_id = ${userId} AND code = ${code} RETURNING *`
+  )
 }

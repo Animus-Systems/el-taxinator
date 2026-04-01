@@ -1,3 +1,5 @@
+"use client"
+
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import {
   DropdownMenu,
@@ -10,18 +12,14 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { SidebarMenuButton } from "@/components/ui/sidebar"
 import { UserProfile } from "@/lib/auth"
-import { authClient } from "@/lib/auth-client"
-import { PLANS } from "@/lib/stripe"
+import { disconnectAction } from "@/actions/auth"
 import { formatBytes } from "@/lib/utils"
-import { CreditCard, LogOut, MoreVertical, Settings, Sparkles, User } from "lucide-react"
-import Link from "next/link"
-import { redirect } from "next/navigation"
+import { Building2, HardDrive, LogOut, MoreVertical, Settings, User } from "lucide-react"
+import { Link } from "@/lib/navigation"
+import { useTranslations } from "next-intl"
 
-export default function SidebarUser({ profile, isSelfHosted }: { profile: UserProfile; isSelfHosted: boolean }) {
-  const signOut = async () => {
-    await authClient.signOut({})
-    redirect("/")
-  }
+export default function SidebarUser({ profile }: { profile: UserProfile }) {
+  const t = useTranslations("sidebar")
 
   return (
     <DropdownMenu>
@@ -56,48 +54,36 @@ export default function SidebarUser({ profile, isSelfHosted }: { profile: UserPr
             </Avatar>
             <div className="grid flex-1 text-left text-sm leading-tight">
               <span className="truncate font-semibold">{profile.name || profile.email}</span>
-              <span className="truncate text-xs">{profile.email}</span>
+              <span className="truncate text-xs text-muted-foreground">
+                <HardDrive className="inline h-3 w-3 mr-1" />{formatBytes(profile.storageUsed)} used
+              </span>
             </div>
           </div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
           <DropdownMenuItem asChild>
-            <Link href="/settings/profile" className="flex items-center gap-2">
-              <Sparkles />
-              <span className="truncate">{PLANS[profile.membershipPlan as keyof typeof PLANS].name}</span>
-              <span className="ml-auto text-xs text-muted-foreground">{formatBytes(profile.storageUsed)} used</span>
+            <Link href="/settings" className="flex items-center gap-2">
+              <Settings className="h-4 w-4" />
+              {t("settings")}
+            </Link>
+          </DropdownMenuItem>
+          <DropdownMenuItem asChild>
+            <Link href="/settings/entities" className="flex items-center gap-2">
+              <Building2 className="h-4 w-4" />
+              {t("switchCompany")}
             </Link>
           </DropdownMenuItem>
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
-        <DropdownMenuGroup>
-          <DropdownMenuItem asChild>
-            <Link href="/settings" className="flex items-center gap-2">
-              <Settings className="h-4 w-4" />
-              Settings
-            </Link>
-          </DropdownMenuItem>
-          {!isSelfHosted && (
-            <DropdownMenuItem asChild>
-              <Link href="/api/stripe/portal" className="flex items-center gap-2">
-                <CreditCard className="h-4 w-4" />
-                Billing
-              </Link>
-            </DropdownMenuItem>
-          )}
-        </DropdownMenuGroup>
-        {!isSelfHosted && (
-          <>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem asChild>
-              <span onClick={signOut} className="flex items-center gap-2 text-red-600 cursor-pointer">
-                <LogOut className="h-4 w-4" />
-                Log out
-              </span>
-            </DropdownMenuItem>
-          </>
-        )}
+        <DropdownMenuItem asChild>
+          <form suppressHydrationWarning action={disconnectAction}>
+            <button type="submit" className="flex items-center gap-2 text-red-600 cursor-pointer w-full text-left">
+              <LogOut className="h-4 w-4" />
+              {t("disconnect")}
+            </button>
+          </form>
+        </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   )

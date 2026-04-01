@@ -1,9 +1,9 @@
 "use client"
 
-import { deleteClientAction } from "@/app/(app)/clients/actions"
+import { deleteClientAction } from "@/actions/clients"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Client } from "@/prisma/client"
+import type { Client } from "@/lib/db-types"
 import { Pencil, Trash2 } from "lucide-react"
 import { useState } from "react"
 import { toast } from "sonner"

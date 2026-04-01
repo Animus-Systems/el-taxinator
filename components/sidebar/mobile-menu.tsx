@@ -3,7 +3,7 @@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { useSidebar } from "@/components/ui/sidebar"
 import config from "@/lib/config"
-import Link from "next/link"
+import { Link } from "@/lib/navigation"
 
 export default function MobileMenu({ unsortedFilesCount }: { unsortedFilesCount: number }) {
   const { toggleSidebar } = useSidebar()

@@ -4,13 +4,12 @@ import { Badge, type BadgeProps } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { calcInvoiceTotals } from "@/lib/invoice-calculations"
-import { Client, Invoice, InvoiceItem } from "@/prisma/client"
 import { formatCurrency } from "@/lib/utils"
+import type { InvoiceWithRelations } from "@/models/invoices"
 import { format } from "date-fns"
-import Link from "next/link"
+import { Link } from "@/lib/navigation"
+import { useTranslations } from "next-intl"
 import { Eye } from "lucide-react"
-
-type InvoiceWithRelations = Invoice & { client: Client | null; items: InvoiceItem[] }
 
 const STATUS_COLORS: Record<string, NonNullable<BadgeProps["variant"]>> = {
   draft: "secondary",
@@ -21,12 +20,13 @@ const STATUS_COLORS: Record<string, NonNullable<BadgeProps["variant"]>> = {
 }
 
 export function InvoiceList({ invoices }: { invoices: InvoiceWithRelations[] }) {
+  const t = useTranslations("invoices")
   if (invoices.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[300px] gap-4 text-muted-foreground">
-        <p>No invoices yet.</p>
+        <p>{t("noInvoices")}</p>
         <Button asChild>
-          <Link href="/invoices/new">Create your first invoice</Link>
+          <Link href="/invoices/new">{t("createFirst")}</Link>
         </Button>
       </div>
     )
@@ -36,13 +36,13 @@ export function InvoiceList({ invoices }: { invoices: InvoiceWithRelations[] }) 
     <Table>
       <TableHeader>
         <TableRow>
-          <TableHead>Number</TableHead>
-          <TableHead>Client</TableHead>
-          <TableHead>Issue Date</TableHead>
-          <TableHead>Due Date</TableHead>
-          <TableHead>Total</TableHead>
-          <TableHead>Status</TableHead>
-          <TableHead className="text-right">Actions</TableHead>
+          <TableHead>{t("number")}</TableHead>
+          <TableHead>{t("client")}</TableHead>
+          <TableHead>{t("issueDate")}</TableHead>
+          <TableHead>{t("dueDate")}</TableHead>
+          <TableHead>{t("total")}</TableHead>
+          <TableHead>{t("status")}</TableHead>
+          <TableHead className="text-right">{t("actions")}</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>

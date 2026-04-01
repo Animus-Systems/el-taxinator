@@ -7,8 +7,9 @@ import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { Badge } from "@/components/ui/badge"
 import type { AccountantPermissions } from "@/models/accountants"
-import { createInviteAction, deleteInviteAction, reactivateInviteAction, revokeInviteAction } from "@/app/(app)/settings/accountant/actions"
+import { createInviteAction, deleteInviteAction, reactivateInviteAction, revokeInviteAction } from "@/actions/accountant"
 import { Check, Copy, Link, Plus, Trash2, UserX, UserCheck } from "lucide-react"
+import { useTranslations } from "next-intl"
 
 type InviteWithUrl = {
   id: string
@@ -23,6 +24,7 @@ type InviteWithUrl = {
 }
 
 function CopyButton({ text }: { text: string }) {
+  const t = useTranslations("accountantInvite")
   const [copied, setCopied] = useState(false)
   async function handleCopy() {
     await navigator.clipboard.writeText(text)
@@ -32,7 +34,7 @@ function CopyButton({ text }: { text: string }) {
   return (
     <Button variant="outline" size="sm" onClick={handleCopy} className="gap-1.5">
       {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
-      {copied ? "Copied" : "Copy link"}
+      {copied ? t("copied") : t("copyLink")}
     </Button>
   )
 }
@@ -49,23 +51,24 @@ function PermissionBadge({ label, enabled }: { label: string; enabled: boolean }
   )
 }
 
-function InviteCard({ invite, userId }: { invite: InviteWithUrl; userId: string }) {
+function InviteCard({ invite }: { invite: InviteWithUrl }) {
+  const t = useTranslations("accountantInvite")
   const [pending, setPending] = useState(false)
 
   async function handleRevoke() {
     setPending(true)
-    await revokeInviteAction(userId, invite.id)
+    await revokeInviteAction(invite.id)
     setPending(false)
   }
   async function handleReactivate() {
     setPending(true)
-    await reactivateInviteAction(userId, invite.id)
+    await reactivateInviteAction(invite.id)
     setPending(false)
   }
   async function handleDelete() {
-    if (!confirm(`Delete invite for "${invite.name}"? This cannot be undone.`)) return
+    if (!confirm(t("deleteConfirm", { name: invite.name }))) return
     setPending(true)
-    await deleteInviteAction(userId, invite.id)
+    await deleteInviteAction(invite.id)
     setPending(false)
   }
 
@@ -76,9 +79,9 @@ function InviteCard({ invite, userId }: { invite: InviteWithUrl; userId: string 
           <div className="flex items-center gap-2">
             <span className="font-medium">{invite.name}</span>
             {invite.isActive ? (
-              <Badge variant="secondary" className="text-xs bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">Active</Badge>
+              <Badge variant="secondary" className="text-xs bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">{t("active")}</Badge>
             ) : (
-              <Badge variant="secondary" className="text-xs">Revoked</Badge>
+              <Badge variant="secondary" className="text-xs">{t("revoked")}</Badge>
             )}
           </div>
           {invite.email && <p className="text-sm text-muted-foreground">{invite.email}</p>}
@@ -91,11 +94,11 @@ function InviteCard({ invite, userId }: { invite: InviteWithUrl; userId: string 
           {invite.isActive && <CopyButton text={invite.accessUrl} />}
           {invite.isActive ? (
             <Button variant="outline" size="sm" onClick={handleRevoke} disabled={pending} className="gap-1.5">
-              <UserX className="h-3 w-3" /> Revoke
+              <UserX className="h-3 w-3" /> {t("revoke")}
             </Button>
           ) : (
             <Button variant="outline" size="sm" onClick={handleReactivate} disabled={pending} className="gap-1.5">
-              <UserCheck className="h-3 w-3" /> Reactivate
+              <UserCheck className="h-3 w-3" /> {t("reactivate")}
             </Button>
           )}
           <Button variant="ghost" size="icon" onClick={handleDelete} disabled={pending} className="h-8 w-8 text-destructive hover:text-destructive">
@@ -105,10 +108,10 @@ function InviteCard({ invite, userId }: { invite: InviteWithUrl; userId: string 
       </div>
 
       <div className="flex flex-wrap gap-1.5 mb-3">
-        <PermissionBadge label="Transactions" enabled={invite.permissions.transactions} />
-        <PermissionBadge label="Invoices" enabled={invite.permissions.invoices} />
-        <PermissionBadge label="Tax Reports" enabled={invite.permissions.tax} />
-        <PermissionBadge label="Time Tracking" enabled={invite.permissions.time} />
+        <PermissionBadge label={t("transactions")} enabled={invite.permissions.transactions} />
+        <PermissionBadge label={t("invoices")} enabled={invite.permissions.invoices} />
+        <PermissionBadge label={t("taxReports")} enabled={invite.permissions.tax} />
+        <PermissionBadge label={t("timeTracking")} enabled={invite.permissions.time} />
       </div>
 
       {invite.isActive && (
@@ -121,14 +124,15 @@ function InviteCard({ invite, userId }: { invite: InviteWithUrl; userId: string 
   )
 }
 
-export function AccountantInviteManager({ userId, invites }: { userId: string; invites: InviteWithUrl[] }) {
+export function AccountantInviteManager({ invites }: { invites: InviteWithUrl[] }) {
+  const t = useTranslations("accountantInvite")
   const [showForm, setShowForm] = useState(false)
   const [creating, setCreating] = useState(false)
 
   async function handleCreate(formData: FormData) {
     setCreating(true)
     try {
-      await createInviteAction(userId, formData)
+      await createInviteAction(formData)
       setShowForm(false)
     } finally {
       setCreating(false)
@@ -138,41 +142,41 @@ export function AccountantInviteManager({ userId, invites }: { userId: string; i
   return (
     <div className="space-y-4">
       {invites.length === 0 && !showForm && (
-        <p className="text-sm text-muted-foreground py-4">No accountant invites yet.</p>
+        <p className="text-sm text-muted-foreground py-4">{t("noInvites")}</p>
       )}
 
       {invites.map((invite) => (
-        <InviteCard key={invite.id} invite={invite} userId={userId} />
+        <InviteCard key={invite.id} invite={invite} />
       ))}
 
       {showForm ? (
         <div className="rounded-lg border p-4">
-          <h3 className="font-medium mb-4">New Accountant Invite</h3>
-          <form action={handleCreate} className="space-y-4">
+          <h3 className="font-medium mb-4">{t("newAccountantInvite")}</h3>
+          <form suppressHydrationWarning action={handleCreate} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1">
-                <Label htmlFor="name">Name *</Label>
-                <Input id="name" name="name" placeholder="Accountant name" required />
+                <Label htmlFor="name">{t("name")}</Label>
+                <Input id="name" name="name" placeholder={t("namePlaceholder")} required />
               </div>
               <div className="space-y-1">
-                <Label htmlFor="email">Email (optional)</Label>
+                <Label htmlFor="email">{t("emailOptional")}</Label>
                 <Input id="email" name="email" type="email" placeholder="accountant@example.com" />
               </div>
             </div>
 
             <div className="space-y-1">
-              <Label htmlFor="expires_at">Expires (optional)</Label>
+              <Label htmlFor="expires_at">{t("expires")}</Label>
               <Input id="expires_at" name="expires_at" type="date" />
             </div>
 
             <div>
-              <Label className="mb-2 block">Sections to share</Label>
+              <Label className="mb-2 block">{t("sectionsToShare")}</Label>
               <div className="grid grid-cols-2 gap-3">
                 {[
-                  { key: "perm_transactions", label: "Transactions", default: true },
-                  { key: "perm_invoices", label: "Invoices", default: true },
-                  { key: "perm_tax", label: "Tax Reports", default: true },
-                  { key: "perm_time", label: "Time Tracking", default: false },
+                  { key: "perm_transactions", label: t("transactions"), default: true },
+                  { key: "perm_invoices", label: t("invoices"), default: true },
+                  { key: "perm_tax", label: t("taxReports"), default: true },
+                  { key: "perm_time", label: t("timeTracking"), default: false },
                 ].map(({ key, label, default: def }) => (
                   <div key={key} className="flex items-center gap-2">
                     <Switch id={key} name={key} defaultChecked={def} value="on" />
@@ -184,17 +188,17 @@ export function AccountantInviteManager({ userId, invites }: { userId: string; i
 
             <div className="flex gap-2">
               <Button type="submit" disabled={creating}>
-                {creating ? "Creating…" : "Create Invite"}
+                {creating ? t("creating") : t("createInvite")}
               </Button>
               <Button type="button" variant="outline" onClick={() => setShowForm(false)}>
-                Cancel
+                {t("cancel")}
               </Button>
             </div>
           </form>
         </div>
       ) : (
         <Button onClick={() => setShowForm(true)} className="gap-2">
-          <Plus className="h-4 w-4" /> New Invite
+          <Plus className="h-4 w-4" /> {t("newInvite")}
         </Button>
       )}
     </div>

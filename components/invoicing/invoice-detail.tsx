@@ -1,25 +1,19 @@
 "use client"
 
-import { deleteInvoiceAction, updateInvoiceStatusAction } from "@/app/(app)/invoices/actions"
+import { deleteInvoiceAction, updateInvoiceStatusAction } from "@/actions/invoices"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { calcInvoiceTotals } from "@/lib/invoice-calculations"
 import { formatCurrency } from "@/lib/utils"
-import { Client, Invoice, InvoiceItem, Product, Quote } from "@/prisma/client"
+import type { InvoiceWithRelations } from "@/models/invoices"
 import { format } from "date-fns"
 import { ArrowLeft, Download, Trash2 } from "lucide-react"
-import Link from "next/link"
-import { useRouter } from "next/navigation"
+import { Link, useRouter } from "@/lib/navigation"
 import { useTransition } from "react"
+import { useTranslations } from "next-intl"
 import { toast } from "sonner"
-
-type InvoiceWithRelations = Invoice & {
-  client: Client | null
-  items: (InvoiceItem & { product: Product | null })[]
-  quote: Quote | null
-}
 
 const STATUSES = ["draft", "sent", "paid", "overdue", "cancelled"] as const
 
@@ -29,6 +23,7 @@ export function InvoiceDetail({
   invoice: InvoiceWithRelations
 }) {
   const router = useRouter()
+  const t = useTranslations("invoices")
   const [isPending, startTransition] = useTransition()
   const { subtotal, vatTotal, total } = calcInvoiceTotals(invoice.items)
 
@@ -39,23 +34,23 @@ export function InvoiceDetail({
     startTransition(async () => {
       const result = await updateInvoiceStatusAction(null, formData)
       if (result.success) {
-        toast.success("Status updated")
+        toast.success(t("statusUpdated"))
         router.refresh()
       } else {
-        toast.error(result.error || "Failed to update status")
+        toast.error(result.error || t("failedToUpdate"))
       }
     })
   }
 
   async function handleDelete() {
-    if (!confirm("Delete this invoice? This cannot be undone.")) return
+    if (!confirm(t("deleteConfirm"))) return
     startTransition(async () => {
       const result = await deleteInvoiceAction(null, invoice.id)
       if (result.success) {
-        toast.success("Invoice deleted")
+        toast.success(t("invoiceDeleted"))
         router.push("/invoices")
       } else {
-        toast.error(result.error || "Failed to delete invoice")
+        toast.error(result.error || t("failedToDeleteInvoice"))
       }
     })
   }
@@ -106,18 +101,18 @@ export function InvoiceDetail({
         </div>
         <div className="space-y-1 text-right">
           <div>
-            <p className="text-sm text-muted-foreground">Issue Date</p>
+            <p className="text-sm text-muted-foreground">{t("issueDate")}</p>
             <p className="font-medium">{format(invoice.issueDate, "dd/MM/yyyy")}</p>
           </div>
           {invoice.dueDate && (
             <div>
-              <p className="text-sm text-muted-foreground">Due Date</p>
+              <p className="text-sm text-muted-foreground">{t("dueDate")}</p>
               <p className="font-medium">{format(invoice.dueDate, "dd/MM/yyyy")}</p>
             </div>
           )}
           {invoice.paidAt && (
             <div>
-              <p className="text-sm text-muted-foreground">Paid</p>
+              <p className="text-sm text-muted-foreground">{t("paid")}</p>
               <p className="font-medium text-green-600">{format(invoice.paidAt, "dd/MM/yyyy")}</p>
             </div>
           )}
@@ -127,11 +122,11 @@ export function InvoiceDetail({
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>Description</TableHead>
-            <TableHead className="text-right">Qty</TableHead>
-            <TableHead className="text-right">Unit Price</TableHead>
-            <TableHead className="text-right">VAT %</TableHead>
-            <TableHead className="text-right">Amount</TableHead>
+            <TableHead>{t("description")}</TableHead>
+            <TableHead className="text-right">{t("qty")}</TableHead>
+            <TableHead className="text-right">{t("unitPrice")}</TableHead>
+            <TableHead className="text-right">{t("vatPercent")}</TableHead>
+            <TableHead className="text-right">{t("amount")}</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -147,21 +142,21 @@ export function InvoiceDetail({
         </TableBody>
         <TableFooter>
           <TableRow>
-            <TableCell colSpan={4}>Subtotal</TableCell>
+            <TableCell colSpan={4}>{t("subtotal")}</TableCell>
             <TableCell className="text-right">{formatCurrency(subtotal, "EUR")}</TableCell>
           </TableRow>
           <TableRow>
-            <TableCell colSpan={4}>IVA</TableCell>
+            <TableCell colSpan={4}>{t("iva")}</TableCell>
             <TableCell className="text-right">{formatCurrency(vatTotal, "EUR")}</TableCell>
           </TableRow>
           {invoice.irpfRate > 0 && (
             <TableRow className="text-muted-foreground">
-              <TableCell colSpan={4}>Retención IRPF ({invoice.irpfRate}%)</TableCell>
+              <TableCell colSpan={4}>{t("irpfRetention", { rate: invoice.irpfRate })}</TableCell>
               <TableCell className="text-right">−{formatCurrency(Math.round(subtotal * invoice.irpfRate / 100), "EUR")}</TableCell>
             </TableRow>
           )}
           <TableRow className="font-bold">
-            <TableCell colSpan={4}>Total a pagar</TableCell>
+            <TableCell colSpan={4}>{t("totalToPay")}</TableCell>
             <TableCell className="text-right">
               {formatCurrency(total - (invoice.irpfRate > 0 ? Math.round(subtotal * invoice.irpfRate / 100) : 0), "EUR")}
             </TableCell>
@@ -171,14 +166,14 @@ export function InvoiceDetail({
 
       {invoice.notes && (
         <div className="p-4 border rounded-lg">
-          <p className="text-sm text-muted-foreground mb-1">Notes</p>
+          <p className="text-sm text-muted-foreground mb-1">{t("notes")}</p>
           <p className="text-sm whitespace-pre-wrap">{invoice.notes}</p>
         </div>
       )}
 
       {invoice.quote && (
         <div className="text-sm text-muted-foreground">
-          Converted from quote{" "}
+          {t("convertedFromQuote")}{" "}
           <Link href={`/quotes/${invoice.quote.id}`} className="underline">
             {invoice.quote.number}
           </Link>

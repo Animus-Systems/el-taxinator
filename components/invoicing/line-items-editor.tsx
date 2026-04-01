@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { formatCurrency } from "@/lib/utils"
-import { Product } from "@/prisma/client"
+import type { Product } from "@/lib/db-types"
 import { Plus, Trash2 } from "lucide-react"
 import { useEffect, useState } from "react"
 
@@ -24,7 +24,7 @@ type Props = {
   currency?: string
 }
 
-const DEFAULT_VAT = 21
+const DEFAULT_VAT = 7 // IGIC general rate (Canary Islands)
 
 export function LineItemsEditor({ products, initialItems, onChange, currency = "EUR" }: Props) {
   const [items, setItems] = useState<LineItem[]>(

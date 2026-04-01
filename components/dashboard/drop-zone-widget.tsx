@@ -1,11 +1,11 @@
 "use client"
 
-import { useNotification } from "@/app/(app)/context"
-import { uploadFilesAction } from "@/app/(app)/files/actions"
+import { useNotification } from "@/lib/context"
+import { uploadFilesAction } from "@/actions/files"
 import { FormError } from "@/components/forms/error"
 import config from "@/lib/config"
 import { Camera, Loader2 } from "lucide-react"
-import { useRouter } from "next/navigation"
+import { useRouter } from "@/lib/navigation"
 import { startTransition, useState } from "react"
 
 export default function DashboardDropZoneWidget() {

@@ -1,6 +1,6 @@
-import { prisma } from "@/lib/db"
+import { sql, queryMany, queryOne, buildInsert, buildUpdate, execute } from "@/lib/sql"
 import { codeFromName } from "@/lib/utils"
-import { Prisma } from "@/prisma/client"
+import type { Category } from "@/lib/db-types"
 import { cache } from "react"
 
 export type CategoryData = {
@@ -8,55 +8,39 @@ export type CategoryData = {
 }
 
 export const getCategories = cache(async (userId: string) => {
-  return await prisma.category.findMany({
-    where: { userId },
-    orderBy: {
-      name: "asc",
-    },
-  })
+  return queryMany<Category>(
+    sql`SELECT * FROM categories WHERE user_id = ${userId} ORDER BY name ASC`
+  )
 })
 
 export const getCategoryByCode = cache(async (userId: string, code: string) => {
-  return await prisma.category.findUnique({
-    where: { userId_code: { userId, code } },
-  })
+  return queryOne<Category>(
+    sql`SELECT * FROM categories WHERE user_id = ${userId} AND code = ${code}`
+  )
 })
 
 export const createCategory = async (userId: string, category: CategoryData) => {
   if (!category.code) {
     category.code = codeFromName(category.name as string)
   }
-  return await prisma.category.create({
-    data: {
-      ...category,
-      user: {
-        connect: {
-          id: userId,
-        },
-      },
-    } as Prisma.CategoryCreateInput,
-  })
+  return queryOne<Category>(
+    buildInsert("categories", { ...category, userId })
+  )
 }
 
 export const updateCategory = async (userId: string, code: string, category: CategoryData) => {
-  return await prisma.category.update({
-    where: { userId_code: { userId, code } },
-    data: category,
-  })
+  return queryOne<Category>(
+    buildUpdate("categories", category, "user_id = $1 AND code = $2", [userId, code])
+  )
 }
 
 export const deleteCategory = async (userId: string, code: string) => {
-  await prisma.transaction.updateMany({
-    where: {
-      userId,
-      categoryCode: code,
-    },
-    data: {
-      categoryCode: null,
-    },
-  })
+  // Set category_code to null on related transactions
+  await execute(
+    sql`UPDATE transactions SET category_code = NULL WHERE user_id = ${userId} AND category_code = ${code}`
+  )
 
-  return await prisma.category.delete({
-    where: { userId_code: { userId, code } },
-  })
+  return queryOne<Category>(
+    sql`DELETE FROM categories WHERE user_id = ${userId} AND code = ${code} RETURNING *`
+  )
 }

@@ -1,17 +1,21 @@
 "use client"
 
-import { parseCSVAction, saveTransactionsAction } from "@/app/(app)/import/csv/actions"
+import { parseCSVAction, saveTransactionsAction } from "@/actions/import"
 import { FormError } from "@/components/forms/error"
 import { Button } from "@/components/ui/button"
-import { Field } from "@/prisma/client"
+import type { Field } from "@/lib/db-types"
 import { Loader2, Play, Upload } from "lucide-react"
-import { useRouter } from "next/navigation"
+import { useRouter } from "@/lib/navigation"
 import { startTransition, useActionState, useEffect, useState } from "react"
+import { useTranslations, useLocale } from "next-intl"
+import { getLocalizedValue } from "@/lib/i18n-db"
 
 const MAX_PREVIEW_ROWS = 100
 
 export function ImportCSVTable({ fields }: { fields: Field[] }) {
   const router = useRouter()
+  const t = useTranslations("import")
+  const locale = useLocale()
   const [parseState, parseAction, isParsing] = useActionState(parseCSVAction, null)
   const [saveState, saveAction, isSaving] = useActionState(saveTransactionsAction, null)
 
@@ -96,12 +100,12 @@ export function ImportCSVTable({ fields }: { fields: Field[] }) {
     <>
       {csvData.length === 0 && (
         <div className="flex flex-col items-center justify-center gap-2 h-full min-h-[400px]">
-          <p className="text-muted-foreground">Upload your CSV file to import transactions</p>
+          <p className="text-muted-foreground">{t("uploadCsvHint")}</p>
           <div className="flex flex-row gap-5 mt-8">
             <div>
               <input type="file" accept=".csv" className="hidden" id="csv-file" onChange={handleFileChange} />
               <Button type="button" onClick={() => document.getElementById("csv-file")?.click()}>
-                {isParsing ? "Parsing..." : <Upload className="mr-2" />} Import from CSV
+                {isParsing ? t("parsing") : <Upload className="mr-2" />} {t("importFromCsv")}
               </Button>
             </div>
           </div>
@@ -113,17 +117,17 @@ export function ImportCSVTable({ fields }: { fields: Field[] }) {
         <div>
           <header className="flex flex-wrap items-center justify-between gap-2 mb-8">
             <h2 className="flex flex-row gap-3 md:gap-5">
-              <span className="text-3xl font-bold tracking-tight">Import {csvData.length} items from CSV</span>
+              <span className="text-3xl font-bold tracking-tight">{t("importNItems", { count: csvData.length })}</span>
             </h2>
             <div className="flex gap-2">
               <Button onClick={handleSave} disabled={isSaving}>
                 {isSaving ? (
                   <>
-                    <Loader2 className="animate-spin" /> Importing...
+                    <Loader2 className="animate-spin" /> {t("importing")}
                   </>
                 ) : (
                   <>
-                    <Play /> Import {csvData.length} transactions
+                    <Play /> {t("importNTransactions", { count: csvData.length })}
                   </>
                 )}
               </Button>
@@ -141,7 +145,7 @@ export function ImportCSVTable({ fields }: { fields: Field[] }) {
                 defaultChecked={csvSettings.skipHeader}
                 onChange={(e) => setCSVSettings({ ...csvSettings, skipHeader: e.target.checked })}
               />
-              <span>First row is a header</span>
+              <span>{t("firstRowIsHeader")}</span>
             </label>
           </div>
 
@@ -157,10 +161,10 @@ export function ImportCSVTable({ fields }: { fields: Field[] }) {
                           value={columnMappings[index] || ""}
                           onChange={(e) => handleMappingChange(index, e.target.value)}
                         >
-                          <option value="">Skip column</option>
+                          <option value="">{t("skipColumn")}</option>
                           {fields.map((field) => (
                             <option key={field.code} value={field.code}>
-                              {field.name}
+                              {getLocalizedValue(field.name, locale)}
                             </option>
                           ))}
                         </select>
@@ -189,7 +193,7 @@ export function ImportCSVTable({ fields }: { fields: Field[] }) {
           </div>
 
           {csvData.length > MAX_PREVIEW_ROWS && (
-            <p className="text-muted-foreground mt-4">and {csvData.length - MAX_PREVIEW_ROWS} more entries...</p>
+            <p className="text-muted-foreground mt-4">{t("andNMore", { count: csvData.length - MAX_PREVIEW_ROWS })}</p>
           )}
         </div>
       )}

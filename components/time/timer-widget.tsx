@@ -1,12 +1,14 @@
 "use client"
 
-import { createTimeEntryAction } from "@/app/(app)/time/actions"
+import { createTimeEntryAction } from "@/actions/time"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Client, Project } from "@/prisma/client"
+import type { Client, Project } from "@/lib/db-types"
+import { getLocalizedValue } from "@/lib/i18n-db"
 import { CircleStop, Play } from "lucide-react"
+import { useLocale } from "next-intl"
 import { useEffect, useRef, useState, useTransition } from "react"
 import { toast } from "sonner"
 
@@ -25,6 +27,7 @@ type ActiveTimer = {
 }
 
 export function TimerWidget({ projects, clients }: Props) {
+  const locale = useLocale()
   const [active, setActive] = useState<ActiveTimer | null>(null)
   const [elapsed, setElapsed] = useState(0)
   const [description, setDescription] = useState("")
@@ -135,7 +138,7 @@ export function TimerWidget({ projects, clients }: Props) {
               <SelectItem value="__none__">None</SelectItem>
               {projects.map((p) => (
                 <SelectItem key={p.code} value={p.code}>
-                  {p.name}
+                  {getLocalizedValue(p.name, locale)}
                 </SelectItem>
               ))}
             </SelectContent>

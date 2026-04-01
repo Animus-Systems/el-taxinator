@@ -1,14 +1,15 @@
 "use client"
 
-import { updateProductAction } from "@/app/(app)/products/actions"
+import { updateProductAction } from "@/actions/products"
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { Product } from "@/prisma/client"
+import type { Product } from "@/lib/db-types"
 import { useTransition } from "react"
+import { useTranslations } from "next-intl"
 import { toast } from "sonner"
 import { ProductForm } from "./product-form"
 
@@ -18,16 +19,17 @@ type Props = {
 }
 
 export function EditProductDialog({ product, onClose }: Props) {
+  const t = useTranslations("products")
   const [isPending, startTransition] = useTransition()
 
   function handleSubmit(formData: FormData) {
     startTransition(async () => {
       const result = await updateProductAction(null, formData)
       if (result.success) {
-        toast.success("Product updated")
+        toast.success(t("productUpdated"))
         onClose()
       } else {
-        toast.error(result.error || "Failed to update product")
+        toast.error(result.error || t("failedToUpdate"))
       }
     })
   }
@@ -36,7 +38,7 @@ export function EditProductDialog({ product, onClose }: Props) {
     <Dialog open onOpenChange={(open) => { if (!open) onClose() }}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Edit Product / Service</DialogTitle>
+          <DialogTitle>{t("editProduct")}</DialogTitle>
         </DialogHeader>
         <ProductForm product={product} onSubmit={handleSubmit} isPending={isPending} />
       </DialogContent>

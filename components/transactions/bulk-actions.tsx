@@ -1,6 +1,6 @@
 "use client"
 
-import { bulkDeleteTransactionsAction } from "@/app/(app)/transactions/actions"
+import { bulkDeleteTransactionsAction } from "@/actions/transactions"
 import { Button } from "@/components/ui/button"
 import { Trash2 } from "lucide-react"
 import { useState } from "react"

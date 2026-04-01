@@ -1,3 +1,5 @@
+"use client"
+
 import { SelectProps } from "@radix-ui/react-select"
 import { useMemo } from "react"
 import { FormSelect } from "./simple"
