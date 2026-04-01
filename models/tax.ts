@@ -42,6 +42,48 @@ export function getUpcomingDeadlines(year: number, locale?: string) {
   }))
 }
 
+// ─── Shared tax query helpers ────────────────────────────────────────────────
+
+/** Total revenue from sent/paid invoices in a date range. */
+export async function queryInvoiceRevenue(pool: Awaited<ReturnType<typeof getPool>>, userId: string, start: Date, end: Date) {
+  const result = await pool.query(
+    `SELECT
+       COALESCE(SUM(ii.quantity * ii.unit_price), 0)::float AS total_revenue,
+       COUNT(DISTINCT i.id)::int AS invoice_count
+     FROM invoices i
+     JOIN invoice_items ii ON ii.invoice_id = i.id
+     WHERE i.user_id = $1
+       AND i.status IN ('sent', 'paid')
+       AND i.issue_date >= $2
+       AND i.issue_date <= $3`,
+    [userId, start, end],
+  )
+  return {
+    totalRevenue: (result.rows[0]?.total_revenue ?? 0) as number,
+    invoiceCount: (result.rows[0]?.invoice_count ?? 0) as number,
+  }
+}
+
+/** Total deductible expenses in a date range. */
+export async function queryExpenses(pool: Awaited<ReturnType<typeof getPool>>, userId: string, start: Date, end: Date, requireConverted = false) {
+  const result = await pool.query(
+    `SELECT
+       COALESCE(SUM(COALESCE(converted_total, total, 0)), 0)::float AS total_expenses,
+       COUNT(*)::int AS expense_count
+     FROM transactions
+     WHERE user_id = $1
+       AND type = 'expense'
+       AND issued_at >= $2
+       AND issued_at <= $3
+       ${requireConverted ? "AND converted_total IS NOT NULL" : ""}`,
+    [userId, start, end],
+  )
+  return {
+    totalExpenses: (result.rows[0]?.total_expenses ?? 0) as number,
+    expenseCount: (result.rows[0]?.expense_count ?? 0) as number,
+  }
+}
+
 // ─── IGIC rates (Canary Islands) ─────────────────────────────────────────────
 //
 // IGIC replaces IVA/VAT in the Canary Islands. Administered by ATC.
@@ -91,8 +133,8 @@ export const calcModelo420 = cache(
     const pool = await getPool()
     const period = getTaxPeriod(year, quarter)
 
-    // Aggregate IGIC bands from invoice items
-    const [igicResult, expenseResult] = await Promise.all([
+    // Aggregate IGIC bands from invoice items (unique to 420 — can't share with simple revenue query)
+    const [igicResult, expenses] = await Promise.all([
       pool.query(
         `SELECT
            SUM(CASE WHEN ii.vat_rate = 0 OR ii.vat_rate IS NULL THEN ii.quantity * ii.unit_price ELSE 0 END)::float AS base_zero,
@@ -114,18 +156,7 @@ export const calcModelo420 = cache(
            AND i.issue_date <= $3`,
         [userId, period.start, period.end],
       ),
-      pool.query(
-        `SELECT
-           COALESCE(SUM(COALESCE(converted_total, total, 0)), 0)::float AS total_expenses,
-           COUNT(*)::int AS expense_count
-         FROM transactions
-         WHERE user_id = $1
-           AND type = 'expense'
-           AND issued_at >= $2
-           AND issued_at <= $3
-           AND converted_total IS NOT NULL`,
-        [userId, period.start, period.end],
-      ),
+      queryExpenses(pool, userId, period.start, period.end, true),
     ])
 
     const r = igicResult.rows[0]
@@ -143,8 +174,7 @@ export const calcModelo420 = cache(
 
     const totalIgicDevengado = cuotaZero + cuotaReducido + cuotaGeneral + cuotaIncrementado + cuotaEspecial
 
-    const totalExpenses = expenseResult.rows[0]?.total_expenses ?? 0
-    const expenseCount = expenseResult.rows[0]?.expense_count ?? 0
+    const { totalExpenses, expenseCount } = expenses
 
     // Estimate deductible IGIC: assume expenses are IGIC-inclusive at general rate (7%)
     const baseDeducible = Math.round(totalExpenses / (1 + IGIC_GENERAL_RATE / 100))
@@ -203,7 +233,8 @@ export const calcModelo130 = cache(
     const cumulativeStart = new Date(year, 0, 1)
     const cumulativeEnd = period.end
 
-    const [invoiceResult, expenseResult] = await Promise.all([
+    // Revenue query includes IRPF retention (unique to Modelo 130)
+    const [invoiceResult, expenses] = await Promise.all([
       pool.query(
         `SELECT
            COALESCE(SUM(ii.quantity * ii.unit_price), 0)::float AS total_ingresos,
@@ -221,26 +252,15 @@ export const calcModelo130 = cache(
            AND i.issue_date <= $3`,
         [userId, cumulativeStart, cumulativeEnd],
       ),
-      pool.query(
-        `SELECT
-           COALESCE(SUM(COALESCE(converted_total, total, 0)), 0)::float AS total_gastos,
-           COUNT(*)::int AS expense_count
-         FROM transactions
-         WHERE user_id = $1
-           AND type = 'expense'
-           AND issued_at >= $2
-           AND issued_at <= $3
-           AND converted_total IS NOT NULL`,
-        [userId, cumulativeStart, cumulativeEnd],
-      ),
+      queryExpenses(pool, userId, cumulativeStart, cumulativeEnd, true),
     ])
 
     const totalIngresos = invoiceResult.rows[0]?.total_ingresos ?? 0
     const totalIrpfRetenido = invoiceResult.rows[0]?.total_irpf_retenido ?? 0
     const invoiceCount = invoiceResult.rows[0]?.invoice_count ?? 0
 
-    const totalGastos = expenseResult.rows[0]?.total_gastos ?? 0
-    const expenseCount = expenseResult.rows[0]?.expense_count ?? 0
+    const totalGastos = expenses.totalExpenses
+    const expenseCount = expenses.expenseCount
     const rendimientoNeto = Math.max(0, totalIngresos - totalGastos)
     const cuota = Math.round(rendimientoNeto * 0.2)
     const irpfRetenidoRounded = Math.round(totalIrpfRetenido)

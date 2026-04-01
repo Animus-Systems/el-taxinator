@@ -1,4 +1,9 @@
 import { getCurrentUser } from "@/lib/auth"
+
+/** Convert a 2D string array to semicolon-separated CSV with BOM for Excel. */
+function toCsv(rows: string[][]): string {
+  return "\uFEFF" + rows.map(row => row.map(cell => `"${(cell ?? "").replace(/"/g, '""')}"`).join(";")).join("\n")
+}
 import { getActiveEntity } from "@/lib/entities"
 import { getTransactions } from "@/models/transactions"
 import { getInvoices, getQuotes } from "@/models/invoices"
@@ -89,8 +94,7 @@ export async function GET(request: Request) {
     ])
   }
 
-  const txCsv = txCsvRows.map(row => row.map(cell => `"${(cell ?? "").replace(/"/g, '""')}"`).join(";")).join("\n")
-  zip.file("transactions/transactions.csv", "\uFEFF" + txCsv) // BOM for Excel
+  zip.file("transactions/transactions.csv", toCsv(txCsvRows)) // BOM for Excel
 
   // ─── Transaction Attachments (bulk-loaded) ──────────────────────────────
   if (includeAttachments) {
@@ -155,8 +159,7 @@ export async function GET(request: Request) {
     ])
   }
 
-  const invCsv = invRows.map(row => row.map(cell => `"${(cell ?? "").replace(/"/g, '""')}"`).join(";")).join("\n")
-  zip.file("invoices/invoices.csv", "\uFEFF" + invCsv)
+  zip.file("invoices/invoices.csv", toCsv(invRows))
 
   // ─── Tax Reports ───────────────────────────────────────────────────────
   const quarters: Quarter[] = quarter ? [quarter] : [1, 2, 3, 4]
@@ -239,13 +242,15 @@ export async function GET(request: Request) {
   const taxCsvRows: string[][] = [taxCsvHeaders]
 
   for (const q of quarters) {
-    const m420 = taxResultsCache.get(q)!.m420
-    const secondary = entity.type === "autonomo"
-      ? taxResultsCache.get(q)!.secondary as Awaited<ReturnType<typeof calcModelo130>>
-      : taxResultsCache.get(q)!.secondary as Awaited<ReturnType<typeof calcModelo202>>
-    const secondaryAmount = entity.type === "autonomo"
-      ? ((secondary as any).casilla06_aIngresar / 100).toFixed(2)
-      : ((secondary as any).casilla05_aIngresar / 100).toFixed(2)
+    const { m420, secondary } = taxResultsCache.get(q)!
+    let secondaryAmount: string
+    if (entity.type === "autonomo") {
+      const m130 = secondary as Awaited<ReturnType<typeof calcModelo130>>
+      secondaryAmount = (m130.casilla06_aIngresar / 100).toFixed(2)
+    } else {
+      const m202 = secondary as Awaited<ReturnType<typeof calcModelo202>>
+      secondaryAmount = (m202.casilla05_aIngresar / 100).toFixed(2)
+    }
     taxCsvRows.push([
       `Q${q}`,
       (m420.totalIgicDevengado / 100).toFixed(2),
@@ -255,8 +260,7 @@ export async function GET(request: Request) {
     ])
   }
 
-  const taxCsv = taxCsvRows.map(row => row.join(";")).join("\n")
-  zip.file("tax/tax-summary.csv", "\uFEFF" + taxCsv)
+  zip.file("tax/tax-summary.csv", toCsv(taxCsvRows))
 
   // ─── Time Entries CSV ──────────────────────────────────────────────────
   const timeEntries = await getTimeEntries(user.id, { dateFrom, dateTo })
@@ -280,8 +284,7 @@ export async function GET(request: Request) {
       ])
     }
 
-    const timeCsv = timeRows.map(row => row.map(cell => `"${(cell ?? "").replace(/"/g, '""')}"`).join(";")).join("\n")
-    zip.file("time/time-entries.csv", "\uFEFF" + timeCsv)
+    zip.file("time/time-entries.csv", toCsv(timeRows))
   }
 
   // ─── Categories & Projects reference ───────────────────────────────────

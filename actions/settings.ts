@@ -143,16 +143,21 @@ export async function editProjectAction(code: string, data: Record<string, unkno
   return { success: true, project }
 }
 
-export async function deleteProjectAction(code: string) {
+async function deleteSettingsItem(
+  router: "projects" | "currencies" | "categories" | "fields",
+  code: string,
+) {
   const trpc = await serverClient()
   try {
-    await trpc.projects.delete({ code })
+    await trpc[router].delete({ code })
   } catch (error) {
-    return { success: false, error: "Failed to delete project" + error }
+    return { success: false, error: `Failed to delete ${router.slice(0, -1)}: ${error}` }
   }
-  revalidatePath("/settings/projects")
+  revalidatePath(`/settings/${router}`)
   return { success: true }
 }
+
+export async function deleteProjectAction(code: string) { return deleteSettingsItem("projects", code) }
 
 export async function addCurrencyAction(data: Record<string, unknown>) {
   const trpc = await serverClient()
@@ -184,16 +189,7 @@ export async function editCurrencyAction(code: string, data: Record<string, unkn
   return { success: true, currency }
 }
 
-export async function deleteCurrencyAction(code: string) {
-  const trpc = await serverClient()
-  try {
-    await trpc.currencies.delete({ code })
-  } catch (error) {
-    return { success: false, error: "Failed to delete currency" + error }
-  }
-  revalidatePath("/settings/currencies")
-  return { success: true }
-}
+export async function deleteCurrencyAction(code: string) { return deleteSettingsItem("currencies", code) }
 
 export async function addCategoryAction(data: Record<string, unknown>) {
   const trpc = await serverClient()
@@ -252,16 +248,7 @@ export async function editCategoryAction(code: string, data: Record<string, unkn
   return { success: true, category }
 }
 
-export async function deleteCategoryAction(code: string) {
-  const trpc = await serverClient()
-  try {
-    await trpc.categories.delete({ code })
-  } catch (error) {
-    return { success: false, error: "Failed to delete category" + error }
-  }
-  revalidatePath("/settings/categories")
-  return { success: true }
-}
+export async function deleteCategoryAction(code: string) { return deleteSettingsItem("categories", code) }
 
 export async function addFieldAction(data: Record<string, unknown>) {
   const trpc = await serverClient()
@@ -307,13 +294,4 @@ export async function editFieldAction(code: string, data: Record<string, unknown
   return { success: true, field }
 }
 
-export async function deleteFieldAction(code: string) {
-  const trpc = await serverClient()
-  try {
-    await trpc.fields.delete({ code })
-  } catch (error) {
-    return { success: false, error: "Failed to delete field" + error }
-  }
-  revalidatePath("/settings/fields")
-  return { success: true }
-}
+export async function deleteFieldAction(code: string) { return deleteSettingsItem("fields", code) }

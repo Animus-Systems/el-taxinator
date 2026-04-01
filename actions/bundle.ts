@@ -4,8 +4,8 @@ import {
   addEntity,
   getEntities,
   getPoolForEntity,
+  setActiveEntity,
   testDatabaseConnection,
-  ENTITY_COOKIE,
   type Entity,
 } from "@/lib/entities"
 import { ensureSchema } from "@/lib/schema"
@@ -14,7 +14,6 @@ import { FILE_UPLOAD_PATH } from "@/lib/files"
 import { execFileSync } from "child_process"
 import { mkdir, writeFile } from "fs/promises"
 import JSZip from "jszip"
-import { cookies } from "next/headers"
 import path from "path"
 import { redirect } from "next/navigation"
 
@@ -151,13 +150,7 @@ export async function importBundleAction(formData: FormData) {
       await writeFile(fullPath, Buffer.from(content))
     }
 
-    // Set entity cookie and redirect
-    const cookieStore = await cookies()
-    cookieStore.set(ENTITY_COOKIE, entityId, {
-      path: "/",
-      maxAge: 365 * 24 * 60 * 60,
-      sameSite: "lax",
-    })
+    await setActiveEntity(entityId)
 
     return { success: true, entityId }
   } catch (error) {

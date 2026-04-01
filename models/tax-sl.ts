@@ -1,6 +1,6 @@
 import { getPool } from "@/lib/pg"
 import { cache } from "react"
-import { getTaxPeriod, Quarter, calcModelo420, getQuarterLabel, getFilingDeadline, getUpcomingDeadlines, type Modelo420Result } from "./tax"
+import { getTaxPeriod, Quarter, calcModelo420, getQuarterLabel, getFilingDeadline, getUpcomingDeadlines, queryInvoiceRevenue, queryExpenses, type Modelo420Result } from "./tax"
 
 // ─── Modelo 202 — Quarterly corporate tax installment (SL) ──────────────────
 
@@ -36,36 +36,13 @@ async function calcModelo202ForQuarter(
   const cumulativeStart = new Date(year, 0, 1)
   const cumulativeEnd = period.end
 
-  const [revenueResult, expenseResult] = await Promise.all([
-    pool.query(
-      `SELECT
-         COALESCE(SUM(ii.quantity * ii.unit_price), 0)::float AS total_revenue,
-         COUNT(DISTINCT i.id)::int AS invoice_count
-       FROM invoices i
-       JOIN invoice_items ii ON ii.invoice_id = i.id
-       WHERE i.user_id = $1
-         AND i.status IN ('sent', 'paid')
-         AND i.issue_date >= $2
-         AND i.issue_date <= $3`,
-      [userId, cumulativeStart, cumulativeEnd],
-    ),
-    pool.query(
-      `SELECT
-         COALESCE(SUM(COALESCE(converted_total, total, 0)), 0)::float AS total_expenses,
-         COUNT(*)::int AS expense_count
-       FROM transactions
-       WHERE user_id = $1
-         AND type = 'expense'
-         AND issued_at >= $2
-         AND issued_at <= $3`,
-      [userId, cumulativeStart, cumulativeEnd],
-    ),
+  const [revenue, expenses] = await Promise.all([
+    queryInvoiceRevenue(pool, userId, cumulativeStart, cumulativeEnd),
+    queryExpenses(pool, userId, cumulativeStart, cumulativeEnd),
   ])
 
-  const totalRevenue = revenueResult.rows[0]?.total_revenue ?? 0
-  const invoiceCount = revenueResult.rows[0]?.invoice_count ?? 0
-  const totalExpenses = expenseResult.rows[0]?.total_expenses ?? 0
-  const expenseCount = expenseResult.rows[0]?.expense_count ?? 0
+  const { totalRevenue, invoiceCount } = revenue
+  const { totalExpenses, expenseCount } = expenses
 
   const baseImponible = Math.max(0, totalRevenue - totalExpenses)
   const cuotaIntegra = Math.round(baseImponible * (taxRate / 100))
@@ -134,32 +111,13 @@ export const calcModelo200 = cache(
     const yearStart = new Date(year, 0, 1)
     const yearEnd = new Date(year, 11, 31, 23, 59, 59, 999)
 
-    const [revenueResult, expenseResult] = await Promise.all([
-      pool.query(
-        `SELECT
-           COALESCE(SUM(ii.quantity * ii.unit_price), 0)::float AS total_revenue
-         FROM invoices i
-         JOIN invoice_items ii ON ii.invoice_id = i.id
-         WHERE i.user_id = $1
-           AND i.status IN ('sent', 'paid')
-           AND i.issue_date >= $2
-           AND i.issue_date <= $3`,
-        [userId, yearStart, yearEnd],
-      ),
-      pool.query(
-        `SELECT
-           COALESCE(SUM(COALESCE(converted_total, total, 0)), 0)::float AS total_expenses
-         FROM transactions
-         WHERE user_id = $1
-           AND type = 'expense'
-           AND issued_at >= $2
-           AND issued_at <= $3`,
-        [userId, yearStart, yearEnd],
-      ),
+    const [revenue, expenses] = await Promise.all([
+      queryInvoiceRevenue(pool, userId, yearStart, yearEnd),
+      queryExpenses(pool, userId, yearStart, yearEnd),
     ])
 
-    const totalRevenue = revenueResult.rows[0]?.total_revenue ?? 0
-    const totalExpenses = expenseResult.rows[0]?.total_expenses ?? 0
+    const { totalRevenue } = revenue
+    const { totalExpenses } = expenses
     const baseImponible = Math.max(0, totalRevenue - totalExpenses)
     const cuotaIntegra = Math.round(baseImponible * (taxRate / 100))
     const totalPagosACuenta = quarters.reduce((s, q) => s + q.casilla05_aIngresar, 0)

@@ -5,6 +5,7 @@ import {
   getEntities,
   getEntityById,
   getPoolForEntity,
+  setActiveEntity,
   testDatabaseConnection,
   ENTITY_COOKIE,
   type EntityType,
@@ -40,13 +41,7 @@ export async function connectAction(entityId: string) {
     return { success: false, error: `Failed to initialize database schema: ${error instanceof Error ? error.message : "Unknown error"}` }
   }
 
-  // Set the entity cookie
-  const cookieStore = await cookies()
-  cookieStore.set(ENTITY_COOKIE, entityId, {
-    path: "/",
-    maxAge: 365 * 24 * 60 * 60,
-    sameSite: "lax",
-  })
+  await setActiveEntity(entityId)
 
   // Ensure the self-hosted user and defaults exist (also updates i18n values)
   try {

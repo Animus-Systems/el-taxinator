@@ -59,13 +59,23 @@ async function ensureDefaults(pool: pg.Pool): Promise<void> {
   }
 }
 
+// Track which databases have had defaults ensured (per process lifetime)
+const defaultsApplied = new Set<string>()
+
 /**
  * Ensure a database has the Taxinator schema and proper defaults.
+ * Defaults are only applied once per database per process lifetime.
  */
 export async function ensureSchema(pool: pg.Pool): Promise<void> {
+  const connId = (pool as any).options?.connectionString ?? "default"
+
   if (await hasSchema(pool)) {
-    await ensureDefaults(pool)
+    if (!defaultsApplied.has(connId)) {
+      await ensureDefaults(pool)
+      defaultsApplied.add(connId)
+    }
     return
   }
   await applySchema(pool)
+  defaultsApplied.add(connId)
 }

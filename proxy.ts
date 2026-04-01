@@ -1,3 +1,5 @@
+import createIntlMiddleware from "next-intl/middleware"
+import { routing } from "./routing"
 import { NextRequest, NextResponse } from "next/server"
 
 const protectedPaths = [
@@ -6,35 +8,34 @@ const protectedPaths = [
   "/quotes", "/clients", "/products", "/tax", "/time", "/apps",
 ]
 
-const locales = new Set(["en", "es"])
-const DEFAULT_LOCALE = "en"
+const locales = new Set(routing.locales)
+const handleIntl = createIntlMiddleware(routing)
 
+/**
+ * Combined auth + locale proxy.
+ * next-intl middleware handles locale detection and rewrites (e.g. /dashboard → /en/dashboard).
+ * We layer auth protection on top — redirect to entity picker if no entity cookie.
+ */
 export default function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
 
-  if (pathname === "/") return
+  // Skip auth check for root (entity picker / login)
+  if (pathname !== "/") {
+    const first = pathname.split("/")[1]
+    const hasLocale = locales.has(first)
+    const appPath = hasLocale ? pathname.slice(first.length + 1) || "/" : pathname
 
-  const first = pathname.split("/")[1]
-  const hasLocale = locales.has(first)
-
-  // Auth check
-  const appPath = hasLocale ? pathname.slice(first.length + 1) || "/" : pathname
-  if (protectedPaths.some(p => appPath.startsWith(p))) {
-    if (!request.cookies.get("TAXINATOR_ENTITY")?.value) {
-      return NextResponse.redirect(new URL("/", request.url))
+    if (protectedPaths.some(p => appPath.startsWith(p))) {
+      if (!request.cookies.get("TAXINATOR_ENTITY")?.value) {
+        return NextResponse.redirect(new URL("/", request.url))
+      }
     }
   }
 
-  // Already has locale prefix — pass through
-  if (hasLocale) return
-
-  // No locale prefix — add default locale via rewrite
-  const url = request.nextUrl.clone()
-  url.pathname = `/${DEFAULT_LOCALE}${pathname}`
-  return NextResponse.rewrite(url)
+  // Delegate to next-intl for locale routing
+  return handleIntl(request)
 }
 
 export const config = {
-  // Only run on page routes, skip api/static/next internals AND skip locale-prefixed paths
-  matcher: ["/((?!api|_next|_vercel|en/|es/|.*\\..*).*)"],
+  matcher: ["/((?!api|_next|_vercel|.*\\..*).*)"],
 }

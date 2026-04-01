@@ -9,6 +9,7 @@ import {
   testDatabaseConnection,
   generateDockerComposeSnippet,
   closePoolForEntity,
+  setActiveEntity,
   ENTITY_COOKIE,
   type Entity,
   type EntityType,
@@ -22,13 +23,7 @@ export async function switchEntityAction(entityId: string) {
     return { success: false, error: "Entity not found" }
   }
 
-  const cookieStore = await cookies()
-  cookieStore.set(ENTITY_COOKIE, entityId, {
-    path: "/",
-    maxAge: 365 * 24 * 60 * 60,
-    sameSite: "lax",
-  })
-
+  await setActiveEntity(entityId)
   revalidatePath("/", "layout")
   return { success: true }
 }
@@ -94,11 +89,7 @@ export async function removeEntityAction(id: string) {
     if (current === id) {
       const remaining = getEntities()
       if (remaining.length > 0) {
-        cookieStore.set(ENTITY_COOKIE, remaining[0].id, {
-          path: "/",
-          maxAge: 365 * 24 * 60 * 60,
-          sameSite: "lax",
-        })
+        await setActiveEntity(remaining[0].id)
       }
     }
 

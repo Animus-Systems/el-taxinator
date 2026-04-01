@@ -122,6 +122,16 @@ export function removeEntity(id: string): void {
 // Active entity (cookie-based)
 // ---------------------------------------------------------------------------
 
+/** Set the active entity cookie. */
+export async function setActiveEntity(entityId: string): Promise<void> {
+  const cookieStore = await cookies()
+  cookieStore.set(ENTITY_COOKIE, entityId, {
+    path: "/",
+    maxAge: 365 * 24 * 60 * 60,
+    sameSite: "lax",
+  })
+}
+
 export async function getActiveEntityId(): Promise<string> {
   const entities = getEntities()
   if (entities.length === 0) return "default"
