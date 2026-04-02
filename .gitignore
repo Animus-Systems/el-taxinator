@@ -30,6 +30,8 @@
 *.pem
 .vscode
 .claude
+.planning
+.skills
 
 # debug
 npm-debug.log*
