@@ -32,7 +32,10 @@ export default function proxy(request: NextRequest) {
     }
   }
 
-  // Delegate to next-intl for locale routing
+  // Root is the entity picker — lives outside [locale], don't rewrite it
+  if (request.nextUrl.pathname === "/") return
+
+  // Delegate to next-intl for locale routing on all other pages
   return handleIntl(request)
 }
 
