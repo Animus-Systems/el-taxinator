@@ -8,7 +8,7 @@ const protectedPaths = [
   "/quotes", "/clients", "/products", "/tax", "/time", "/apps",
 ]
 
-const locales = new Set(routing.locales)
+const locales = new Set<string>(routing.locales)
 const handleIntl = createIntlMiddleware(routing)
 
 /**

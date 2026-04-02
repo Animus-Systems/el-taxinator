@@ -6,7 +6,7 @@ import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 import { Toaster } from "@/components/ui/sonner"
 import { getCurrentUser, isSubscriptionExpired } from "@/lib/auth"
 import config from "@/lib/config"
-import { getEntities, getActiveEntityId, isMultiEntity } from "@/lib/entities"
+import { getActiveEntity } from "@/lib/entities"
 import { getUnsortedFilesCount } from "@/models/files"
 import type { Metadata, Viewport } from "next"
 import { NextIntlClientProvider } from "next-intl"
@@ -44,19 +44,14 @@ export default async function LocaleLayout({
   const messages = await getMessages()
   const user = await getCurrentUser()
   const unsortedFilesCount = await getUnsortedFilesCount(user.id)
-  const entities = getEntities()
-  const activeEntityId = await getActiveEntityId()
+  const entity = await getActiveEntity()
 
   return (
     <NextIntlClientProvider messages={messages}>
     <NotificationProvider>
       <SidebarProvider>
         <MobileMenu unsortedFilesCount={unsortedFilesCount} />
-        <AppSidebar
-          unsortedFilesCount={unsortedFilesCount}
-          entities={entities}
-          activeEntityId={activeEntityId}
-        />
+        <AppSidebar unsortedFilesCount={unsortedFilesCount} entityName={entity.name} />
         <SidebarInset style={{ marginLeft: "var(--sidebar-width)" }} className="mt-[60px] md:mt-0 overflow-auto max-md:!ml-0">
           <ScreenDropArea>
             {isSubscriptionExpired(user) && <SubscriptionExpired />}

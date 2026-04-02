@@ -1,6 +1,6 @@
 import type { Entity } from "@/lib/entities"
 import type { User } from "@/lib/db-types"
-import { FILE_UPLOAD_PATH } from "@/lib/files"
+import { getUserUploadsDirectory } from "@/lib/files"
 import { execFileSync } from "child_process"
 import { existsSync } from "fs"
 import fs from "fs/promises"
@@ -57,7 +57,7 @@ export async function createBundle(entity: Entity, user: User): Promise<Buffer> 
   zip.file("database.sql", dbDump)
 
   // Add user uploads
-  const uploadsDir = path.join(FILE_UPLOAD_PATH, user.email)
+  const uploadsDir = getUserUploadsDirectory(user, entity)
   const files = await readDirRecursive(uploadsDir)
   for (const { relativePath, buffer } of files) {
     zip.file(`uploads/${relativePath}`, buffer)

@@ -48,12 +48,9 @@ yarn-error.log*
 next-env.d.ts
 
 # databases
-prisma/client
 pgdata
 *.db
 *.sqlite
 *.sqlite3
 *.sqlite-journal
 *.db-journal
-# Sentry Config File
-.env.sentry-build-plugin

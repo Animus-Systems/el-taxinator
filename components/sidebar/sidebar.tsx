@@ -17,7 +17,6 @@ import {
 } from "@/components/ui/sidebar"
 import config from "@/lib/config"
 import {
-  ArrowLeftRight,
   Calculator,
   Clock,
   ClockArrowUp,
@@ -40,22 +39,18 @@ import { Blinker } from "./blinker"
 import { LanguageSwitcher } from "./language-switcher"
 import { SidebarMenuItemWithHighlight } from "./sidebar-item"
 import { disconnectAction } from "@/actions/auth"
-import type { Entity } from "@/lib/entities"
 
 export function AppSidebar({
   unsortedFilesCount,
-  entities,
-  activeEntityId,
+  entityName,
 }: {
   unsortedFilesCount: number
-  entities?: Entity[]
-  activeEntityId?: string
+  entityName?: string
 }) {
   const t = useTranslations("sidebar")
   const { open, setOpenMobile } = useSidebar()
   const pathname = usePathname()
   const { notification } = useNotification()
-  const activeEntity = entities?.find((e) => e.id === activeEntityId)
 
   // Hide sidebar on mobile when clicking an item
   useEffect(() => {
@@ -72,6 +67,7 @@ export function AppSidebar({
               <span className="truncate font-semibold text-lg">
                 <ColoredText>{config.app.title}</ColoredText>
               </span>
+              {entityName && <span className="truncate text-xs text-sidebar-foreground/70">{entityName}</span>}
             </div>
           </Link>
         </SidebarHeader>
@@ -189,14 +185,6 @@ export function AppSidebar({
               <SidebarMenu>
                 <SidebarMenuItem>
                   <LanguageSwitcher />
-                </SidebarMenuItem>
-                <SidebarMenuItem>
-                  <SidebarMenuButton asChild>
-                    <a href="/?switch=1">
-                      <ArrowLeftRight className="h-4 w-4" />
-                      <span>{activeEntity?.name ?? t("switchCompany")}</span>
-                    </a>
-                  </SidebarMenuButton>
                 </SidebarMenuItem>
                 <SidebarMenuItem>
                   <form suppressHydrationWarning action={disconnectAction}>

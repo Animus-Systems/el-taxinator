@@ -71,6 +71,7 @@ export async function addAndConnectAction(data: {
   name: string
   type: EntityType
   connectionString: string
+  dataDir?: string
 }) {
   if (!data.name) return { success: false, error: "Company name is required" }
   if (!data.connectionString) return { success: false, error: "Database connection is required" }
@@ -92,7 +93,7 @@ export async function addAndConnectAction(data: {
   }
 
   try {
-    addEntity({ id, name: data.name, type: data.type, db: data.connectionString })
+    addEntity({ id, name: data.name, type: data.type, db: data.connectionString, dataDir: data.dataDir })
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : "Failed to save company" }
   }

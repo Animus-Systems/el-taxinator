@@ -1,15 +1,11 @@
 "use client"
 
 import { Button } from "@/components/ui/button"
-import * as Sentry from "@sentry/nextjs"
 import { Ghost } from "lucide-react"
 import Link from "next/link"
-import { useEffect } from "react"
 
 export default function GlobalError({ error }: { error: Error }) {
-  useEffect(() => {
-    Sentry.captureException(error)
-  }, [error])
+  console.error("Global error:", error)
 
   return (
     <html>
@@ -19,7 +15,7 @@ export default function GlobalError({ error }: { error: Error }) {
             <Ghost className="w-24 h-24 text-destructive mx-auto" />
             <h1 className="text-4xl font-bold text-foreground">Oops! Something went wrong</h1>
             <p className="text-muted-foreground max-w-md mx-auto">
-              We apologize for the inconvenience. Our team has been notified and is working to fix the issue.
+              Something unexpected happened. Try refreshing the page.
             </p>
             <div className="pt-4">
               <Button asChild>

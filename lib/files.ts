@@ -1,4 +1,5 @@
 import type { File, Transaction, User } from "@/lib/db-types"
+import type { Entity } from "@/lib/entities"
 import { access, constants, readdir, stat } from "fs/promises"
 import path from "path"
 import config from "./config"
@@ -9,7 +10,15 @@ export const FILE_PREVIEWS_DIRECTORY_NAME = "previews"
 export const FILE_STATIC_DIRECTORY_NAME = "static"
 export const FILE_IMPORT_CSV_DIRECTORY_NAME = "csv"
 
-export function getUserUploadsDirectory(user: User) {
+/**
+ * Get uploads directory for a user.
+ * If entity has a dataDir, uploads live at `{dataDir}/uploads/`.
+ * Otherwise falls back to legacy `{UPLOAD_PATH}/{email}/`.
+ */
+export function getUserUploadsDirectory(user: User, entity?: Entity) {
+  if (entity?.dataDir) {
+    return path.resolve(entity.dataDir, "uploads")
+  }
   return safePathJoin(FILE_UPLOAD_PATH, user.email)
 }
 
@@ -36,8 +45,8 @@ export function getTransactionFileUploadPath(fileUuid: string, filename: string,
   return formatFilePath(storedFileName, transaction.issuedAt || new Date())
 }
 
-export function fullPathForFile(user: User, file: File) {
-  const userUploadsDirectory = getUserUploadsDirectory(user)
+export function fullPathForFile(user: User, file: File, entity?: Entity) {
+  const userUploadsDirectory = getUserUploadsDirectory(user, entity)
   return safePathJoin(userUploadsDirectory, file.path)
 }
 

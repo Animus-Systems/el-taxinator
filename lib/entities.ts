@@ -14,6 +14,8 @@ export type Entity = {
   name: string
   type: EntityType
   db: string
+  /** Root directory for all entity data (pgdata + uploads). If unset, falls back to legacy paths. */
+  dataDir?: string
 }
 
 // ---------------------------------------------------------------------------

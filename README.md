@@ -10,13 +10,14 @@
 
 > **Note:** This project is a fork of [Taxinator by vas3k](https://github.com/vas3k/Taxinator). We are grateful to the original creators for building the foundation — their work on AI-powered receipt scanning, transaction management, and the overall architecture made this fork possible. El Taxinator takes the project in a different direction, focusing specifically on the Canary Islands tax regime (IGIC), multi-company management, and a fully self-hosted experience without cloud dependencies.
 
-El Taxinator is a self-hosted accounting and tax management app built for freelancers (autónomos) and small companies (Sociedad Limitada) in the Canary Islands. Upload receipts, invoices, or bank statements — AI extracts and categorizes everything automatically. Manage multiple companies from a single instance, each with its own database. Calculate IGIC (Modelo 420/425), IRPF (Modelo 130), and corporate tax (Modelo 202/200) with built-in tax calculators.
+El Taxinator is a self-hosted accounting and tax management app built for freelancers (autónomos) and small companies (Sociedad Limitada) in the Canary Islands. Upload receipts, invoices, or bank statements — AI extracts and categorizes everything automatically. Manage multiple companies from a single instance, each with its own database and file storage. Calculate IGIC (Modelo 420/425), IRPF (Modelo 130), and corporate tax (Modelo 202/200) with built-in tax calculators.
 
 ## Features
 
 - **AI-powered document processing** — Upload photos of receipts, invoices, or bank statement PDFs. AI extracts transactions, categorizes them, and matches bank entries to invoices automatically.
 - **Canary Islands tax calculators** — Modelo 420 (quarterly IGIC), Modelo 425 (annual IGIC summary), Modelo 130 (quarterly IRPF for autónomos), Modelo 202/200 (corporate tax for SLs). All with IGIC rates (0%, 3%, 7%, 9.5%, 15%).
-- **Multi-company support** — Manage multiple businesses from one instance. Each company has its own PostgreSQL database. Switch between them from the sidebar. Supports both Autónomo and Sociedad Limitada entity types.
+- **Multi-company support** — Manage multiple businesses from one instance. Each company gets its own PostgreSQL database and file storage in a single data folder. Supports both Autónomo and Sociedad Limitada entity types.
+- **One-folder-per-company** — All company data (database + receipts + files) lives in one folder you choose. Easy to back up, move to an external drive, or sync to Google Drive.
 - **Invoicing & quotes** — Create, track, and export professional invoices with IGIC and IRPF withholding. Convert quotes to invoices. Import billable time entries.
 - **Time tracking** — Log billable hours, track by project and client, import into invoices.
 - **Multi-language** — Full English and Spanish UI with locale-aware database content (category names, field names, etc. stored in both languages).
@@ -25,35 +26,36 @@ El Taxinator is a self-hosted accounting and tax management app built for freela
 - **Portable backups** — Full database dump + uploaded files in a single `.taxinator.zip`. Import on any instance. Auto-backup to Google Drive with configurable frequency.
 - **Bank statement processing** — Upload a bank statement PDF, AI splits it into individual transactions, auto-categorizes, and matches to existing invoices.
 - **Currency conversion** — Automatic multi-currency support with historical exchange rates, including crypto (BTC, ETH, etc.).
-- **Docker auto-provisioning** — Add a new company and auto-create a PostgreSQL database via Docker with one click.
+- **Docker auto-provisioning** — Add a new company and auto-create a PostgreSQL database via Docker with one click. Choose where to store data with a visual folder browser.
 
 ## Quick Start
-
-### Using Docker Compose
 
 ```bash
 git clone https://github.com/animusystems/el-taxinator.git
 cd el-taxinator
-
-# Start the database
-docker compose up -d
-
-# Install dependencies and start the app
 yarn install
 cp .env.example .env
 yarn dev
 ```
 
-Visit `http://localhost:7331`. You'll see the entity picker — click **Add New Company**, enter your database credentials, and you're in.
+Visit `http://localhost:7331`. You'll see the entity picker with three options:
+
+- **New Company** — Set up a new company. Use "Auto (Docker)" to create a database automatically, or enter your own PostgreSQL credentials.
+- **Open Folder** — Reconnect to an existing company data folder (created by Taxinator previously).
+- **Import Backup** — Restore from a `.taxinator.zip` portable bundle.
+
+### With Docker Compose
+
+```bash
+docker compose up -d   # starts PostgreSQL
+yarn dev               # starts the app
+```
 
 ### Environment Variables
 
 | Variable | Required | Description | Default |
 |----------|----------|-------------|---------|
-| `DATABASE_URL` | Yes | PostgreSQL connection string for the default entity | — |
-| `UPLOAD_PATH` | No | Directory for uploaded files | `./uploads` |
 | `PORT` | No | Application port | `7331` |
-| `BASE_URL` | No | Public URL of the app | `http://localhost:7331` |
 | `SELF_HOSTED_MODE` | No | Enable self-hosted mode | `true` |
 
 AI providers are configured in the app UI (Settings > LLM Settings), or via environment variables:
@@ -64,29 +66,20 @@ AI providers are configured in the app UI (Settings > LLM Settings), or via envi
 - `ANTHROPIC_API_KEY` / `ANTHROPIC_MODEL_NAME`
 - `OPENROUTER_API_KEY` / `OPENROUTER_MODEL_NAME`
 
-For Google Drive auto-backup, configure in Settings > Backups (no env vars needed).
+For Google Drive auto-backup, set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`, then connect in Settings > Backups.
 
-## Multi-Company Setup
+## Company Data Structure
 
-El Taxinator supports multiple companies, each with its own database. There are two ways to configure entities:
+Each company stores everything in one folder:
 
-### Option 1: Through the UI (recommended)
-
-1. Visit `http://localhost:7331`
-2. Click **Add New Company**
-3. Enter the company name, type (Autónomo or SL), and database credentials
-4. Or click **Auto (Docker)** to create a PostgreSQL container automatically
-
-Entities are saved to `data/entities.json` and persist across restarts.
-
-### Option 2: Via environment variable
-
-```bash
-ENTITIES='[
-  {"id":"seth","name":"Seth (Autónomo)","type":"autonomo","db":"postgresql://taxinator:taxinator@localhost:5435/taxinator"},
-  {"id":"acme","name":"Acme SL","type":"sl","db":"postgresql://taxinator:taxinator@localhost:5436/taxinator"}
-]'
 ```
+/path/to/my-company/
+├── taxinator.json    ← manifest (name, type, DB credentials)
+├── pgdata/           ← PostgreSQL data (Docker volume)
+└── uploads/          ← receipts, logos, previews, CSVs
+```
+
+This folder can live anywhere — local disk, external drive, or a Google Drive–synced folder. To move a company to another machine, just copy the folder and use "Open Folder" on the new instance.
 
 ## Tax Calculators
 
@@ -103,35 +96,27 @@ Filing deadlines: Q1 → April 20, Q2 → July 20, Q3 → October 20, Q4 → Jan
 
 ## Tech Stack
 
-- **Next.js 16** — Frontend and API
-- **PostgreSQL 17** — Database (one per company)
-- **Raw SQL** — No ORM, direct parameterized queries via `pg`
-- **tRPC** — Type-safe API layer
-- **next-intl** — Internationalization (English + Spanish)
+- **Next.js 16** with Turbopack
+- **PostgreSQL 17** — one database per company
+- **Raw SQL** — no ORM, parameterized queries via `pg`
+- **tRPC** — type-safe API layer
+- **next-intl** — internationalization (English + Spanish)
 - **LangChain** — AI provider abstraction
-- **JSZip** — Backup/export bundles
-- **sharp** — Image processing
+- **JSZip** — backup/export bundles
+- **sharp** — image processing
 - **googleapis** — Google Drive auto-backup
 
 ## Local Development
 
 ```bash
-# Prerequisites: Node.js 20.19+, PostgreSQL 17+, Ghostscript, GraphicsMagick
+# Prerequisites: Node.js 20+, Docker (for auto-provisioning)
+# Optional: Ghostscript + GraphicsMagick for PDF previews
 # macOS: brew install gs graphicsmagick
 
-# Clone and install
 git clone https://github.com/animusystems/el-taxinator.git
 cd el-taxinator
 yarn install
-
-# Set up environment
 cp .env.example .env
-# Edit .env with your DATABASE_URL
-
-# Start database
-docker compose up -d
-
-# Start dev server
 yarn dev
 ```
 
@@ -139,12 +124,12 @@ The schema is applied automatically when you connect to a new database — no mi
 
 ## Acknowledgments
 
-This project is a fork of [Taxinator](https://github.com/vas3k/Taxinator) by [vas3k](https://github.com/vas3k). The original project provided an excellent foundation for AI-powered receipt scanning and transaction management. We're taking it in a new direction focused on:
+This project is a fork of [Taxinator](https://github.com/vas3k/Taxinator) by [vas3k](https://github.com/vas3k). The original project provided an excellent foundation for AI-powered receipt scanning and transaction management. We've taken it in a new direction:
 
 - Canary Islands tax compliance (IGIC instead of IVA)
-- Multi-company management with separate databases
+- Multi-company management with per-company data folders
 - Self-hosted-first with no cloud dependencies
-- DB-credential-based authentication (no email/password accounts)
+- DB-credential-based authentication
 - Portable backup bundles with Google Drive auto-backup
 - Full English/Spanish bilingual support
 

@@ -10,7 +10,8 @@ import {
 } from "@/lib/entities"
 import { ensureSchema } from "@/lib/schema"
 import { getOrCreateSelfHostedUser } from "@/models/users"
-import { FILE_UPLOAD_PATH } from "@/lib/files"
+import { getUserUploadsDirectory } from "@/lib/files"
+import { getEntityById } from "@/lib/entities"
 import { execFileSync } from "child_process"
 import { mkdir, writeFile } from "fs/promises"
 import JSZip from "jszip"
@@ -132,7 +133,8 @@ export async function importBundleAction(formData: FormData) {
 
     // Extract uploaded files
     const user = await getOrCreateSelfHostedUser()
-    const userUploadsDir = path.join(FILE_UPLOAD_PATH, user.email)
+    const entity = getEntityById(entityId)
+    const userUploadsDir = getUserUploadsDirectory(user, entity)
 
     const uploadFiles = Object.keys(zip.files).filter(
       f => f.startsWith("uploads/") && !zip.files[f].dir,
