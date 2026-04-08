@@ -27,15 +27,20 @@ export async function connectAction(entityId: string) {
     return { success: false, error: "Company not found" }
   }
 
-  // Test the connection
-  const test = await testDatabaseConnection(entity.db)
-  if (!test.ok) {
-    return { success: false, error: `Cannot connect: ${test.error}` }
+  // For external connections, test the URL up front so we can show a clear
+  // error before touching the pool. Embedded entities don't need this — the
+  // pool itself will create the database lazily.
+  if (entity.db) {
+    const test = await testDatabaseConnection(entity.db)
+    if (!test.ok) {
+      return { success: false, error: `Cannot connect: ${test.error}` }
+    }
   }
 
-  // Ensure database has the Taxinator schema (tables)
+  // Ensure database has the Taxinator schema (tables). For embedded
+  // entities this is also where the per-entity database first gets created.
   try {
-    const pool = getPoolForEntity(entityId)
+    const pool = await getPoolForEntity(entityId)
     await ensureSchema(pool)
   } catch (error) {
     return { success: false, error: `Failed to initialize database schema: ${error instanceof Error ? error.message : "Unknown error"}` }
@@ -66,20 +71,25 @@ export async function disconnectAction() {
 
 /**
  * Add a new company and connect to it immediately.
+ *
+ * If `connectionString` is omitted (the standard self-hosted path), the new
+ * entity uses its own database in the embedded Postgres cluster. Pass a
+ * connection string only when pointing at an external Postgres.
  */
 export async function addAndConnectAction(data: {
   name: string
   type: EntityType
-  connectionString: string
+  connectionString?: string
   dataDir?: string
 }) {
   if (!data.name) return { success: false, error: "Company name is required" }
-  if (!data.connectionString) return { success: false, error: "Database connection is required" }
 
-  // Test connection first
-  const test = await testDatabaseConnection(data.connectionString)
-  if (!test.ok) {
-    return { success: false, error: `Cannot connect to database: ${test.error}` }
+  // If a connection string was provided (advanced path), validate it now.
+  if (data.connectionString) {
+    const test = await testDatabaseConnection(data.connectionString)
+    if (!test.ok) {
+      return { success: false, error: `Cannot connect to database: ${test.error}` }
+    }
   }
 
   // Generate ID and save
@@ -93,12 +103,18 @@ export async function addAndConnectAction(data: {
   }
 
   try {
-    addEntity({ id, name: data.name, type: data.type, db: data.connectionString, dataDir: data.dataDir })
+    addEntity({
+      id,
+      name: data.name,
+      type: data.type,
+      db: data.connectionString,
+      dataDir: data.dataDir,
+    })
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : "Failed to save company" }
   }
 
-  // Connect to it
+  // Connect to it (this will boot the embedded cluster + create the per-entity DB if needed)
   const connectResult = await connectAction(id)
   if (!connectResult.success) {
     return connectResult

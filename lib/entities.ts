@@ -2,6 +2,12 @@ import pg from "pg"
 import { cookies } from "next/headers"
 import fs from "fs"
 import path from "path"
+import {
+  startCluster,
+  getClusterInfo,
+  ensureDatabase,
+  getEmbeddedConnectionString,
+} from "./embedded-pg"
 
 // ---------------------------------------------------------------------------
 // Types
@@ -13,8 +19,13 @@ export type Entity = {
   id: string
   name: string
   type: EntityType
-  db: string
-  /** Root directory for all entity data (pgdata + uploads). If unset, falls back to legacy paths. */
+  /**
+   * Postgres connection string. Optional: when omitted, the entity uses its
+   * own database inside the embedded cluster (db name = entity id). Set this
+   * only when pointing at an external Postgres for advanced/dev scenarios.
+   */
+  db?: string
+  /** Root directory for entity-scoped uploads. Defaults to data/<id>/uploads. */
   dataDir?: string
 }
 
@@ -150,18 +161,19 @@ export async function getActiveEntityId(): Promise<string> {
 export async function getActiveEntity(): Promise<Entity> {
   const id = await getActiveEntityId()
   const entity = getEntityById(id)
-  if (!entity) {
-    // Fallback to first entity
-    const entities = getEntities()
-    if (entities.length > 0) return entities[0]
-    // No entities configured at all
-    return { id: "default", name: "Default", type: "autonomo", db: process.env.DATABASE_URL ?? "" }
-  }
-  return entity
+  if (entity) return entity
+
+  // Fallback to first entity if the active one was deleted
+  const entities = getEntities()
+  if (entities.length > 0) return entities[0]
+
+  // No entities configured — return a synthetic default backed by the
+  // embedded cluster's "default" database.
+  return { id: "default", name: "Default", type: "autonomo" }
 }
 
 // ---------------------------------------------------------------------------
-// Connection pool manager — one pool per entity
+// Connection pool manager — one pool per entity, lazily created
 // ---------------------------------------------------------------------------
 
 const globalForPools = globalThis as unknown as {
@@ -174,15 +186,36 @@ if (process.env.NODE_ENV !== "production") {
   globalForPools.entityPools = poolMap
 }
 
-export function getPoolForEntity(entityId: string): pg.Pool {
+/**
+ * Resolve the connection string for an entity. If the entity has an explicit
+ * `db` field, that wins (lets advanced users point at an external Postgres).
+ * Otherwise we fall back to the embedded cluster, creating the per-entity
+ * database if it doesn't exist yet.
+ */
+async function resolveConnectionString(entity: Entity): Promise<string> {
+  if (entity.db && entity.db.length > 0) {
+    return entity.db
+  }
+
+  // Embedded path: ensure the cluster is up and the per-entity database exists
+  if (!getClusterInfo()) {
+    await startCluster()
+  }
+  await ensureDatabase(entity.id)
+  return getEmbeddedConnectionString(entity.id)
+}
+
+export async function getPoolForEntity(entityId: string): Promise<pg.Pool> {
   const existing = poolMap.get(entityId)
   if (existing) return existing
 
   const entity = getEntityById(entityId)
   if (!entity) throw new Error(`Entity "${entityId}" not found`)
 
+  const connectionString = await resolveConnectionString(entity)
+
   const newPool = new pg.Pool({
-    connectionString: entity.db,
+    connectionString,
     max: 10,
     idleTimeoutMillis: 30_000,
     connectionTimeoutMillis: 5_000,
@@ -206,36 +239,9 @@ export async function getPool(): Promise<pg.Pool> {
   return getPoolForEntity(entityId)
 }
 
-// ---------------------------------------------------------------------------
-// Docker provisioning helpers
-// ---------------------------------------------------------------------------
-
-export function generateDockerComposeSnippet(entity: { id: string; name: string }): string {
-  const slug = entity.id.replace(/[^a-z0-9-]/g, "")
-  const password = generateRandomPassword()
-  return `  # ${entity.name}
-  db-${slug}:
-    image: postgres:17-alpine
-    environment:
-      POSTGRES_USER: taxinator
-      POSTGRES_PASSWORD: ${password}
-      POSTGRES_DB: taxinator
-    volumes:
-      - ./data/${slug}-pgdata:/var/lib/postgresql/data
-    ports:
-      - "0:5432"  # Auto-assign port
-    restart: unless-stopped
-
-# Connection string for this entity:
-# postgresql://taxinator:${password}@db-${slug}:5432/taxinator`
-}
-
-function generateRandomPassword(): string {
-  return crypto.randomUUID().replace(/-/g, "")
-}
-
 /**
  * Test if a database connection string is valid and reachable.
+ * Used by the entity creation UI when an advanced user supplies an external URL.
  */
 export async function testDatabaseConnection(connectionString: string): Promise<{ ok: boolean; error?: string }> {
   const testPool = new pg.Pool({

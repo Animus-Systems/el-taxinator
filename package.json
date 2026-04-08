@@ -8,12 +8,9 @@
     "node": ">=20.19.0"
   },
   "scripts": {
-    "db:dev:up": "docker compose -f docker-compose.dev.yml up -d",
-    "db:dev:down": "docker compose -f docker-compose.dev.yml down",
-    "db:dev:logs": "docker compose -f docker-compose.dev.yml logs -f postgres",
     "dev": "next dev -p ${PORT:-7331} --turbopack",
     "build": "next build",
-    "start": "prisma migrate deploy && next start",
+    "start": "next start -p ${PORT:-7331}",
     "lint": "eslint .",
     "test": "vitest run"
   },
@@ -49,6 +46,7 @@
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
     "dotenv": "^17.2.3",
+    "embedded-postgres": "17.9.0-beta.16",
     "googleapis": "^171.4.0",
     "jszip": "^3.10.1",
     "langchain": "^1.2.38",
@@ -84,7 +82,6 @@
     "eslint": "^9.39.4",
     "eslint-config-next": "16.2.1",
     "postcss": "^8",
-    "prisma": "^7.6.0",
     "tailwindcss": "^4.2.2",
     "typescript": "^6",
     "vitest": "^4.1.2"

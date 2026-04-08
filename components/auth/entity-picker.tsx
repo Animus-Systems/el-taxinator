@@ -1,18 +1,25 @@
 "use client"
 
 import { connectAction, addAndConnectAction } from "@/actions/auth"
-import { testConnectionAction, autoProvisionDatabaseAction, getDockerComposeSnippetAction, removeEntityAction, listDirectoriesAction, createDirectoryAction, readFolderManifestAction, openFromFolderAction } from "@/actions/entities"
+import { removeEntityAction, listDirectoriesAction, createDirectoryAction } from "@/actions/entities"
 import { importBundleAction, readBundleManifestAction } from "@/actions/bundle"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import type { Entity, EntityType } from "@/lib/entities"
-import { Archive, Building2, Check, ChevronRight, Cloud, Copy, Database, FileUp, Folder, FolderOpen, FolderPlus, FolderUp, HardDrive, Loader2, Plus, Trash2, User, Zap } from "lucide-react"
+import { Archive, Building2, ChevronRight, Cloud, Folder, FolderOpen, FolderPlus, FolderUp, HardDrive, Loader2, Plus, Trash2, User } from "lucide-react"
 import Image from "next/image"
 import { useRouter } from "next/navigation"
-import { useReducer, useState, useTransition } from "react"
+import { useState } from "react"
 
 type Props = {
   entities: Entity[]
+}
+
+type BundleManifest = {
+  version: string
+  entity: { id: string; name: string; type: string }
+  created: string
+  dbDumpFile: string
 }
 
 export function EntityPicker({ entities }: Props) {
@@ -23,13 +30,8 @@ export function EntityPicker({ entities }: Props) {
   const [error, setError] = useState("")
   const [showAdd, setShowAdd] = useState(entities.length === 0)
   const [showImport, setShowImport] = useState(false)
-  const [showOpenFolder, setShowOpenFolder] = useState(false)
-  const [openFolderPath, setOpenFolderPath] = useState("")
-  const [openFolderManifest, setOpenFolderManifest] = useState<any>(null)
-  const [openingFolder, setOpeningFolder] = useState(false)
   const [importFile, setImportFile] = useState<File | null>(null)
-  const [importManifest, setImportManifest] = useState<any>(null)
-  const [importConnStr, setImportConnStr] = useState("")
+  const [importManifest, setImportManifest] = useState<BundleManifest | null>(null)
   const [importing, setImporting] = useState(false)
 
   const handleConnect = async (entityId: string) => {
@@ -42,39 +44,6 @@ export function EntityPicker({ entities }: Props) {
       setError(result.error ?? "Connection failed")
       setConnecting(null)
     }
-  }
-
-  const handleFolderSelected = async (folderPath: string) => {
-    setOpenFolderPath(folderPath)
-    setError("")
-    const result = await readFolderManifestAction(folderPath)
-    if (result.found) {
-      setOpenFolderManifest(result.manifest)
-    } else if (result.hasData) {
-      setError("This folder has database data but no taxinator.json manifest. It may have been created outside Taxinator.")
-      setOpenFolderManifest(null)
-    } else {
-      setError("No Taxinator data found in this folder.")
-      setOpenFolderManifest(null)
-    }
-  }
-
-  const handleOpenFromFolder = async () => {
-    if (!openFolderPath) return
-    setOpeningFolder(true)
-    setError("")
-    const result = await openFromFolderAction(openFolderPath)
-    if (result.success) {
-      const connectResult = await connectAction(result.entityId!)
-      if (connectResult.success) {
-        router.push("/dashboard")
-      } else {
-        setError(connectResult.error ?? "Failed to connect")
-      }
-    } else {
-      setError(result.error ?? "Failed to open")
-    }
-    setOpeningFolder(false)
   }
 
   const [confirmRemove, setConfirmRemove] = useState<string | null>(null)
@@ -101,7 +70,7 @@ export function EntityPicker({ entities }: Props) {
         <div className="text-center space-y-3">
           <Image src="/logo/logo.webp" alt="Taxinator" width={80} height={80} className="mx-auto rounded-2xl" />
           <h1 className="text-3xl font-bold tracking-tight">Taxinator</h1>
-          <p className="text-muted-foreground">{"Connect to a company database to get started"}</p>
+          <p className="text-muted-foreground">{"Choose a company to get started"}</p>
         </div>
 
         {/* Entity cards */}
@@ -185,7 +154,7 @@ export function EntityPicker({ entities }: Props) {
                   {removing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4 text-red-600" />}
                   <div className="text-left">
                     <p className="text-sm text-red-700">{"Delete everything"}</p>
-                    <p className="text-xs text-muted-foreground">{"Stop the database, remove the container, and delete all files."}</p>
+                    <p className="text-xs text-muted-foreground">{"Remove the entity and delete its uploads folder."}</p>
                   </div>
                 </Button>
               </div>
@@ -206,8 +175,8 @@ export function EntityPicker({ entities }: Props) {
             onSuccess={() => router.push("/dashboard")}
             onCancel={entityList.length > 0 ? () => setShowAdd(false) : undefined}
           />
-        ) : !showImport && !showOpenFolder ? (
-          <div className="grid grid-cols-3 gap-2">
+        ) : !showImport ? (
+          <div className="grid grid-cols-2 gap-2">
             <button
               onClick={() => setShowAdd(true)}
               className="flex flex-col items-center gap-2 p-4 rounded-lg border hover:bg-muted/50 transition-colors text-center"
@@ -216,14 +185,7 @@ export function EntityPicker({ entities }: Props) {
               <span className="text-sm font-medium">{"New Company"}</span>
             </button>
             <button
-              onClick={() => { setShowOpenFolder(true); setShowImport(false) }}
-              className="flex flex-col items-center gap-2 p-4 rounded-lg border hover:bg-muted/50 transition-colors text-center"
-            >
-              <FolderOpen className="h-5 w-5 text-blue-600" />
-              <span className="text-sm font-medium">{"Open Folder"}</span>
-            </button>
-            <button
-              onClick={() => { setShowImport(true); setShowOpenFolder(false) }}
+              onClick={() => setShowImport(true)}
               className="flex flex-col items-center gap-2 p-4 rounded-lg border hover:bg-muted/50 transition-colors text-center"
             >
               <Archive className="h-5 w-5 text-orange-600" />
@@ -231,54 +193,6 @@ export function EntityPicker({ entities }: Props) {
             </button>
           </div>
         ) : null}
-
-        {/* Open from folder */}
-        {showOpenFolder && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">{"Open Company from Folder"}</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <p className="text-sm text-muted-foreground">
-                {"Browse to an existing company data folder created by Taxinator."}
-              </p>
-              <FolderPicker
-                value={openFolderPath}
-                placeholder="Choose a company folder..."
-                onChange={handleFolderSelected}
-              />
-
-              {openFolderManifest && (
-                <>
-                  <div className="p-3 bg-muted rounded-lg text-sm space-y-1">
-                    <div className="flex items-center gap-2">
-                      {openFolderManifest.type === "sl" ? (
-                        <Building2 className="h-4 w-4 text-blue-600" />
-                      ) : (
-                        <User className="h-4 w-4 text-green-600" />
-                      )}
-                      <p className="font-medium">{openFolderManifest.name}</p>
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      {openFolderManifest.type === "sl" ? "Sociedad Limitada" : "Autónomo"} &middot; Port {openFolderManifest.port}
-                    </p>
-                  </div>
-                  <Button onClick={handleOpenFromFolder} disabled={openingFolder}>
-                    {openingFolder ? (
-                      <><Loader2 className="h-4 w-4 animate-spin" /> {"Starting..."}</>
-                    ) : (
-                      <><Database className="h-4 w-4" /> {"Open & Connect"}</>
-                    )}
-                  </Button>
-                </>
-              )}
-
-              <Button variant="ghost" onClick={() => { setShowOpenFolder(false); setOpenFolderManifest(null); setOpenFolderPath("") }}>
-                {"Cancel"}
-              </Button>
-            </CardContent>
-          </Card>
-        )}
 
         {/* Import from bundle */}
         {showImport && (
@@ -318,26 +232,17 @@ export function EntityPicker({ entities }: Props) {
                     </p>
                   </div>
 
-                  <div>
-                    <label className="text-sm font-medium">{"Database Connection"}</label>
-                    <p className="text-xs text-muted-foreground mb-1">{"Provide an empty database to restore into"}</p>
-                    <input
-                      type="text"
-                      value={importConnStr}
-                      onChange={(e) => setImportConnStr(e.target.value)}
-                      className="w-full border rounded px-3 py-2 text-sm bg-background font-mono text-xs"
-                      placeholder="postgresql://user:password@host:5432/database"
-                    />
-                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {"This will create a new company in your local database and restore the bundle into it."}
+                  </p>
 
                   <Button
                     onClick={async () => {
-                      if (!importFile || !importConnStr) return
+                      if (!importFile) return
                       setImporting(true)
                       setError("")
                       const fd = new FormData()
                       fd.append("bundle", importFile)
-                      fd.append("connectionString", importConnStr)
                       fd.append("entityName", importManifest.entity.name)
                       fd.append("entityType", importManifest.entity.type)
                       const result = await importBundleAction(fd)
@@ -345,12 +250,12 @@ export function EntityPicker({ entities }: Props) {
                         router.push("/dashboard")
                       } else {
                         setError(result.error ?? "Import failed")
+                        setImporting(false)
                       }
-                      setImporting(false)
                     }}
-                    disabled={importing || !importConnStr}
+                    disabled={importing}
                   >
-                    {importing ? <><Loader2 className="h-4 w-4 animate-spin" /> {"Connecting..."}</> : "Import & Connect"}
+                    {importing ? <><Loader2 className="h-4 w-4 animate-spin" /> {"Importing..."}</> : "Import & Connect"}
                   </Button>
                 </>
               )}
@@ -368,113 +273,26 @@ export function EntityPicker({ entities }: Props) {
 
 // ---------------------------------------------------------------------------
 
-type ProvisionInfo = { connectionString: string; port: number; password: string; dataDir: string }
-
-type FormState = {
-  name: string
-  type: EntityType
-  mode: "connection-string" | "fields" | "docker" | "auto-provision"
-  connectionString: string
-  host: string
-  port: string
-  dbUser: string
-  dbPassword: string
-  dbName: string
-  dataVolume: string
-  dockerSnippet: string
-  provisionInfo: ProvisionInfo | null
-  loading: "idle" | "testing" | "provisioning" | "saving"
-  testResult: { ok: boolean; error?: string } | null
-  error: string
-  copied: boolean
-  dockerMissing: boolean
-}
-
-type FormAction =
-  | { type: "SET"; field: keyof FormState; value: string | boolean | null | ProvisionInfo | { ok: boolean; error?: string } }
-  | { type: "PROVISION_OK"; connectionString: string }
-  | { type: "CLEAR_TEST" }
-
-function formReducer(s: FormState, a: FormAction): FormState {
-  switch (a.type) {
-    case "SET": return { ...s, [a.field]: a.value }
-    case "PROVISION_OK": return { ...s, connectionString: a.connectionString, testResult: { ok: true }, loading: "idle" }
-    case "CLEAR_TEST": return { ...s, testResult: null }
-    default: return s
-  }
-}
-
-function buildConnectionString(s: FormState): string {
-  if (s.mode === "fields") {
-    return `postgresql://${s.dbUser}:${s.dbPassword}@${s.host}:${s.port || "5432"}/${s.dbName}`
-  }
-  return s.connectionString
-}
-
 function AddCompanyForm({ onSuccess, onCancel }: { onSuccess: () => void; onCancel?: () => void }) {
-  const [s, d] = useReducer(formReducer, {
-    name: "", type: "autonomo", mode: "fields",
-    connectionString: "", host: "localhost", port: "5432",
-    dbUser: "taxinator", dbPassword: "", dbName: "taxinator",
-    dataVolume: "",
-    dockerSnippet: "", provisionInfo: null,
-    loading: "idle", testResult: null, error: "", copied: false, dockerMissing: false,
-  })
-
-  const connStr = buildConnectionString(s)
-  const slug = s.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "")
-
-  const handleTest = async () => {
-    d({ type: "SET", field: "loading", value: "testing" })
-    d({ type: "CLEAR_TEST" })
-    const result = await testConnectionAction(connStr)
-    d({ type: "SET", field: "testResult", value: result })
-    d({ type: "SET", field: "loading", value: "idle" })
-  }
-
-  const handleAutoProvision = async () => {
-    if (!s.name) { d({ type: "SET", field: "error", value: "Enter a name first" }); return }
-    d({ type: "SET", field: "loading", value: "provisioning" })
-    d({ type: "SET", field: "error", value: "" })
-    d({ type: "SET", field: "dockerMissing", value: false })
-    const result = await autoProvisionDatabaseAction({ id: slug, name: s.name, type: s.type, dataVolume: s.dataVolume || undefined })
-    if (result.success && result.connectionString) {
-      d({ type: "PROVISION_OK", connectionString: result.connectionString })
-      if (result.dataDir) d({ type: "SET", field: "dataVolume", value: result.dataDir })
-      // Extract password from connection string for display
-      const match = result.connectionString.match(/:([^@]+)@/)
-      d({ type: "SET", field: "provisionInfo", value: {
-        connectionString: result.connectionString,
-        port: result.port!,
-        password: match?.[1] ?? "",
-        dataDir: result.dataDir ?? "",
-      }})
-    } else {
-      if (result.error?.includes("Docker is not available")) {
-        d({ type: "SET", field: "dockerMissing", value: true })
-      }
-      d({ type: "SET", field: "error", value: result.error ?? "Provisioning failed" })
-      d({ type: "SET", field: "loading", value: "idle" })
-    }
-  }
-
-  const handleGenerateSnippet = async () => {
-    if (!s.name) return
-    const result = await getDockerComposeSnippetAction({ id: slug, name: s.name })
-    d({ type: "SET", field: "dockerSnippet", value: result.snippet })
-  }
+  const [name, setName] = useState("")
+  const [type, setType] = useState<EntityType>("autonomo")
+  const [dataDir, setDataDir] = useState("")
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState("")
 
   const handleSubmit = async () => {
-    if (!s.name) { d({ type: "SET", field: "error", value: "Company name is required" }); return }
-    if (!connStr) { d({ type: "SET", field: "error", value: "Database connection is required" }); return }
-    d({ type: "SET", field: "loading", value: "saving" })
-    d({ type: "SET", field: "error", value: "" })
-    const result = await addAndConnectAction({ name: s.name, type: s.type, connectionString: connStr, dataDir: s.dataVolume || undefined })
+    if (!name) {
+      setError("Company name is required")
+      return
+    }
+    setLoading(true)
+    setError("")
+    const result = await addAndConnectAction({ name, type, dataDir: dataDir || undefined })
     if (result.success) {
       onSuccess()
     } else {
-      d({ type: "SET", field: "error", value: "error" in result ? result.error ?? "Failed" : "Failed" })
-      d({ type: "SET", field: "loading", value: "idle" })
+      setError("error" in result && result.error ? result.error : "Failed")
+      setLoading(false)
     }
   }
 
@@ -489,8 +307,8 @@ function AddCompanyForm({ onSuccess, onCancel }: { onSuccess: () => void; onCanc
           <label className="text-sm font-medium">{"Company Name"}</label>
           <input
             type="text"
-            value={s.name}
-            onChange={(e) => d({ type: "SET", field: "name", value: e.target.value })}
+            value={name}
+            onChange={(e) => setName(e.target.value)}
             className="w-full border rounded px-3 py-2 text-sm bg-background mt-1"
             placeholder="e.g. Seth (Autónomo)"
             autoFocus
@@ -499,150 +317,34 @@ function AddCompanyForm({ onSuccess, onCancel }: { onSuccess: () => void; onCanc
 
         {/* Type */}
         <div className="flex gap-2">
-          <button type="button" onClick={() => d({ type: "SET", field: "type", value: "autonomo" })}
-            className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 text-sm rounded-lg border ${s.type === "autonomo" ? "bg-green-50 border-green-300 text-green-800" : "hover:bg-muted"}`}>
+          <button
+            type="button"
+            onClick={() => setType("autonomo")}
+            className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 text-sm rounded-lg border ${type === "autonomo" ? "bg-green-50 border-green-300 text-green-800" : "hover:bg-muted"}`}
+          >
             <User className="h-4 w-4" /> {"Autónomo"}
           </button>
-          <button type="button" onClick={() => d({ type: "SET", field: "type", value: "sl" })}
-            className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 text-sm rounded-lg border ${s.type === "sl" ? "bg-blue-50 border-blue-300 text-blue-800" : "hover:bg-muted"}`}>
+          <button
+            type="button"
+            onClick={() => setType("sl")}
+            className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 text-sm rounded-lg border ${type === "sl" ? "bg-blue-50 border-blue-300 text-blue-800" : "hover:bg-muted"}`}
+          >
             <Building2 className="h-4 w-4" /> {"Sociedad Limitada"}
           </button>
         </div>
 
-        {/* Database mode tabs */}
-        <div>
-          <label className="text-sm font-medium">{"Database Connection"}</label>
-          <div className="flex gap-1 mt-1 mb-3 flex-wrap">
-            {([
-              { key: "fields", label: "Credentials", icon: Database },
-              { key: "connection-string", label: "Connection String", icon: Database },
-              { key: "auto-provision", label: "Auto (Docker)", icon: Zap },
-            ] as const).map(({ key, label, icon: Icon }) => (
-              <button key={key} type="button"
-                onClick={() => {
-                  d({ type: "SET", field: "mode", value: key })
-                }}
-                className={`flex items-center gap-1 px-2 py-1.5 text-xs rounded border ${s.mode === key ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}>
-                <Icon className="h-3 w-3" /> {label}
-              </button>
-            ))}
-          </div>
+        {/* Optional data directory */}
+        <FolderPicker
+          value={dataDir}
+          placeholder="Default: ./data/uploads/"
+          onChange={setDataDir}
+        />
 
-          {s.mode === "fields" && (
-            <div className="grid grid-cols-2 gap-2">
-              <div className="col-span-2 sm:col-span-1">
-                <label className="text-xs text-muted-foreground">{"Host"}</label>
-                <input type="text" value={s.host} onChange={(e) => d({ type: "SET", field: "host", value: e.target.value })}
-                  className="w-full border rounded px-2 py-1.5 text-sm bg-background" placeholder="localhost" />
-              </div>
-              <div>
-                <label className="text-xs text-muted-foreground">{"Port"}</label>
-                <input type="text" value={s.port} onChange={(e) => d({ type: "SET", field: "port", value: e.target.value })}
-                  className="w-full border rounded px-2 py-1.5 text-sm bg-background" placeholder="5432" />
-              </div>
-              <div>
-                <label className="text-xs text-muted-foreground">{"Username"}</label>
-                <input type="text" value={s.dbUser} onChange={(e) => d({ type: "SET", field: "dbUser", value: e.target.value })}
-                  className="w-full border rounded px-2 py-1.5 text-sm bg-background" placeholder="taxinator" />
-              </div>
-              <div>
-                <label className="text-xs text-muted-foreground">{"Password"}</label>
-                <input type="password" value={s.dbPassword} onChange={(e) => d({ type: "SET", field: "dbPassword", value: e.target.value })}
-                  className="w-full border rounded px-2 py-1.5 text-sm bg-background" placeholder="password" />
-              </div>
-              <div className="col-span-2">
-                <label className="text-xs text-muted-foreground">{"Database Name"}</label>
-                <input type="text" value={s.dbName} onChange={(e) => d({ type: "SET", field: "dbName", value: e.target.value })}
-                  className="w-full border rounded px-2 py-1.5 text-sm bg-background" placeholder="taxinator" />
-              </div>
-            </div>
-          )}
-
-          {s.mode === "connection-string" && (
-            <input type="text" value={s.connectionString}
-              onChange={(e) => { d({ type: "SET", field: "connectionString", value: e.target.value }); d({ type: "CLEAR_TEST" }) }}
-              className="w-full border rounded px-3 py-2 text-sm bg-background font-mono text-xs"
-              placeholder="postgresql://user:password@host:5432/database" />
-          )}
-
-          {s.mode === "auto-provision" && (
-            <div className="space-y-3">
-              <p className="text-xs text-muted-foreground">{"Creates a PostgreSQL database using Docker. Choose where to store all company data (database + files)."}</p>
-              <FolderPicker
-                value={s.dataVolume}
-                placeholder={`Default: ./data/${slug || "company"}/`}
-                onChange={(v) => d({ type: "SET", field: "dataVolume", value: v })}
-              />
-              {s.provisionInfo ? (
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2 text-sm text-green-600">
-                    <Check className="h-4 w-4" /> {"Database created successfully"}
-                  </div>
-                  <div className="p-3 bg-muted rounded-lg text-xs font-mono space-y-1">
-                    <p><span className="text-muted-foreground">{"Host: "}</span>{"localhost"}</p>
-                    <p><span className="text-muted-foreground">{"Port: "}</span>{s.provisionInfo.port}</p>
-                    <p><span className="text-muted-foreground">{"User: "}</span>{"taxinator"}</p>
-                    <p><span className="text-muted-foreground">{"Password: "}</span>{s.provisionInfo.password}</p>
-                    <p><span className="text-muted-foreground">{"Database: "}</span>{"taxinator"}</p>
-                    {s.provisionInfo.dataDir && (
-                      <p><span className="text-muted-foreground">{"Data: "}</span>{s.provisionInfo.dataDir}</p>
-                    )}
-                  </div>
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      readOnly
-                      value={s.provisionInfo.connectionString}
-                      className="w-full border rounded px-2 py-1.5 text-xs font-mono bg-muted cursor-text"
-                      onClick={(e) => (e.target as HTMLInputElement).select()}
-                    />
-                  </div>
-                  <p className="text-xs text-muted-foreground">{"Save these credentials somewhere safe. You'll need them if you reconfigure Taxinator."}</p>
-                </div>
-              ) : (
-                <>
-                  {s.dockerMissing && (
-                    <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm space-y-2">
-                      <p className="font-medium text-amber-800">{"Docker is required for automatic setup"}</p>
-                      <p className="text-xs text-amber-700">{"Install Docker Desktop to create databases automatically, or use the Credentials tab to connect to an existing database."}</p>
-                      <a
-                        href="https://docs.docker.com/get-started/get-docker/"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:underline"
-                      >
-                        {"Download Docker Desktop"} <ChevronRight className="h-3 w-3" />
-                      </a>
-                    </div>
-                  )}
-                  <Button onClick={handleAutoProvision} disabled={s.loading !== "idle" || !s.name} size="sm">
-                    {s.loading === "provisioning" ? <><Loader2 className="h-4 w-4 animate-spin" /> {"Creating..."}</> : <><Zap className="h-4 w-4" /> {"Create Database"}</>}
-                  </Button>
-                </>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Test + Submit */}
-        <div className="flex items-center gap-2">
-          {s.mode !== "auto-provision" && (
-            <Button variant="outline" size="sm" onClick={handleTest} disabled={s.loading !== "idle" || !connStr}>
-              {s.loading === "testing" ? <Loader2 className="h-3 w-3 animate-spin" /> : <Database className="h-3 w-3" />} {"Test"}
-            </Button>
-          )}
-          {s.testResult && (
-            <span className={`text-xs ${s.testResult.ok ? "text-green-600" : "text-red-600"}`}>
-              {s.testResult.ok ? "Connected" : s.testResult.error}
-            </span>
-          )}
-        </div>
-
-        {s.error && <p className="text-sm text-red-600">{s.error}</p>}
+        {error && <p className="text-sm text-red-600">{error}</p>}
 
         <div className="flex gap-2 pt-2">
-          <Button onClick={handleSubmit} disabled={s.loading === "saving" || !s.name}>
-            {s.loading === "saving" ? <><Loader2 className="h-4 w-4 animate-spin" /> {"Connecting..."}</> : <><Plus className="h-4 w-4" /> {"Add & Connect"}</>}
+          <Button onClick={handleSubmit} disabled={loading || !name}>
+            {loading ? <><Loader2 className="h-4 w-4 animate-spin" /> {"Creating..."}</> : <><Plus className="h-4 w-4" /> {"Create & Connect"}</>}
           </Button>
           {onCancel && <Button variant="ghost" onClick={onCancel}>{"Cancel"}</Button>}
         </div>
@@ -652,7 +354,7 @@ function AddCompanyForm({ onSuccess, onCancel }: { onSuccess: () => void; onCanc
 }
 
 // ---------------------------------------------------------------------------
-// Folder Picker — server-side directory browser
+// Folder Picker — server-side directory browser (used to choose where uploads go)
 // ---------------------------------------------------------------------------
 
 function FolderPicker({ value, placeholder, onChange }: { value: string; placeholder: string; onChange: (v: string) => void }) {
@@ -700,8 +402,8 @@ function FolderPicker({ value, placeholder, onChange }: { value: string; placeho
 
   return (
     <div>
-      <label className="text-xs font-medium">{"Company Data Folder"}</label>
-      <p className="text-xs text-muted-foreground mb-1">{"Database, receipts, and all files will be stored here."}</p>
+      <label className="text-xs font-medium">{"Uploads Folder (optional)"}</label>
+      <p className="text-xs text-muted-foreground mb-1">{"Where receipts and files for this company are stored."}</p>
       <div className="flex gap-2 mt-1">
         <div className="flex-1 border rounded px-2 py-1.5 text-sm bg-background text-muted-foreground truncate">
           {value || placeholder}

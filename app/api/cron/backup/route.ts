@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
   const entities = getEntities()
 
   async function backupEntity(entity: typeof entities[number]): Promise<{ entity: string; success: boolean; error?: string }> {
-    const pool = getPoolForEntity(entity.id)
+    const pool = await getPoolForEntity(entity.id)
 
     const userResult = await pool.query(`SELECT * FROM users LIMIT 1`)
     if (userResult.rows.length === 0) {

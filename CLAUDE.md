@@ -5,9 +5,8 @@ These rules are mandatory for all work in this repository.
 ## Architecture Overview
 
 - **Framework**: Next.js 16 (App Router, Turbopack)
-- **Database**: PostgreSQL via raw `pg` pool (`lib/pg.ts`), no ORM
+- **Database**: PostgreSQL via raw `pg` pool (`lib/pg.ts`), no ORM. Cluster runs in-process via `embedded-postgres` (a real Postgres 17 binary spawned by Node), bootstrapped from `instrumentation.ts` → `lib/embedded-pg.ts`. Each entity gets its own database inside the shared cluster. Data lives under `TAXINATOR_DATA_DIR` (default `./data`).
 - **API layer**: tRPC with OpenAPI plugin (`trpc-to-openapi`), fully typesafe
-- **Auth**: better-auth with JWT sessions, self-hosted or cloud mode
 - **i18n**: next-intl with `[locale]` route segment, `localePrefix: "as-needed"`
 - **UI**: Radix UI + Tailwind CSS + shadcn/ui components
 - **Testing**: Vitest, tests in `tests/` directory
@@ -15,13 +14,12 @@ These rules are mandatory for all work in this repository.
 ## Quick Start
 
 ```bash
-yarn db:dev:up            # Start dev PostgreSQL
-yarn prisma generate      # Generate migration tooling
-yarn prisma migrate dev   # Run migrations
-yarn dev                  # Start dev server on :7331
+yarn dev                  # Start dev server on :7331 (also boots embedded Postgres)
 yarn test                 # Run tests
 yarn build                # Production build
 ```
+
+No Docker, no external Postgres install. The first launch runs `initdb` and stores the cluster in `./data/pgdata/`. The TCP port and superuser password are persisted in `./data/runtime.json`.
 
 ## Core Engineering Rules
 
@@ -36,7 +34,7 @@ yarn build                # Production build
 - Raw SQL via `lib/sql.ts` helpers: `sql` tagged template, `queryMany`, `queryOne`, `execute`, `withTransaction`.
 - All SQL queries must be parameterized (use `sql` template or `$N` placeholders). Never interpolate user input.
 - Column ordering in `buildOrderBy` must validate against an allowlist.
-- Schema changes via Prisma migrations only (`prisma/migrations/`).
+- Schema is a single `schema.sql` file at the repo root, applied lazily by `lib/schema.ts:ensureSchema()` on first connection. There is no migration tool — modify `schema.sql` directly and the change is picked up on next fresh database.
 - Always scope queries by `user_id` — never trust client-supplied user IDs.
 - Add `LIMIT` to list queries. No unbounded SELECTs.
 
@@ -99,7 +97,7 @@ yarn build                # Production build
 - TypeScript properties: camelCase (`llmPrompt`, `userId`, `createdAt`).
 - DB columns: snake_case (`llm_prompt`, `user_id`, `created_at`).
 - `mapRow()` handles the conversion — don't write custom row mappers.
-- Table names in code match `@@map` annotations in `prisma/schema.prisma`.
+- Table names live in `schema.sql`.
 
 ### 12. Self-hosted vs Cloud mode
 - `SELF_HOSTED_MODE=true`: single user, auto-login, no signup, LLM keys in settings.
