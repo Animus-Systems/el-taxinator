@@ -5,8 +5,8 @@ import {
   getEntities,
   getPoolForEntity,
   setActiveEntity,
-  testDatabaseConnection,
   type Entity,
+  type EntityType,
 } from "@/lib/entities"
 import { ensureSchema } from "@/lib/schema"
 import { getOrCreateSelfHostedUser } from "@/models/users"
@@ -16,7 +16,7 @@ import { execFileSync } from "child_process"
 import { mkdir, writeFile } from "fs/promises"
 import JSZip from "jszip"
 import path from "path"
-import { redirect } from "next/navigation"
+import { codeFromName } from "@/lib/utils"
 
 type BundleManifest = {
   version: string
@@ -67,22 +67,17 @@ export async function readBundleManifestAction(formData: FormData) {
 }
 
 /**
- * Import a .taxinator.zip bundle into a database.
+ * Import a .taxinator.zip bundle into a new entity backed by the embedded
+ * cluster. Creates the entity, restores the database dump via psql, and
+ * extracts uploads into the entity's data directory.
  */
 export async function importBundleAction(formData: FormData) {
   const file = formData.get("bundle") as File | null
-  const connectionString = formData.get("connectionString") as string
-  const entityName = formData.get("entityName") as string
-  const entityType = formData.get("entityType") as string
+  const entityName = (formData.get("entityName") as string) || ""
+  const entityType = (formData.get("entityType") as string) || "autonomo"
 
-  if (!file || !connectionString) {
-    return { success: false, error: "Bundle file and database connection are required" }
-  }
-
-  // Test connection
-  const test = await testDatabaseConnection(connectionString)
-  if (!test.ok) {
-    return { success: false, error: `Cannot connect to database: ${test.error}` }
+  if (!file) {
+    return { success: false, error: "Bundle file is required" }
   }
 
   try {
@@ -98,7 +93,32 @@ export async function importBundleAction(formData: FormData) {
     if (!dbDumpFile) return { success: false, error: "Missing database dump in bundle" }
     const dbDump = await dbDumpFile.async("string")
 
-    // Restore the database using psql
+    // Resolve final entity metadata. The user may override the imported name
+    // (e.g. when restoring "Acme SL" alongside an existing "Acme SL").
+    const finalName = entityName || manifest.entity.name
+    const finalType = (entityType || manifest.entity.type) as EntityType
+    const entityId = codeFromName(finalName) || manifest.entity.id
+
+    // Check for collisions
+    if (getEntities().some((e) => e.id === entityId)) {
+      return { success: false, error: `An entity named "${finalName}" already exists. Pick a different name.` }
+    }
+
+    // Add the entity (no db field → uses embedded cluster). The first call
+    // to getPoolForEntity below will trigger the per-entity database creation.
+    addEntity({ id: entityId, name: finalName, type: finalType })
+
+    // Get a pool to force database creation, then build the connection string
+    // for psql by reading it back out of the pool config.
+    const pool = await getPoolForEntity(entityId)
+    const connectionString = (pool.options as { connectionString?: string }).connectionString
+    if (!connectionString) {
+      return { success: false, error: "Failed to resolve connection string for embedded cluster" }
+    }
+
+    // Restore the database using psql. The bundled embedded-postgres binaries
+    // ship psql alongside the postgres binary; if it's on PATH we use it,
+    // otherwise we fall back to the system psql.
     try {
       execFileSync("psql", [connectionString], {
         input: dbDump,
@@ -107,28 +127,16 @@ export async function importBundleAction(formData: FormData) {
         stdio: ["pipe", "pipe", "pipe"],
       })
     } catch (error) {
-      // psql may output warnings for --clean --if-exists on fresh DBs — that's OK
-      const stderr = error instanceof Error ? (error as any).stderr?.toString() : ""
-      if (stderr && !stderr.includes("ERROR")) {
-        // Just warnings, continue
-      } else {
+      const stderr = error instanceof Error ? (error as NodeJS.ErrnoException & { stderr?: Buffer }).stderr?.toString() : ""
+      // psql may emit warnings for --clean --if-exists on a fresh DB; only
+      // surface the error if stderr actually contains "ERROR".
+      if (stderr && stderr.includes("ERROR")) {
         console.error("psql restore error:", stderr)
-        return { success: false, error: "Failed to restore database. Is psql installed?" }
+        return { success: false, error: "Failed to restore database. Is psql installed and on PATH?" }
       }
     }
 
-    // Ensure schema defaults are applied
-    const entityId = manifest.entity.id
-    const name = entityName || manifest.entity.name
-    const type = (entityType || manifest.entity.type) as Entity["type"]
-
-    // Add entity to config first so getPool can find it
-    const existing = getEntities()
-    if (!existing.some(e => e.id === entityId)) {
-      addEntity({ id: entityId, name, type, db: connectionString })
-    }
-
-    const pool = getPoolForEntity(entityId)
+    // Make sure the schema is in place (idempotent — no-op if dump created tables)
     await ensureSchema(pool)
 
     // Extract uploaded files
