@@ -23,6 +23,7 @@ import { randomUUID } from "crypto"
 import { mkdir, readFile, rename, writeFile } from "fs/promises"
 import { revalidatePath } from "next/cache"
 import path from "path"
+import { getActiveEntityId } from "@/lib/entities"
 
 export async function analyzeFileAction(
   file: File,
@@ -53,7 +54,8 @@ export async function analyzeFileAction(
 
   let attachments: AnalyzeAttachment[] = []
   try {
-    attachments = await loadAttachmentsForAI(user, file)
+    const entityId = await getActiveEntityId()
+    attachments = await loadAttachmentsForAI(entityId, file)
   } catch (error) {
     console.error("Failed to retrieve files:", error)
     return { success: false, error: "Failed to retrieve files: " + error }
@@ -100,7 +102,8 @@ export async function saveFileAsTransactionAction(
     const transaction = await createTransaction(user.id, validatedForm.data)
 
     // Move file to processed location
-    const userUploadsDirectory = getUserUploadsDirectory(user)
+    const entityId = await getActiveEntityId()
+    const userUploadsDirectory = getUserUploadsDirectory(entityId)
     const originalFileName = path.basename(file.path)
     const newRelativeFilePath = getTransactionFileUploadPath(file.id, originalFileName, transaction)
 
@@ -134,7 +137,8 @@ export async function deleteUnsortedFileAction(
 ): Promise<ActionState<Transaction>> {
   try {
     const user = await getCurrentUser()
-    await deleteFile(fileId, user.id)
+    const entityId = await getActiveEntityId()
+    await deleteFile(fileId, user.id, entityId)
     revalidatePath("/unsorted")
     return { success: true }
   } catch (error) {
@@ -163,7 +167,8 @@ export async function splitFileIntoItemsAction(
     }
 
     // Get the original file's content
-    const userUploadsDirectory = getUserUploadsDirectory(user)
+    const entityId = await getActiveEntityId()
+    const userUploadsDirectory = getUserUploadsDirectory(entityId)
     const originalFilePath = safePathJoin(userUploadsDirectory, originalFile.path)
     const fileContent = await readFile(originalFilePath)
 
@@ -205,10 +210,10 @@ export async function splitFileIntoItemsAction(
     }
 
     // Delete the original file
-    await deleteFile(fileId, user.id)
+    await deleteFile(fileId, user.id, entityId)
 
     // Update user storage used
-    const storageUsed = await getDirectorySize(getUserUploadsDirectory(user))
+    const storageUsed = await getDirectorySize(getUserUploadsDirectory(entityId))
     await updateUser(user.id, { storageUsed })
 
     revalidatePath("/unsorted")
@@ -241,7 +246,8 @@ export async function splitAndSaveAllAction(
       return { success: false, error: "Original file not found" }
     }
 
-    const userUploadsDirectory = getUserUploadsDirectory(user)
+    const entityId = await getActiveEntityId()
+    const userUploadsDirectory = getUserUploadsDirectory(entityId)
     const originalFilePath = safePathJoin(userUploadsDirectory, originalFile.path)
     const fileContent = await readFile(originalFilePath)
 
@@ -288,10 +294,10 @@ export async function splitAndSaveAllAction(
     }
 
     // Delete the original unsorted file
-    await deleteFile(fileId, user.id)
+    await deleteFile(fileId, user.id, entityId)
 
     // Update storage
-    const storageUsed = await getDirectorySize(getUserUploadsDirectory(user))
+    const storageUsed = await getDirectorySize(getUserUploadsDirectory(entityId))
     await updateUser(user.id, { storageUsed })
 
     revalidatePath("/unsorted")

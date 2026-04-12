@@ -7,6 +7,7 @@ import {
   deleteFile,
 } from "@/models/files"
 import { fileSchema } from "@/lib/db-types"
+import { getActiveEntityId } from "@/lib/entities"
 
 export const filesRouter = router({
   listUnsorted: authedProcedure
@@ -39,6 +40,7 @@ export const filesRouter = router({
     .input(z.object({ id: z.string() }))
     .output(fileSchema.passthrough().optional())
     .mutation(async ({ ctx, input }) => {
-      return deleteFile(input.id, ctx.user.id)
+      const entityId = await getActiveEntityId()
+      return deleteFile(input.id, ctx.user.id, entityId)
     }),
 })

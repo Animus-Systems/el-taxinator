@@ -2,7 +2,7 @@
 
 import { sql, queryMany, queryOne, buildInsert, buildUpdate, execute, mapRow } from "@/lib/sql"
 import { getPool } from "@/lib/pg"
-import type { File, User } from "@/lib/db-types"
+import type { File } from "@/lib/db-types"
 
 type FileCreateData = {
   id?: string
@@ -86,27 +86,19 @@ export const updateFile = async (id: string, userId: string, data: FileUpdateDat
   return result!
 }
 
-export const deleteFile = async (id: string, userId: string) => {
+export const deleteFile = async (id: string, userId: string, entityId: string) => {
   const pool = await getPool()
-  // Fetch the file with its user (for building the full path)
   const result = await pool.query(
-    `SELECT f.*, u.email AS user_email, u.name AS user_name, u.id AS uid,
-            u.storage_used, u.storage_limit
-     FROM files f
-     JOIN users u ON u.id = f.user_id
-     WHERE f.id = $1 AND f.user_id = $2`,
+    `SELECT * FROM files WHERE id = $1 AND user_id = $2`,
     [id, userId]
   )
 
   if (result.rows.length === 0) return
 
-  const row = result.rows[0]
-  const file = mapRow<File>(row)
-  // Build a minimal user object for fullPathForFile
-  const user = { email: row.user_email } as Pick<User, "email"> as User
+  const file = mapRow<File>(result.rows[0])
 
   try {
-    await unlink(fullPathForFile(user, file))
+    await unlink(fullPathForFile(entityId, file))
   } catch (error) {
     console.error("Error deleting file:", error)
   }

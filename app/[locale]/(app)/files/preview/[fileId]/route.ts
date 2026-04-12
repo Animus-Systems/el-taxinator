@@ -1,5 +1,6 @@
 import { getCurrentUser } from "@/lib/auth"
 import { fileExists, fullPathForFile } from "@/lib/files"
+import { getActiveEntityId } from "@/lib/entities"
 import { generateFilePreviews } from "@/lib/previews/generate"
 import { getFileById } from "@/models/files"
 import fs from "fs/promises"
@@ -27,14 +28,15 @@ export async function GET(request: Request, { params }: { params: Promise<{ file
     }
 
     // Check if file exists on disk
-    const fullFilePath = fullPathForFile(user, file)
+    const entityId = await getActiveEntityId()
+    const fullFilePath = fullPathForFile(entityId, file)
     const isFileExists = await fileExists(fullFilePath)
     if (!isFileExists) {
       return new NextResponse("File not found", { status: 404 })
     }
 
     // Generate previews
-    const { contentType, previews } = await generateFilePreviews(user, fullFilePath, file.mimetype)
+    const { contentType, previews } = await generateFilePreviews(entityId, fullFilePath, file.mimetype)
     if (page > previews.length) {
       return new NextResponse("Page not found", { status: 404 })
     }

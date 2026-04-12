@@ -1,33 +1,28 @@
 import type { File, Transaction, User } from "@/lib/db-types"
-import type { Entity } from "@/lib/entities"
+import { resolveEntityDir } from "@/lib/entities"
 import { access, constants, readdir, stat } from "fs/promises"
 import path from "path"
 import config from "./config"
 
-export const FILE_UPLOAD_PATH = path.resolve(process.env.UPLOAD_PATH || "./uploads")
 export const FILE_UNSORTED_DIRECTORY_NAME = "unsorted"
 export const FILE_PREVIEWS_DIRECTORY_NAME = "previews"
 export const FILE_STATIC_DIRECTORY_NAME = "static"
 export const FILE_IMPORT_CSV_DIRECTORY_NAME = "csv"
 
 /**
- * Get uploads directory for a user.
- * If entity has a dataDir, uploads live at `{dataDir}/uploads/`.
- * Otherwise falls back to legacy `{UPLOAD_PATH}/{email}/`.
+ * Get uploads directory for an entity.
+ * Uses entity.dataDir if set, otherwise falls back to `data/<entityId>/uploads/`.
  */
-export function getUserUploadsDirectory(user: User, entity?: Entity) {
-  if (entity?.dataDir) {
-    return path.resolve(entity.dataDir, "uploads")
-  }
-  return safePathJoin(FILE_UPLOAD_PATH, user.email)
+export function getUserUploadsDirectory(entityId: string): string {
+  return path.join(resolveEntityDir(entityId), "uploads")
 }
 
-export function getStaticDirectory(user: User) {
-  return safePathJoin(getUserUploadsDirectory(user), FILE_STATIC_DIRECTORY_NAME)
+export function getStaticDirectory(entityId: string): string {
+  return safePathJoin(getUserUploadsDirectory(entityId), FILE_STATIC_DIRECTORY_NAME)
 }
 
-export function getUserPreviewsDirectory(user: User) {
-  return safePathJoin(getUserUploadsDirectory(user), FILE_PREVIEWS_DIRECTORY_NAME)
+export function getUserPreviewsDirectory(entityId: string): string {
+  return safePathJoin(getUserUploadsDirectory(entityId), FILE_PREVIEWS_DIRECTORY_NAME)
 }
 
 export function unsortedFilePath(fileUuid: string, filename: string) {
@@ -45,9 +40,9 @@ export function getTransactionFileUploadPath(fileUuid: string, filename: string,
   return formatFilePath(storedFileName, transaction.issuedAt || new Date())
 }
 
-export function fullPathForFile(user: User, file: File, entity?: Entity) {
-  const userUploadsDirectory = getUserUploadsDirectory(user, entity)
-  return safePathJoin(userUploadsDirectory, file.path)
+export function fullPathForFile(entityId: string, file: File): string {
+  const uploadsDirectory = getUserUploadsDirectory(entityId)
+  return safePathJoin(uploadsDirectory, file.path)
 }
 
 function formatFilePath(filename: string, date: Date, format = "{YYYY}/{MM}/{name}{ext}") {

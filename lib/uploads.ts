@@ -7,13 +7,14 @@ import { getStaticDirectory, isEnoughStorageToUploadFile, safePathJoin } from ".
 
 export async function uploadStaticImage(
   user: User,
+  entityId: string,
   file: File,
   saveFileName: string,
   maxWidth: number = config.upload.images.maxWidth,
   maxHeight: number = config.upload.images.maxHeight,
   quality: number = config.upload.images.quality
 ) {
-  const uploadDirectory = getStaticDirectory(user)
+  const uploadDirectory = getStaticDirectory(entityId)
 
   if (!isEnoughStorageToUploadFile(user, file.size)) {
     throw Error("Not enough space to upload the file")

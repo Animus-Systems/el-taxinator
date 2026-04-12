@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from "vitest"
 
 // Mock the database module before importing tax model
-vi.mock("@/lib/db", () => ({
-  prisma: {},
+vi.mock("@/lib/pg", () => ({
+  getPool: vi.fn(),
 }))
 
 import {
@@ -70,20 +70,27 @@ describe("getTaxPeriod", () => {
 })
 
 describe("getQuarterLabel", () => {
-  it("returns correct label for Q1", () => {
-    expect(getQuarterLabel(1)).toBe("Q1 (Ene\u2013Mar)")
+  it("returns English label by default for Q1", () => {
+    expect(getQuarterLabel(1)).toBe("Q1 (Jan\u2013Mar)")
   })
 
-  it("returns correct label for Q2", () => {
-    expect(getQuarterLabel(2)).toBe("Q2 (Abr\u2013Jun)")
+  it("returns English label by default for Q2", () => {
+    expect(getQuarterLabel(2)).toBe("Q2 (Apr\u2013Jun)")
   })
 
-  it("returns correct label for Q3", () => {
+  it("returns English label by default for Q3", () => {
     expect(getQuarterLabel(3)).toBe("Q3 (Jul\u2013Sep)")
   })
 
-  it("returns correct label for Q4", () => {
-    expect(getQuarterLabel(4)).toBe("Q4 (Oct\u2013Dic)")
+  it("returns English label by default for Q4", () => {
+    expect(getQuarterLabel(4)).toBe("Q4 (Oct\u2013Dec)")
+  })
+
+  it("returns Spanish label when locale is es", () => {
+    expect(getQuarterLabel(1, "es")).toBe("Q1 (Ene\u2013Mar)")
+    expect(getQuarterLabel(2, "es")).toBe("Q2 (Abr\u2013Jun)")
+    expect(getQuarterLabel(3, "es")).toBe("Q3 (Jul\u2013Sep)")
+    expect(getQuarterLabel(4, "es")).toBe("Q4 (Oct\u2013Dic)")
   })
 })
 
@@ -139,17 +146,17 @@ describe("getUpcomingDeadlines", () => {
     }
   })
 
-  it("Q1-Q3 have forms 303 and 130", () => {
+  it("Q1-Q3 have forms 420 and 130", () => {
     const deadlines = getUpcomingDeadlines(2026)
     for (const d of deadlines.slice(0, 3)) {
-      expect(d.forms).toEqual(["303", "130"])
+      expect(d.forms).toEqual(["420", "130"])
     }
   })
 
-  it("Q4 additionally includes form 390 (annual summary)", () => {
+  it("Q4 additionally includes form 425 (annual IGIC summary)", () => {
     const deadlines = getUpcomingDeadlines(2026)
     const q4 = deadlines[3]
-    expect(q4.forms).toEqual(["303", "130", "390"])
+    expect(q4.forms).toEqual(["420", "130", "425"])
   })
 
   it("quarters are ordered 1 through 4", () => {

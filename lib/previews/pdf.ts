@@ -1,14 +1,13 @@
 "use server"
 
 import { fileExists, getUserPreviewsDirectory, safePathJoin } from "@/lib/files"
-import type { User } from "@/lib/db-types"
 import fs from "fs/promises"
 import path from "path"
 import { fromPath } from "pdf2pic"
 import config from "../config"
 
-export async function pdfToImages(user: User, origFilePath: string): Promise<{ contentType: string; pages: string[] }> {
-  const userPreviewsDirectory = getUserPreviewsDirectory(user)
+export async function pdfToImages(entityId: string, origFilePath: string): Promise<{ contentType: string; pages: string[] }> {
+  const userPreviewsDirectory = getUserPreviewsDirectory(entityId)
   await fs.mkdir(userPreviewsDirectory, { recursive: true })
 
   const basename = path.basename(origFilePath, path.extname(origFilePath))

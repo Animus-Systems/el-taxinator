@@ -6,15 +6,15 @@ import path from "path"
 import { randomUUID } from "crypto"
 
 // ---------------------------------------------------------------------------
-// Embedded PostgreSQL — single in-process cluster, one database per entity
+// Embedded PostgreSQL — per-entity in-process clusters
 // ---------------------------------------------------------------------------
 //
-// On boot we spawn a real PostgreSQL 17 binary (bundled via the
-// `embedded-postgres` npm package) and use it as the canonical DB for the
-// app. Each Taxinator entity gets its own database inside this cluster.
+// Each Taxinator entity gets its own Postgres cluster under
+// `<dataRoot>/<entityId>/pgdata/` with a fixed database name ("taxinator").
 //
-// Data lives under TAXINATOR_DATA_DIR (or ./data by default) so the user can
-// move / back up / restore the entire app state by copying one folder.
+// Data lives under TAXINATOR_DATA_DIR (or ./data by default, overridable via
+// taxinator.config.json) so the user can move / back up / restore the entire
+// app state by copying one folder.
 
 export type ClusterInfo = {
   host: string
@@ -30,18 +30,53 @@ type RuntimeConfig = {
 }
 
 const SUPERUSER = "taxinator"
+const DB_NAME = "taxinator"
 const RUNTIME_FILE = "runtime.json"
+const CONFIG_FILE = "taxinator.config.json"
 
-function getDataRoot(): string {
-  return path.resolve(process.env.TAXINATOR_DATA_DIR ?? path.join(process.cwd(), "data"))
+// ---------------------------------------------------------------------------
+// App-level config (taxinator.config.json at project root)
+// ---------------------------------------------------------------------------
+
+type AppConfig = {
+  dataDir?: string
 }
 
-function getPgDataDir(): string {
-  return path.join(getDataRoot(), "pgdata")
+function loadAppConfig(): AppConfig {
+  const filePath = path.join(process.cwd(), CONFIG_FILE)
+  try {
+    if (!fs.existsSync(filePath)) return {}
+    return JSON.parse(fs.readFileSync(filePath, "utf-8")) as AppConfig
+  } catch {
+    return {}
+  }
 }
 
-function getRuntimeFilePath(): string {
-  return path.join(getDataRoot(), RUNTIME_FILE)
+export function saveAppConfig(config: AppConfig): void {
+  const filePath = path.join(process.cwd(), CONFIG_FILE)
+  fs.writeFileSync(filePath, JSON.stringify(config, null, 2), "utf-8")
+}
+
+// ---------------------------------------------------------------------------
+// Path helpers — all scoped by entityId
+// ---------------------------------------------------------------------------
+
+export function getDataRoot(): string {
+  const fromConfig = loadAppConfig().dataDir
+  const resolved = fromConfig ?? process.env.TAXINATOR_DATA_DIR ?? path.join(process.cwd(), "data")
+  return path.resolve(resolved)
+}
+
+export function getEntityDataDir(entityId: string): string {
+  return path.join(getDataRoot(), entityId)
+}
+
+function getPgDataDir(entityId: string): string {
+  return path.join(getEntityDataDir(entityId), "pgdata")
+}
+
+function getRuntimeFilePath(entityId: string): string {
+  return path.join(getEntityDataDir(entityId), RUNTIME_FILE)
 }
 
 /**
@@ -75,8 +110,7 @@ async function pickFreePort(): Promise<number> {
   })
 }
 
-function loadRuntimeConfig(): RuntimeConfig | null {
-  const filePath = getRuntimeFilePath()
+function loadRuntimeConfigFromPath(filePath: string): RuntimeConfig | null {
   if (!fs.existsSync(filePath)) return null
   try {
     const raw = fs.readFileSync(filePath, "utf-8")
@@ -88,8 +122,7 @@ function loadRuntimeConfig(): RuntimeConfig | null {
   }
 }
 
-function saveRuntimeConfig(config: RuntimeConfig): void {
-  const filePath = getRuntimeFilePath()
+function saveRuntimeConfigToPath(filePath: string, config: RuntimeConfig): void {
   const dir = path.dirname(filePath)
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true })
@@ -115,7 +148,7 @@ async function isPortInUse(port: number): Promise<boolean> {
 type ClusterState = {
   pg: EmbeddedPostgres
   info: ClusterInfo
-  ensuredDatabases: Set<string>
+  entityId: string
 }
 
 const globalForCluster = globalThis as unknown as {
@@ -123,23 +156,38 @@ const globalForCluster = globalThis as unknown as {
   __taxinatorEmbeddedClusterStarting: Promise<ClusterState> | undefined
 }
 
-export async function startCluster(): Promise<ClusterInfo> {
+export async function startCluster(entityId: string, entityDataDir?: string): Promise<ClusterInfo> {
+  // If a cluster is already running for the SAME entity, return it.
   if (globalForCluster.__taxinatorEmbeddedCluster) {
-    return globalForCluster.__taxinatorEmbeddedCluster.info
+    if (globalForCluster.__taxinatorEmbeddedCluster.entityId === entityId) {
+      return globalForCluster.__taxinatorEmbeddedCluster.info
+    }
+    // Different entity — stop the current cluster first.
+    console.log(
+      `[embedded-pg] Switching from entity "${globalForCluster.__taxinatorEmbeddedCluster.entityId}" to "${entityId}"`,
+    )
+    await stopCluster()
   }
+
   if (globalForCluster.__taxinatorEmbeddedClusterStarting) {
     const state = await globalForCluster.__taxinatorEmbeddedClusterStarting
-    return state.info
+    if (state.entityId === entityId) {
+      return state.info
+    }
+    // Started for a different entity — stop it and proceed.
+    await stopCluster()
   }
 
   globalForCluster.__taxinatorEmbeddedClusterStarting = (async () => {
-    const dataDir = getPgDataDir()
+    const baseDir = entityDataDir ?? getEntityDataDir(entityId)
+    const dataDir = path.join(baseDir, "pgdata")
+    const runtimeFile = path.join(baseDir, RUNTIME_FILE)
     const initialised = isAlreadyInitialised(dataDir)
 
     // Reuse port + password from runtime.json when possible. Generate fresh
     // ones for first-run, OR if the saved port is now occupied (e.g. another
     // process grabbed it during a system reboot).
-    const existing = loadRuntimeConfig()
+    const existing = loadRuntimeConfigFromPath(runtimeFile)
     let port: number
     let password: string
 
@@ -149,7 +197,7 @@ export async function startCluster(): Promise<ClusterInfo> {
     } else {
       port = await pickFreePort()
       password = existing?.password ?? randomUUID().replace(/-/g, "")
-      saveRuntimeConfig({ port, password })
+      saveRuntimeConfigToPath(runtimeFile, { port, password })
     }
 
     const instance = new EmbeddedPostgres({
@@ -161,12 +209,27 @@ export async function startCluster(): Promise<ClusterInfo> {
     })
 
     if (!initialised) {
-      console.log(`[embedded-pg] Initialising new cluster at ${dataDir}`)
+      console.log(`[embedded-pg] Initialising new cluster for "${entityId}" at ${dataDir}`)
       await instance.initialise()
     }
 
-    console.log(`[embedded-pg] Starting cluster on 127.0.0.1:${port}`)
+    console.log(`[embedded-pg] Starting cluster for "${entityId}" on 127.0.0.1:${port}`)
     await instance.start()
+
+    // Ensure the application database exists (initdb only creates "postgres")
+    const adminInfo: ClusterInfo = { host: "127.0.0.1", port, user: SUPERUSER, password, dataDir }
+    const adminUrl = buildConnectionString(adminInfo, "postgres")
+    const client = new pg.Client({ connectionString: adminUrl })
+    await client.connect()
+    try {
+      const result = await client.query("SELECT 1 FROM pg_database WHERE datname = $1", [DB_NAME])
+      if (result.rowCount === 0) {
+        await client.query(`CREATE DATABASE "${DB_NAME}"`)
+        console.log(`[embedded-pg] Created database "${DB_NAME}"`)
+      }
+    } finally {
+      await client.end()
+    }
 
     const info: ClusterInfo = {
       host: "127.0.0.1",
@@ -178,14 +241,12 @@ export async function startCluster(): Promise<ClusterInfo> {
 
     // Make the cluster URL discoverable to legacy code that reads
     // `process.env.DATABASE_URL` (e.g. the CI guard in models/users.ts).
-    if (!process.env.DATABASE_URL) {
-      process.env.DATABASE_URL = buildConnectionString(info, SUPERUSER)
-    }
+    process.env.DATABASE_URL = buildConnectionString(info, DB_NAME)
 
     const state: ClusterState = {
       pg: instance,
       info,
-      ensuredDatabases: new Set(),
+      entityId,
     }
 
     registerShutdownHooks(state)
@@ -204,10 +265,12 @@ export function getClusterInfo(): ClusterInfo | null {
   return globalForCluster.__taxinatorEmbeddedCluster?.info ?? null
 }
 
+export function getRunningClusterEntityId(): string | null {
+  return globalForCluster.__taxinatorEmbeddedCluster?.entityId ?? null
+}
+
 /**
  * Build a Postgres connection string for a database in the embedded cluster.
- * The database name defaults to the superuser's default DB ("taxinator"); pass
- * an entity ID to target a per-entity database.
  */
 export function buildConnectionString(info: ClusterInfo, dbName: string): string {
   const encodedPassword = encodeURIComponent(info.password)
@@ -215,54 +278,44 @@ export function buildConnectionString(info: ClusterInfo, dbName: string): string
 }
 
 /**
- * Get the connection string for an entity's database in the embedded cluster.
- * Throws if the cluster has not been started yet.
+ * Get the connection string for the fixed "taxinator" database in the
+ * embedded cluster. Throws if the cluster has not been started yet.
  */
-export function getEmbeddedConnectionString(dbName: string): string {
+export function getEmbeddedConnectionString(): string {
   const info = getClusterInfo()
   if (!info) {
     throw new Error("Embedded Postgres cluster has not been started")
   }
-  return buildConnectionString(info, dbName)
+  return buildConnectionString(info, DB_NAME)
 }
 
 /**
- * Ensure a database exists in the embedded cluster. Idempotent: safe to call
- * on every connection. Caches the result so we don't hit the system catalog
- * on every request.
+ * Initialise a new Postgres cluster for an entity without starting it.
+ * Idempotent — if the cluster directory already exists this is a no-op.
+ * After calling this the cluster can be started later with `startCluster`.
  */
-export async function ensureDatabase(dbName: string): Promise<void> {
-  const state = globalForCluster.__taxinatorEmbeddedCluster
-  if (!state) {
-    throw new Error("Embedded Postgres cluster has not been started")
-  }
-  if (state.ensuredDatabases.has(dbName)) return
+export async function initNewCluster(entityId: string, entityDataDir?: string): Promise<void> {
+  const baseDir = entityDataDir ?? getEntityDataDir(entityId)
+  const dataDir = path.join(baseDir, "pgdata")
+  const runtimeFile = path.join(baseDir, RUNTIME_FILE)
 
-  // Connect to the default 'postgres' admin database to run CREATE DATABASE.
-  // We can't use a transaction here — Postgres rejects CREATE DATABASE inside
-  // a transaction block — so each query goes on its own client.
-  const adminUrl = buildConnectionString(state.info, "postgres")
-  const client = new pg.Client({ connectionString: adminUrl })
-  await client.connect()
-  try {
-    const result = await client.query(
-      "SELECT 1 FROM pg_database WHERE datname = $1",
-      [dbName],
-    )
-    if (result.rowCount === 0) {
-      // pg_format_identifier would be ideal but isn't available client-side;
-      // we manually quote the identifier and reject anything containing a
-      // double-quote (defence in depth — entity IDs are already slugified).
-      if (dbName.includes('"') || dbName.includes("\0")) {
-        throw new Error(`Invalid database name: ${dbName}`)
-      }
-      await client.query(`CREATE DATABASE "${dbName}"`)
-      console.log(`[embedded-pg] Created database "${dbName}"`)
-    }
-    state.ensuredDatabases.add(dbName)
-  } finally {
-    await client.end()
+  if (isAlreadyInitialised(dataDir)) {
+    console.log(`[embedded-pg] Cluster for "${entityId}" already initialised`)
+    return
   }
+  const port = await pickFreePort()
+  const password = randomUUID().replace(/-/g, "")
+  const instance = new EmbeddedPostgres({
+    databaseDir: dataDir,
+    user: SUPERUSER,
+    password,
+    port,
+    persistent: true,
+  })
+  console.log(`[embedded-pg] Initialising new cluster for "${entityId}" at ${dataDir}`)
+  await instance.initialise()
+  saveRuntimeConfigToPath(runtimeFile, { port, password })
+  console.log(`[embedded-pg] Cluster for "${entityId}" initialised (not started)`)
 }
 
 /**
@@ -272,7 +325,7 @@ export async function ensureDatabase(dbName: string): Promise<void> {
 export async function stopCluster(): Promise<void> {
   const state = globalForCluster.__taxinatorEmbeddedCluster
   if (!state) return
-  console.log(`[embedded-pg] Stopping cluster on 127.0.0.1:${state.info.port}`)
+  console.log(`[embedded-pg] Stopping cluster for "${state.entityId}" on 127.0.0.1:${state.info.port}`)
   try {
     await state.pg.stop()
   } catch (err) {

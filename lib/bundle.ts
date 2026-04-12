@@ -1,5 +1,5 @@
 import type { Entity } from "@/lib/entities"
-import type { User } from "@/lib/db-types"
+import { getEmbeddedConnectionString } from "@/lib/embedded-pg"
 import { getUserUploadsDirectory } from "@/lib/files"
 import { execFileSync } from "child_process"
 import { existsSync } from "fs"
@@ -39,10 +39,11 @@ export async function readDirRecursive(
  * Create a portable .taxinator.zip bundle for an entity.
  * Contains: manifest.json + database.sql (pg_dump) + uploads/
  */
-export async function createBundle(entity: Entity, user: User): Promise<Buffer> {
-  // Run pg_dump
+export async function createBundle(entity: Entity): Promise<Buffer> {
+  // Run pg_dump — use external DB URL if set, otherwise the embedded cluster
+  const connectionString = entity.db ?? getEmbeddedConnectionString()
   const dbDump = execFileSync("pg_dump", [
-    "--no-owner", "--no-privileges", "--no-comments", "--clean", "--if-exists", entity.db,
+    "--no-owner", "--no-privileges", "--no-comments", "--clean", "--if-exists", connectionString,
   ], { timeout: 120_000, encoding: "utf-8", maxBuffer: 500 * 1024 * 1024 })
 
   const zip = new JSZip()
@@ -57,7 +58,7 @@ export async function createBundle(entity: Entity, user: User): Promise<Buffer> 
   zip.file("database.sql", dbDump)
 
   // Add user uploads
-  const uploadsDir = getUserUploadsDirectory(user, entity)
+  const uploadsDir = getUserUploadsDirectory(entity.id)
   const files = await readDirRecursive(uploadsDir)
   for (const { relativePath, buffer } of files) {
     zip.file(`uploads/${relativePath}`, buffer)

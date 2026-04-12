@@ -26,6 +26,7 @@ import { randomUUID } from "crypto"
 import { mkdir, writeFile } from "fs/promises"
 import { revalidatePath } from "next/cache"
 import path from "path"
+import { getActiveEntityId } from "@/lib/entities"
 
 export async function createTransactionAction(
   _prevState: ActionState<Transaction> | null,
@@ -78,10 +79,11 @@ export async function deleteTransactionAction(
 ): Promise<ActionState<Transaction>> {
   try {
     const user = await getCurrentUser()
+    const entityId = await getActiveEntityId()
     const transaction = await getTransactionById(transactionId, user.id)
     if (!transaction) throw new Error("Transaction not found")
 
-    await deleteTransaction(transaction.id, user.id)
+    await deleteTransaction(transaction.id, user.id, entityId)
 
     revalidatePath("/transactions")
 
@@ -112,10 +114,11 @@ export async function deleteTransactionFileAction(
     transaction.files ? (transaction.files as string[]).filter((id) => id !== fileId) : []
   )
 
-  await deleteFile(fileId, user.id)
+  const entityId = await getActiveEntityId()
+  await deleteFile(fileId, user.id, entityId)
 
   // Update user storage used
-  const storageUsed = await getDirectorySize(getUserUploadsDirectory(user))
+  const storageUsed = await getDirectorySize(getUserUploadsDirectory(entityId))
   await updateUser(user.id, { storageUsed })
 
   revalidatePath(`/transactions/${transactionId}`)
@@ -137,7 +140,8 @@ export async function uploadTransactionFilesAction(formData: FormData): Promise<
       return { success: false, error: "Transaction not found" }
     }
 
-    const userUploadsDirectory = getUserUploadsDirectory(user)
+    const entityId = await getActiveEntityId()
+    const userUploadsDirectory = getUserUploadsDirectory(entityId)
 
     // Check limits
     const totalFileSize = files.reduce((acc, file) => acc + file.size, 0)
@@ -191,7 +195,7 @@ export async function uploadTransactionFilesAction(formData: FormData): Promise<
     )
 
     // Update user storage used
-    const storageUsed = await getDirectorySize(getUserUploadsDirectory(user))
+    const storageUsed = await getDirectorySize(getUserUploadsDirectory(entityId))
     await updateUser(user.id, { storageUsed })
 
     revalidatePath(`/transactions/${transactionId}`)
@@ -205,7 +209,8 @@ export async function uploadTransactionFilesAction(formData: FormData): Promise<
 export async function bulkDeleteTransactionsAction(transactionIds: string[]) {
   try {
     const user = await getCurrentUser()
-    await bulkDeleteTransactions(transactionIds, user.id)
+    const entityId = await getActiveEntityId()
+    await bulkDeleteTransactions(transactionIds, user.id, entityId)
     revalidatePath("/transactions")
     return { success: true }
   } catch (error) {

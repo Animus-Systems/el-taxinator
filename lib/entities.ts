@@ -5,8 +5,10 @@ import path from "path"
 import {
   startCluster,
   getClusterInfo,
-  ensureDatabase,
+  getRunningClusterEntityId,
   getEmbeddedConnectionString,
+  getDataRoot,
+  getEntityDataDir,
 } from "./embedded-pg"
 
 // ---------------------------------------------------------------------------
@@ -21,11 +23,15 @@ export type Entity = {
   type: EntityType
   /**
    * Postgres connection string. Optional: when omitted, the entity uses its
-   * own database inside the embedded cluster (db name = entity id). Set this
-   * only when pointing at an external Postgres for advanced/dev scenarios.
+   * own cluster under data/<id>/. Set this only when pointing at an external
+   * Postgres for advanced/dev scenarios.
    */
   db?: string
-  /** Root directory for entity-scoped uploads. Defaults to data/<id>/uploads. */
+  /**
+   * Custom data directory for this entity. When set, pgdata/, uploads/, and
+   * runtime.json live here instead of under the global data root.
+   * If omitted, defaults to `<dataRoot>/<entityId>/`.
+   */
   dataDir?: string
 }
 
@@ -88,6 +94,16 @@ export function getEntityById(id: string): Entity | undefined {
   return getEntities().find((e) => e.id === id)
 }
 
+/**
+ * Resolve the data directory for an entity. Uses entity.dataDir if set,
+ * otherwise falls back to the default `<dataRoot>/<entityId>/`.
+ */
+export function resolveEntityDir(entityId: string): string {
+  const entity = getEntityById(entityId)
+  if (entity?.dataDir) return path.resolve(entity.dataDir)
+  return getEntityDataDir(entityId)
+}
+
 export function isMultiEntity(): boolean {
   return getEntities().length > 1
 }
@@ -132,10 +148,46 @@ export function removeEntity(id: string): void {
 }
 
 // ---------------------------------------------------------------------------
-// Active entity (cookie-based)
+// Active entity — cookie + file persistence
 // ---------------------------------------------------------------------------
 
-/** Set the active entity cookie. */
+const ACTIVE_ENTITY_FILE = "active-entity"
+
+function getActiveEntityFilePath(): string {
+  return path.join(getDataRoot(), ACTIVE_ENTITY_FILE)
+}
+
+/** Persist active entity ID to a file so instrumentation can read it on restart. */
+function saveActiveEntityToFile(entityId: string): void {
+  const filePath = getActiveEntityFilePath()
+  const dir = path.dirname(filePath)
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true })
+  }
+  fs.writeFileSync(filePath, entityId, "utf-8")
+}
+
+/** Clear the persisted active entity when no company should stay selected. */
+export function clearActiveEntityFile(): void {
+  const filePath = getActiveEntityFilePath()
+  try {
+    fs.rmSync(filePath, { force: true })
+  } catch {}
+}
+
+/** Read persisted active entity ID from file (for instrumentation — no cookies available). */
+export function getActiveEntityIdFromFile(): string {
+  const filePath = getActiveEntityFilePath()
+  try {
+    const id = fs.readFileSync(filePath, "utf-8").trim()
+    const entities = getEntities()
+    if (entities.some((e) => e.id === id)) return id
+  } catch {}
+  const entities = getEntities()
+  return entities.length > 0 ? entities[0].id : "default"
+}
+
+/** Set the active entity cookie and persist to file. */
 export async function setActiveEntity(entityId: string): Promise<void> {
   const cookieStore = await cookies()
   cookieStore.set(ENTITY_COOKIE, entityId, {
@@ -143,6 +195,7 @@ export async function setActiveEntity(entityId: string): Promise<void> {
     maxAge: 365 * 24 * 60 * 60,
     sameSite: "lax",
   })
+  saveActiveEntityToFile(entityId)
 }
 
 export async function getActiveEntityId(): Promise<string> {
@@ -189,30 +242,32 @@ if (process.env.NODE_ENV !== "production") {
 /**
  * Resolve the connection string for an entity. If the entity has an explicit
  * `db` field, that wins (lets advanced users point at an external Postgres).
- * Otherwise we fall back to the embedded cluster, creating the per-entity
- * database if it doesn't exist yet.
+ * Otherwise we fall back to the embedded cluster.
  */
 async function resolveConnectionString(entity: Entity): Promise<string> {
   if (entity.db && entity.db.length > 0) {
     return entity.db
   }
 
-  // Embedded path: ensure the cluster is up and the per-entity database exists
-  if (!getClusterInfo()) {
-    await startCluster()
+  const runningEntityId = getRunningClusterEntityId()
+  if (runningEntityId && runningEntityId !== entity.id) {
+    await closeAllPools()
   }
-  await ensureDatabase(entity.id)
-  return getEmbeddedConnectionString(entity.id)
+
+  await startCluster(entity.id, entity.dataDir)
+  return getEmbeddedConnectionString()
 }
 
 export async function getPoolForEntity(entityId: string): Promise<pg.Pool> {
-  const existing = poolMap.get(entityId)
-  if (existing) return existing
-
   const entity = getEntityById(entityId)
   if (!entity) throw new Error(`Entity "${entityId}" not found`)
 
+  const existing = poolMap.get(entityId)
+  if (existing && entity.db) return existing
+
   const connectionString = await resolveConnectionString(entity)
+  const reusablePool = poolMap.get(entityId)
+  if (reusablePool) return reusablePool
 
   const newPool = new pg.Pool({
     connectionString,
@@ -225,6 +280,15 @@ export async function getPoolForEntity(entityId: string): Promise<pg.Pool> {
   return newPool
 }
 
+/** Close and remove every open pool. Used when switching embedded clusters. */
+export async function closeAllPools(): Promise<void> {
+  const entries = [...poolMap.entries()]
+  await Promise.all(entries.map(async ([entityId, pool]) => {
+    await pool.end()
+    poolMap.delete(entityId)
+  }))
+}
+
 /** Close and remove a pool (e.g. when entity is deleted or DB changed) */
 export async function closePoolForEntity(entityId: string): Promise<void> {
   const pool = poolMap.get(entityId)
@@ -232,6 +296,20 @@ export async function closePoolForEntity(entityId: string): Promise<void> {
     await pool.end()
     poolMap.delete(entityId)
   }
+}
+
+/**
+ * Close the currently running entity session, if any. This is used when the
+ * user disconnects and we are back on the picker page, where no DB access is
+ * needed anymore.
+ */
+export async function shutdownRunningEntitySession(): Promise<void> {
+  const { getRunningClusterEntityId, stopCluster } = await import("./embedded-pg")
+  const entityId = getRunningClusterEntityId()
+  if (!entityId) return
+
+  await closePoolForEntity(entityId)
+  await stopCluster()
 }
 
 export async function getPool(): Promise<pg.Pool> {

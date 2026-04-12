@@ -736,7 +736,14 @@
     "code": "Code",
     "showInTransactionsTable": "Show in transactions table",
     "showInAnalysisForm": "Show in analysis form",
-    "isRequired": "Is required"
+    "isRequired": "Is required",
+    "dataLocation": "Current location",
+    "dataLocationTitle": "Data Location",
+    "dataLocationDesc": "All profile data (databases, uploads) is stored in this folder. You can point this at an external drive or cloud-synced folder.",
+    "changeDataLocationConfirm": "Changing the data location will restart the server. Existing data will not be moved automatically. Continue?",
+    "change": "Change",
+    "selectFolder": "Select this folder",
+    "noFolders": "No subfolders"
   },
   "import": {
     "title": "Import from CSV",

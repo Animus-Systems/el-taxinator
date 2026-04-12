@@ -1,18 +1,20 @@
 import { getCurrentUser } from "@/lib/auth"
 import { fileExists, getStaticDirectory, safePathJoin } from "@/lib/files"
+import { getActiveEntityId } from "@/lib/entities"
 import fs from "fs/promises"
 import lookup from "mime-types"
 import { NextResponse } from "next/server"
 
 export async function GET(request: Request, { params }: { params: Promise<{ filename: string }> }) {
   const { filename } = await params
-  const user = await getCurrentUser()
+  await getCurrentUser()
 
   if (!filename) {
     return new NextResponse("No filename provided", { status: 400 })
   }
 
-  const staticFilesDirectory = getStaticDirectory(user)
+  const entityId = await getActiveEntityId()
+  const staticFilesDirectory = getStaticDirectory(entityId)
 
   try {
     const fullFilePath = safePathJoin(staticFilesDirectory, filename)

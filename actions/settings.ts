@@ -10,6 +10,7 @@ import {
 import { userFormSchema } from "@/forms/users"
 import { ActionState } from "@/lib/actions"
 import { getCurrentUser } from "@/lib/auth"
+import { getActiveEntityId, updateEntity } from "@/lib/entities"
 import { uploadStaticImage } from "@/lib/uploads"
 import { codeFromName, randomHexColor } from "@/lib/utils"
 import { serverClient } from "@/lib/trpc/server-client"
@@ -49,6 +50,7 @@ export async function saveProfileAction(
 ): Promise<ActionState<User>> {
   // Keep as model call - file upload with FormData requires getCurrentUser for file paths
   const user = await getCurrentUser()
+  const entityId = await getActiveEntityId()
   const validatedForm = userFormSchema.safeParse(Object.fromEntries(formData))
 
   if (!validatedForm.success) {
@@ -60,7 +62,7 @@ export async function saveProfileAction(
   const avatarFile = formData.get("avatar") as File | null
   if (avatarFile instanceof File && avatarFile.size > 0) {
     try {
-      const uploadedAvatarPath = await uploadStaticImage(user, avatarFile, "avatar.webp", 500, 500)
+      const uploadedAvatarPath = await uploadStaticImage(user, entityId, avatarFile, "avatar.webp", 500, 500)
       avatarUrl = `/api/files/static/${path.basename(uploadedAvatarPath)}`
     } catch (error) {
       return { success: false, error: "Failed to upload avatar: " + error }
@@ -72,7 +74,7 @@ export async function saveProfileAction(
   const businessLogoFile = formData.get("businessLogo") as File | null
   if (businessLogoFile instanceof File && businessLogoFile.size > 0) {
     try {
-      const uploadedBusinessLogoPath = await uploadStaticImage(user, businessLogoFile, "businessLogo.png", 500, 500)
+      const uploadedBusinessLogoPath = await uploadStaticImage(user, entityId, businessLogoFile, "businessLogo.png", 500, 500)
       businessLogoUrl = `/api/files/static/${path.basename(uploadedBusinessLogoPath)}`
     } catch (error) {
       return { success: false, error: "Failed to upload business logo: " + error }
@@ -80,10 +82,13 @@ export async function saveProfileAction(
   }
 
   // Update user
+  const nextBusinessName =
+    validatedForm.data.businessName !== undefined ? validatedForm.data.businessName : user.businessName
+
   await updateUser(user.id, {
     name: validatedForm.data.name !== undefined ? validatedForm.data.name : user.name,
     avatar: avatarUrl,
-    businessName: validatedForm.data.businessName !== undefined ? validatedForm.data.businessName : user.businessName,
+    businessName: nextBusinessName,
     businessAddress:
       validatedForm.data.businessAddress !== undefined ? validatedForm.data.businessAddress : user.businessAddress,
     businessBankDetails:
@@ -93,8 +98,14 @@ export async function saveProfileAction(
     businessLogo: businessLogoUrl,
   })
 
+  const trimmedBusinessName = nextBusinessName?.trim()
+  if (trimmedBusinessName) {
+    updateEntity(entityId, { name: trimmedBusinessName })
+  }
+
   revalidatePath("/settings/profile")
   revalidatePath("/settings/business")
+  revalidatePath("/", "layout")
   return { success: true }
 }
 

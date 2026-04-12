@@ -22,13 +22,18 @@ describe("PROVIDERS list", () => {
       expect(typeof provider.isSubscription).toBe("boolean")
       expect(provider.apiKeyName).toBeTruthy()
       expect(provider.modelName).toBeTruthy()
-      expect(provider.defaultModelName).toBeTruthy()
       expect(Array.isArray(provider.models)).toBe(true)
-      expect(provider.models.length).toBeGreaterThan(0)
       expect(typeof provider.supportsThinking).toBe("boolean")
+      expect(provider.logo).toBeTruthy()
+    }
+  })
+
+  it("non-custom providers have models, default model, and docs", () => {
+    for (const provider of PROVIDERS.filter((p) => p.key !== "custom")) {
+      expect(provider.defaultModelName).toBeTruthy()
+      expect(provider.models.length).toBeGreaterThan(0)
       expect(provider.apiDoc).toBeTruthy()
       expect(provider.apiDocLabel).toBeTruthy()
-      expect(provider.logo).toBeTruthy()
     }
   })
 
@@ -49,7 +54,7 @@ describe("Provider model configurations", () => {
   })
 
   it("default model exists in the model list", () => {
-    for (const provider of PROVIDERS) {
+    for (const provider of PROVIDERS.filter((p) => p.key !== "custom")) {
       const modelIds = provider.models.map((m) => m.id)
       expect(modelIds).toContain(provider.defaultModelName)
     }
@@ -165,16 +170,27 @@ describe("Codex provider", () => {
 })
 
 describe("Provider help links", () => {
-  it("every provider has a valid help URL", () => {
-    for (const provider of PROVIDERS) {
+  const providersWithDocs = PROVIDERS.filter((p) => p.key !== "custom")
+
+  it("every non-custom provider has a valid help URL", () => {
+    for (const provider of providersWithDocs) {
       expect(provider.help.url).toMatch(/^https?:\/\//)
       expect(provider.help.label).toBeTruthy()
     }
   })
 
-  it("every provider has a valid API doc URL", () => {
-    for (const provider of PROVIDERS) {
+  it("every non-custom provider has a valid API doc URL", () => {
+    for (const provider of providersWithDocs) {
       expect(provider.apiDoc).toMatch(/^https?:\/\//)
     }
+  })
+
+  it("custom provider has empty docs (user-supplied)", () => {
+    const custom = PROVIDERS.find((p) => p.key === "custom")!
+    expect(custom).toBeDefined()
+    expect(custom.defaultModelName).toBe("")
+    expect(custom.models).toHaveLength(0)
+    expect(custom.apiDoc).toBe("")
+    expect(custom.freeformModel).toBe(true)
   })
 })

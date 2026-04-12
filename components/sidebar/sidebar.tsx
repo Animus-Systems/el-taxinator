@@ -31,9 +31,9 @@ import {
   Users,
 } from "lucide-react"
 import Image from "next/image"
-import { Link, usePathname } from "@/lib/navigation"
+import { Link, usePathname, useRouter } from "@/lib/navigation"
 import { useTranslations } from "next-intl"
-import { useEffect } from "react"
+import { useEffect, useTransition } from "react"
 import { ColoredText } from "../ui/colored-text"
 import { Blinker } from "./blinker"
 import { LanguageSwitcher } from "./language-switcher"
@@ -48,14 +48,25 @@ export function AppSidebar({
   entityName?: string
 }) {
   const t = useTranslations("sidebar")
+  const router = useRouter()
   const { open, setOpenMobile } = useSidebar()
   const pathname = usePathname()
   const { notification } = useNotification()
+  const [isDisconnecting, startDisconnectTransition] = useTransition()
 
   // Hide sidebar on mobile when clicking an item
   useEffect(() => {
     setOpenMobile(false)
   }, [pathname, setOpenMobile])
+
+  const handleDisconnect = () => {
+    startDisconnectTransition(async () => {
+      const result = await disconnectAction()
+      if (!result.success) return
+      router.push("/")
+      router.refresh()
+    })
+  }
 
   return (
     <>
@@ -187,14 +198,14 @@ export function AppSidebar({
                   <LanguageSwitcher />
                 </SidebarMenuItem>
                 <SidebarMenuItem>
-                  <form suppressHydrationWarning action={disconnectAction}>
-                    <SidebarMenuButton asChild>
-                      <button type="submit" className="w-full text-red-600">
-                        <LogOut className="h-4 w-4" />
-                        <span>{t("disconnect")}</span>
-                      </button>
-                    </SidebarMenuButton>
-                  </form>
+                  <SidebarMenuButton
+                    className="w-full text-red-600 disabled:opacity-50"
+                    onClick={handleDisconnect}
+                    disabled={isDisconnecting}
+                  >
+                    <LogOut className="h-4 w-4" />
+                    <span>{t("disconnect")}</span>
+                  </SidebarMenuButton>
                 </SidebarMenuItem>
               </SidebarMenu>
             </SidebarGroupContent>

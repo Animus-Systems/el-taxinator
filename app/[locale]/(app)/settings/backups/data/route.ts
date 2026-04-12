@@ -1,5 +1,6 @@
 import { getCurrentUser } from "@/lib/auth"
 import { fileExists, getUserUploadsDirectory } from "@/lib/files"
+import { getActiveEntityId } from "@/lib/entities"
 import { MODEL_BACKUP, modelToJSON } from "@/models/backups"
 import { updateProgress } from "@/models/progress"
 import fs from "fs/promises"
@@ -13,7 +14,8 @@ const PROGRESS_UPDATE_INTERVAL_MS = 2000 // 2 seconds
 
 export async function GET(request: Request) {
   const user = await getCurrentUser()
-  const userUploadsDirectory = getUserUploadsDirectory(user)
+  const entityId = await getActiveEntityId()
+  const userUploadsDirectory = getUserUploadsDirectory(entityId)
   const url = new URL(request.url)
   const progressId = url.searchParams.get("progressId")
 

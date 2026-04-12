@@ -1,5 +1,6 @@
 "use server"
 
+import path from "path"
 import {
   getEntities,
   getEntityById,
@@ -9,12 +10,14 @@ import {
   testDatabaseConnection,
   closePoolForEntity,
   setActiveEntity,
+  getActiveEntityIdFromFile,
+  resolveEntityDir,
+  clearActiveEntityFile,
   ENTITY_COOKIE,
   type Entity,
   type EntityType,
 } from "@/lib/entities"
 import { cookies } from "next/headers"
-import { revalidatePath } from "next/cache"
 
 export async function switchEntityAction(entityId: string) {
   const entities = getEntities()
@@ -23,12 +26,11 @@ export async function switchEntityAction(entityId: string) {
   }
 
   await setActiveEntity(entityId)
-  revalidatePath("/", "layout")
   return { success: true }
 }
 
 /**
- * Create a new entity backed by the embedded Postgres cluster.
+ * Create a new entity backed by its own embedded Postgres cluster.
  * This is the default path for self-hosted users — no external DB needed.
  */
 export async function createLocalEntityAction(data: {
@@ -36,17 +38,36 @@ export async function createLocalEntityAction(data: {
   type: EntityType
   dataDir?: string
 }) {
-  const { codeFromName } = await import("@/lib/utils")
+  const { codeFromName, folderNameFromName } = await import("@/lib/utils")
   const id = codeFromName(data.name)
   if (!id) return { success: false, error: "Invalid entity name" }
 
   if (getEntities().some((e) => e.id === id)) {
-    return { success: false, error: `An entity with this name already exists` }
+    return { success: false, error: "An entity with this name already exists" }
   }
 
   try {
-    addEntity({ id, name: data.name, type: data.type, dataDir: data.dataDir })
-    revalidatePath("/", "layout")
+    // Resolve data directory: when the user picks a custom folder, treat it
+    // as the parent and create a short company-named subfolder inside it.
+    const customParentDir = data.dataDir ? path.resolve(data.dataDir) : undefined
+    const folderName = folderNameFromName(data.name) || id
+    const customDir = customParentDir ? path.join(customParentDir, folderName) : undefined
+    const { initNewCluster, getEntityDataDir } = await import("@/lib/embedded-pg")
+    const entityDir = customDir ?? getEntityDataDir(id)
+
+    await initNewCluster(id, customDir)
+
+    const fs = await import("fs")
+    fs.mkdirSync(path.join(entityDir, "uploads"), { recursive: true })
+
+    addEntity({ id, name: data.name, type: data.type, dataDir: customDir })
+
+    const { connectAction } = await import("@/actions/auth")
+    const result = await connectAction(id)
+    if (!result.success) {
+      return result
+    }
+
     return { success: true, entityId: id }
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : "Failed to create entity" }
@@ -74,7 +95,6 @@ export async function addExternalEntityAction(data: {
 
   try {
     addEntity({ id, name: data.name, type: data.type, db: data.db })
-    revalidatePath("/", "layout")
     return { success: true, entityId: id }
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : "Failed to add entity" }
@@ -93,48 +113,87 @@ export async function updateEntityAction(id: string, data: Partial<Omit<Entity, 
 
   try {
     updateEntity(id, data)
-    revalidatePath("/", "layout")
     return { success: true }
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : "Failed to update entity" }
   }
 }
 
-export async function removeEntityAction(id: string, deleteData: boolean = false) {
+/**
+ * Unregister an entity from entities.json without deleting its data.
+ * The data folder remains on disk and can be re-adopted later.
+ */
+export async function disconnectEntityAction(id: string) {
   const entity = getEntityById(id)
   if (!entity) {
     return { success: false, error: "Entity not found" }
   }
 
   try {
+    const cookieStore = await cookies()
+    const currentCookieEntityId = cookieStore.get(ENTITY_COOKIE)?.value
+    const persistedActiveEntityId = getActiveEntityIdFromFile()
+    const { getRunningClusterEntityId, stopCluster } = await import("@/lib/embedded-pg")
+    const runningClusterEntityId = getRunningClusterEntityId()
+
     await closePoolForEntity(id)
 
-    // Optionally delete the entity's data directory (uploads + anything else
-    // stored under dataDir). The shared embedded cluster's per-entity database
-    // is left behind — `DROP DATABASE` would require switching to a different
-    // admin connection and is not worth the complexity for this code path.
-    if (deleteData && entity.dataDir) {
-      const fs = await import("fs")
-      try {
-        fs.rmSync(entity.dataDir, { recursive: true, force: true })
-      } catch {}
+    if (runningClusterEntityId === id) {
+      await stopCluster()
     }
 
     removeEntity(id)
 
-    // If we removed the active entity, switch to the first remaining one
-    const cookieStore = await cookies()
-    const current = cookieStore.get(ENTITY_COOKIE)?.value
-    if (current === id) {
-      const remaining = getEntities()
-      if (remaining.length > 0) {
-        await setActiveEntity(remaining[0].id)
-      } else {
-        cookieStore.delete(ENTITY_COOKIE)
-      }
+    if (currentCookieEntityId === id) {
+      cookieStore.delete(ENTITY_COOKIE)
     }
 
-    revalidatePath("/", "layout")
+    if (persistedActiveEntityId === id || runningClusterEntityId === id) {
+      clearActiveEntityFile()
+    }
+
+    return { success: true }
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : "Failed to disconnect entity" }
+  }
+}
+
+export async function removeEntityAction(id: string) {
+  const entity = getEntityById(id)
+  if (!entity) {
+    return { success: false, error: "Entity not found" }
+  }
+
+  try {
+    const entityDir = !entity.db ? resolveEntityDir(id) : null
+
+    const cookieStore = await cookies()
+    const currentCookieEntityId = cookieStore.get(ENTITY_COOKIE)?.value
+    const persistedActiveEntityId = getActiveEntityIdFromFile()
+    const { getRunningClusterEntityId, stopCluster } = await import("@/lib/embedded-pg")
+    const runningClusterEntityId = getRunningClusterEntityId()
+
+    await closePoolForEntity(id)
+
+    if (runningClusterEntityId === id) {
+      await stopCluster()
+    }
+
+    removeEntity(id)
+
+    if (currentCookieEntityId === id) {
+      cookieStore.delete(ENTITY_COOKIE)
+    }
+
+    if (persistedActiveEntityId === id || runningClusterEntityId === id) {
+      clearActiveEntityFile()
+    }
+
+    if (entityDir) {
+      const fs = await import("fs")
+      fs.rmSync(entityDir, { recursive: true, force: true })
+    }
+
     return { success: true }
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : "Failed to remove entity" }
@@ -147,10 +206,10 @@ export async function testConnectionAction(connectionString: string) {
 
 export async function listDirectoriesAction(dirPath?: string) {
   const fs = await import("fs")
-  const path = await import("path")
+  const pathMod = await import("path")
   const os = await import("os")
 
-  const resolved = dirPath ? path.resolve(dirPath) : os.homedir()
+  const resolved = dirPath ? pathMod.resolve(dirPath) : os.homedir()
 
   try {
     const entries = fs.readdirSync(resolved, { withFileTypes: true })
@@ -159,16 +218,16 @@ export async function listDirectoriesAction(dirPath?: string) {
       .map(e => e.name)
       .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }))
 
-    const parent = path.dirname(resolved)
+    const parent = pathMod.dirname(resolved)
 
     // Detect cloud storage shortcuts (macOS CloudStorage, /Volumes, Linux mounts)
     const shortcuts: { name: string; path: string }[] = []
-    const cloudStorage = path.join(os.homedir(), "Library", "CloudStorage")
+    const cloudStorage = pathMod.join(os.homedir(), "Library", "CloudStorage")
     if (fs.existsSync(cloudStorage)) {
       try {
         for (const entry of fs.readdirSync(cloudStorage, { withFileTypes: true })) {
           if (entry.isDirectory() || entry.isSymbolicLink()) {
-            shortcuts.push({ name: entry.name.replace(/^GoogleDrive-/, "Google Drive — "), path: path.join(cloudStorage, entry.name) })
+            shortcuts.push({ name: entry.name.replace(/^GoogleDrive-/, "Google Drive — "), path: pathMod.join(cloudStorage, entry.name) })
           }
         }
       } catch {}
@@ -178,7 +237,7 @@ export async function listDirectoriesAction(dirPath?: string) {
       try {
         for (const entry of fs.readdirSync("/Volumes", { withFileTypes: true })) {
           if ((entry.isDirectory() || entry.isSymbolicLink()) && entry.name !== "Macintosh HD") {
-            shortcuts.push({ name: entry.name, path: path.join("/Volumes", entry.name) })
+            shortcuts.push({ name: entry.name, path: pathMod.join("/Volumes", entry.name) })
           }
         }
       } catch {}
@@ -191,15 +250,15 @@ export async function listDirectoriesAction(dirPath?: string) {
       shortcuts,
     }
   } catch {
-    return { current: resolved, parent: path.dirname(resolved), directories: [], shortcuts: [] }
+    return { current: resolved, parent: pathMod.dirname(resolved), directories: [], shortcuts: [] }
   }
 }
 
 export async function createDirectoryAction(dirPath: string) {
   const fs = await import("fs")
-  const path = await import("path")
+  const pathMod = await import("path")
 
-  const resolved = path.resolve(dirPath)
+  const resolved = pathMod.resolve(dirPath)
   try {
     fs.mkdirSync(resolved, { recursive: true })
     return { success: true, path: resolved }

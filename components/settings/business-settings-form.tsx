@@ -5,13 +5,21 @@ import { FormError } from "@/components/forms/error"
 import { FormAvatar, FormInput, FormTextarea } from "@/components/forms/simple"
 import { Button } from "@/components/ui/button"
 import type { User } from "@/lib/db-types"
+import { useRouter } from "@/lib/navigation"
 import { CircleCheckBig } from "lucide-react"
 import { useTranslations } from "next-intl"
-import { useActionState } from "react"
+import { useActionState, useEffect } from "react"
 
 export default function BusinessSettingsForm({ user }: { user: User }) {
   const t = useTranslations("settings")
+  const router = useRouter()
   const [saveState, saveAction, pending] = useActionState(saveProfileAction, null)
+
+  useEffect(() => {
+    if (saveState?.success) {
+      router.refresh()
+    }
+  }, [router, saveState?.success])
 
   return (
     <div>

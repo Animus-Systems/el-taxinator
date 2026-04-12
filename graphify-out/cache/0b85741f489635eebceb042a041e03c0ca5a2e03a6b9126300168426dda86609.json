@@ -1,0 +1,1 @@
+{"nodes": [{"id": "invoices", "label": "invoices.ts", "file_type": "code", "source_file": "forms/invoices.ts", "source_location": "L1"}], "edges": [{"source": "invoices", "target": "zod", "relation": "imports_from", "confidence": "EXTRACTED", "source_file": "forms/invoices.ts", "source_location": "L1", "weight": 1.0}]}

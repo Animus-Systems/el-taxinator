@@ -12,7 +12,8 @@
     "build": "next build",
     "start": "next start -p ${PORT:-7331}",
     "lint": "eslint .",
-    "test": "vitest run"
+    "test": "vitest run",
+    "prepare-commit": "bash scripts/prepare-commit.sh"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

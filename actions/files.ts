@@ -15,13 +15,16 @@ import { randomUUID } from "crypto"
 import { mkdir, writeFile } from "fs/promises"
 import { revalidatePath } from "next/cache"
 import path from "path"
+import { getActiveEntityId } from "@/lib/entities"
 
 export async function uploadFilesAction(formData: FormData): Promise<ActionState<null>> {
   const user = await getCurrentUser()
   const files = formData.getAll("files") as File[]
 
+  const entityId = await getActiveEntityId()
+
   // Make sure upload dir exists
-  const userUploadsDirectory = getUserUploadsDirectory(user)
+  const userUploadsDirectory = getUserUploadsDirectory(entityId)
 
   // Check limits
   const totalFileSize = files.reduce((acc, file) => acc + file.size, 0)
@@ -70,7 +73,7 @@ export async function uploadFilesAction(formData: FormData): Promise<ActionState
     })
   )
 
-  const storageUsed = await getDirectorySize(getUserUploadsDirectory(user))
+  const storageUsed = await getDirectorySize(getUserUploadsDirectory(entityId))
   await updateUser(user.id, { storageUsed })
 
   console.log("uploadedFiles", uploadedFiles)

@@ -53,7 +53,7 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    const zipBuffer = await createBundle(entity, user)
+    const zipBuffer = await createBundle(entity)
 
     const slug = entity.name.replace(/[^a-zA-Z0-9]/g, "-").toLowerCase()
     const fileName = `${slug}-${now.toISOString().slice(0, 10)}.taxinator.zip`

@@ -736,7 +736,14 @@
     "code": "Código",
     "showInTransactionsTable": "Mostrar en tabla de transacciones",
     "showInAnalysisForm": "Mostrar en formulario de análisis",
-    "isRequired": "Es obligatorio"
+    "isRequired": "Es obligatorio",
+    "dataLocation": "Ubicación actual",
+    "dataLocationTitle": "Ubicación de datos",
+    "dataLocationDesc": "Todos los datos de perfil (bases de datos, archivos) se guardan en esta carpeta. Puedes apuntar a un disco externo o carpeta sincronizada en la nube.",
+    "changeDataLocationConfirm": "Cambiar la ubicación de datos reiniciará el servidor. Los datos existentes no se moverán automáticamente. ¿Continuar?",
+    "change": "Cambiar",
+    "selectFolder": "Seleccionar esta carpeta",
+    "noFolders": "No hay subcarpetas"
   },
   "import": {
     "title": "Importar desde CSV",

@@ -1,6 +1,6 @@
 import { fileExists, fullPathForFile } from "@/lib/files"
 import { generateFilePreviews } from "@/lib/previews/generate"
-import type { File, User } from "@/lib/db-types"
+import type { File } from "@/lib/db-types"
 import fs from "fs/promises"
 
 const MAX_PAGES_TO_ANALYZE = 4
@@ -11,14 +11,14 @@ export type AnalyzeAttachment = {
   base64: string
 }
 
-export const loadAttachmentsForAI = async (user: User, file: File): Promise<AnalyzeAttachment[]> => {
-  const fullFilePath = fullPathForFile(user, file)
+export const loadAttachmentsForAI = async (entityId: string, file: File): Promise<AnalyzeAttachment[]> => {
+  const fullFilePath = fullPathForFile(entityId, file)
   const isFileExists = await fileExists(fullFilePath)
   if (!isFileExists) {
     throw new Error("File not found on disk")
   }
 
-  const { contentType, previews } = await generateFilePreviews(user, fullFilePath, file.mimetype)
+  const { contentType, previews } = await generateFilePreviews(entityId, fullFilePath, file.mimetype)
 
   return Promise.all(
     previews.slice(0, MAX_PAGES_TO_ANALYZE).map(async (preview) => ({

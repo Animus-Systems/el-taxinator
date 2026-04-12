@@ -8,7 +8,7 @@ export async function GET() {
   const entity = await getActiveEntity()
 
   try {
-    const zipBuffer = await createBundle(entity, user)
+    const zipBuffer = await createBundle(entity)
 
     const slug = entity.name.replace(/[^a-zA-Z0-9]/g, "-").toLowerCase()
     const filename = `${slug}.taxinator.zip`

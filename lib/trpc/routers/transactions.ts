@@ -15,6 +15,7 @@ import {
   categorySchema,
   projectSchema,
 } from "@/lib/db-types"
+import { getActiveEntityId } from "@/lib/entities"
 
 // Transaction with joined category/project relations
 const transactionWithRelationsSchema = transactionSchema.extend({
@@ -117,7 +118,8 @@ export const transactionsRouter = router({
     .input(z.object({ id: z.string() }))
     .output(transactionWithRelationsSchema.optional())
     .mutation(async ({ ctx, input }) => {
-      return deleteTransaction(input.id, ctx.user.id)
+      const entityId = await getActiveEntityId()
+      return deleteTransaction(input.id, ctx.user.id, entityId)
     }),
 
   bulkDelete: authedProcedure
@@ -125,6 +127,7 @@ export const transactionsRouter = router({
     .input(z.object({ ids: z.array(z.string()) }))
     .output(z.object({ count: z.number() }))
     .mutation(async ({ ctx, input }) => {
-      return bulkDeleteTransactions(input.ids, ctx.user.id)
+      const entityId = await getActiveEntityId()
+      return bulkDeleteTransactions(input.ids, ctx.user.id, entityId)
     }),
 })

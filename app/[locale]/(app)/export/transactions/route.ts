@@ -1,5 +1,6 @@
 import { getCurrentUser } from "@/lib/auth"
 import { fileExists, fullPathForFile } from "@/lib/files"
+import { getActiveEntityId } from "@/lib/entities"
 import { EXPORT_AND_IMPORT_FIELD_MAP, ExportFields, ExportFilters } from "@/models/export_and_import"
 import { getFields } from "@/models/fields"
 import { getFilesByTransactionId } from "@/models/files"
@@ -24,6 +25,7 @@ export async function GET(request: Request) {
   const progressId = url.searchParams.get("progressId")
 
   const user = await getCurrentUser()
+  const entityId = await getActiveEntityId()
   const { transactions } = await getTransactions(user.id, filters)
   const existingFields = await getFields(user.id)
 
@@ -131,7 +133,7 @@ export async function GET(request: Request) {
         if (!transactionFolder) continue
 
         for (const file of transactionFiles) {
-          const fullFilePath = fullPathForFile(user, file)
+          const fullFilePath = fullPathForFile(entityId, file)
           if (await fileExists(fullFilePath)) {
             console.log(
               `Processing file ${++totalFilesProcessed}/${totalFilesToProcess}: ${file.filename} for transaction ${transaction.id}`

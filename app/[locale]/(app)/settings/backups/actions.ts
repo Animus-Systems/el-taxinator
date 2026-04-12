@@ -4,6 +4,7 @@ import { ActionState } from "@/lib/actions"
 import { getCurrentUser } from "@/lib/auth"
 import { getPool } from "@/lib/pg"
 import { getUserUploadsDirectory, safePathJoin } from "@/lib/files"
+import { getActiveEntityId } from "@/lib/entities"
 import { MODEL_BACKUP, modelFromJSON } from "@/models/backups"
 import fs from "fs/promises"
 import JSZip from "jszip"
@@ -23,7 +24,8 @@ export async function restoreBackupAction(
 ): Promise<ActionState<BackupRestoreResult>> {
   const pool = await getPool()
   const user = await getCurrentUser()
-  const userUploadsDirectory = getUserUploadsDirectory(user)
+  const entityId = await getActiveEntityId()
+  const userUploadsDirectory = getUserUploadsDirectory(entityId)
   const file = formData.get("file") as File
 
   if (!file || file.size === 0) {
@@ -98,7 +100,7 @@ export async function restoreBackupAction(
         [user.id]
       )
 
-      const userUploadsDirectory = getUserUploadsDirectory(user)
+      const userUploadsDirectory = getUserUploadsDirectory(entityId)
 
       for (const file of files) {
         const filePathWithoutPrefix = path.normalize(file.path.replace(/^.*\/uploads\//, ""))

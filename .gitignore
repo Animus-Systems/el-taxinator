@@ -49,6 +49,9 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
+# app config
+taxinator.config.json
+
 # databases
 pgdata
 *.db

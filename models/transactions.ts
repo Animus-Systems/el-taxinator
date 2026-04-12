@@ -296,6 +296,7 @@ export const updateTransactionFiles = async (
 export const deleteTransaction = async (
   id: string,
   userId: string,
+  entityId: string,
 ): Promise<Transaction | undefined> => {
   const transaction = await getTransactionById(id, userId)
 
@@ -304,7 +305,7 @@ export const deleteTransaction = async (
 
     for (const fileId of files as string[]) {
       if ((await getTransactionsByFileId(fileId, userId)).length <= 1) {
-        await deleteFile(fileId, userId)
+        await deleteFile(fileId, userId, entityId)
       }
     }
 
@@ -315,7 +316,7 @@ export const deleteTransaction = async (
   }
 }
 
-export const bulkDeleteTransactions = async (ids: string[], userId: string) => {
+export const bulkDeleteTransactions = async (ids: string[], userId: string, entityId: string) => {
   const pool = await getPool()
   if (ids.length === 0) return { count: 0 }
 
@@ -344,7 +345,7 @@ export const bulkDeleteTransactions = async (ids: string[], userId: string) => {
   for (const fileId of allFileIds) {
     const refs = await getTransactionsByFileId(fileId, userId)
     if (refs.length === 0) {
-      await deleteFile(fileId, userId)
+      await deleteFile(fileId, userId, entityId)
     }
   }
 

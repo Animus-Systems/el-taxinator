@@ -4,7 +4,7 @@ import { getCurrentUser } from "@/lib/auth"
 function toCsv(rows: string[][]): string {
   return "\uFEFF" + rows.map(row => row.map(cell => `"${(cell ?? "").replace(/"/g, '""')}"`).join(";")).join("\n")
 }
-import { getActiveEntity } from "@/lib/entities"
+import { getActiveEntity, getActiveEntityId } from "@/lib/entities"
 import { getTransactions } from "@/models/transactions"
 import { getInvoices, getQuotes } from "@/models/invoices"
 import { getTimeEntries } from "@/models/time-entries"
@@ -32,6 +32,7 @@ export async function GET(request: Request) {
 
   const user = await getCurrentUser()
   const entity = await getActiveEntity()
+  const entityId = await getActiveEntityId()
 
   const zip = new JSZip()
 
@@ -117,7 +118,7 @@ export async function GET(request: Request) {
         const file = fileById.get(fid)
         if (!file) continue
         try {
-          const fullPath = fullPathForFile(user as any, file as any)
+          const fullPath = fullPathForFile(entityId, file as any)
           if (await fileExists(fullPath)) {
             const buffer = await fs.readFile(fullPath)
             const txDate = tx.issuedAt ? formatDate(new Date(tx.issuedAt), "yyyy-MM-dd") : "unknown"

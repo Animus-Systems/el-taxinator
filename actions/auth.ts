@@ -2,6 +2,7 @@
 
 import {
   addEntity,
+  clearActiveEntityFile,
   getEntities,
   getEntityById,
   getPoolForEntity,
@@ -15,11 +16,11 @@ import { getSelfHostedUser, getOrCreateSelfHostedUser } from "@/models/users"
 import { createUserDefaults, isDatabaseEmpty } from "@/models/defaults-server"
 import { codeFromName } from "@/lib/utils"
 import { cookies } from "next/headers"
-import { redirect } from "next/navigation"
 
 /**
  * Connect to an existing entity. Tests the DB connection, sets the cookie,
- * ensures the self-hosted user and defaults exist, then redirects to dashboard.
+ * ensures the self-hosted user and defaults exist, then returns success so
+ * the client can navigate to the dashboard.
  */
 export async function connectAction(entityId: string) {
   const entity = getEntityById(entityId)
@@ -61,12 +62,21 @@ export async function connectAction(entityId: string) {
 }
 
 /**
- * Disconnect from the current entity. Clears the cookie.
+ * Disconnect from the current entity. Clears the cookie and active-entity
+ * file so the client can navigate back to the entity picker cleanly.
  */
 export async function disconnectAction() {
-  const cookieStore = await cookies()
-  cookieStore.delete(ENTITY_COOKIE)
-  redirect("/")
+  try {
+    const cookieStore = await cookies()
+    cookieStore.delete(ENTITY_COOKIE)
+    clearActiveEntityFile()
+    return { success: true as const }
+  } catch (error) {
+    return {
+      success: false as const,
+      error: error instanceof Error ? error.message : "Failed to disconnect",
+    }
+  }
 }
 
 /**
@@ -84,41 +94,33 @@ export async function addAndConnectAction(data: {
 }) {
   if (!data.name) return { success: false, error: "Company name is required" }
 
-  // If a connection string was provided (advanced path), validate it now.
+  // External DB path
   if (data.connectionString) {
     const test = await testDatabaseConnection(data.connectionString)
     if (!test.ok) {
       return { success: false, error: `Cannot connect to database: ${test.error}` }
     }
+
+    const id = codeFromName(data.name)
+    if (!id) return { success: false, error: "Invalid company name" }
+
+    if (getEntities().some((e) => e.id === id)) {
+      return { success: false, error: `A company with this name already exists` }
+    }
+
+    try {
+      addEntity({ id, name: data.name, type: data.type, db: data.connectionString })
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : "Failed to save company" }
+    }
+
+    const connectResult = await connectAction(id)
+    if (!connectResult.success) return connectResult
+    return { success: true, entityId: id }
   }
 
-  // Generate ID and save
-  const id = codeFromName(data.name)
-  if (!id) return { success: false, error: "Invalid company name" }
-
-  // Check for duplicate
-  const existing = getEntities()
-  if (existing.some((e) => e.id === id)) {
-    return { success: false, error: `A company with this name already exists` }
-  }
-
-  try {
-    addEntity({
-      id,
-      name: data.name,
-      type: data.type,
-      db: data.connectionString,
-      dataDir: data.dataDir,
-    })
-  } catch (error) {
-    return { success: false, error: error instanceof Error ? error.message : "Failed to save company" }
-  }
-
-  // Connect to it (this will boot the embedded cluster + create the per-entity DB if needed)
-  const connectResult = await connectAction(id)
-  if (!connectResult.success) {
-    return connectResult
-  }
-
-  return { success: true, entityId: id }
+  // Local embedded path — delegate to createLocalEntityAction which
+  // handles initNewCluster, uploads dir, and per-company dataDir.
+  const { createLocalEntityAction } = await import("@/actions/entities")
+  return createLocalEntityAction({ name: data.name, type: data.type, dataDir: data.dataDir })
 }

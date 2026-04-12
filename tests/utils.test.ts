@@ -5,6 +5,7 @@ import {
   formatBytes,
   formatNumber,
   codeFromName,
+  folderNameFromName,
   encodeFilename,
   generateUUID,
   formatPeriodLabel,
@@ -143,9 +144,9 @@ describe("codeFromName", () => {
     expect(result.length).toBeLessThanOrEqual(10)
   })
 
-  it("defaults to maxLength of 16", () => {
+  it("defaults to maxLength of 32", () => {
     const result = codeFromName("A Really Really Really Long Name That Exceeds Limit")
-    expect(result.length).toBeLessThanOrEqual(16)
+    expect(result.length).toBeLessThanOrEqual(32)
   })
 
   it("handles empty string", () => {
@@ -155,6 +156,17 @@ describe("codeFromName", () => {
   it("strips accented characters", () => {
     const result = codeFromName("Cafe Expres")
     expect(result).toBe("cafe_expres")
+  })
+})
+
+describe("folderNameFromName", () => {
+  it("converts name to lowercase slug", () => {
+    expect(folderNameFromName("My Project")).toBe("my-project")
+  })
+
+  it("defaults to maxLength of 32", () => {
+    const result = folderNameFromName("A Really Really Really Long Name That Exceeds Limit")
+    expect(result.length).toBeLessThanOrEqual(32)
   })
 })
 

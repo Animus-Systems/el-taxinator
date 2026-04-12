@@ -41,7 +41,12 @@ export function EntitySwitcher({
   const handleSwitch = (entityId: string) => {
     if (entityId === activeId) return
     startTransition(async () => {
-      await switchEntityAction(entityId)
+      const result = await switchEntityAction(entityId)
+      if (!result.success) {
+        return
+      }
+
+      router.push("/dashboard")
       router.refresh()
     })
   }

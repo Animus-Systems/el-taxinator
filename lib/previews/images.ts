@@ -1,21 +1,20 @@
 "use server"
 
 import { fileExists, getUserPreviewsDirectory, safePathJoin } from "@/lib/files"
-import type { User } from "@/lib/db-types"
 import fs from "fs/promises"
 import path from "path"
 import sharp from "sharp"
 import config from "../config"
 
 export async function resizeImage(
-  user: User,
+  entityId: string,
   origFilePath: string,
   maxWidth: number = config.upload.images.maxWidth,
   maxHeight: number = config.upload.images.maxHeight,
   quality: number = config.upload.images.quality
 ): Promise<{ contentType: string; resizedPath: string }> {
   try {
-    const userPreviewsDirectory = getUserPreviewsDirectory(user)
+    const userPreviewsDirectory = getUserPreviewsDirectory(entityId)
     await fs.mkdir(userPreviewsDirectory, { recursive: true })
 
     const basename = path.basename(origFilePath, path.extname(origFilePath))

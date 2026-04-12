@@ -1,10 +1,11 @@
 "use client"
 
 import { createLocalEntityAction, removeEntityAction } from "@/actions/entities"
+import { disconnectAction } from "@/actions/auth"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import type { Entity, EntityType } from "@/lib/entities"
-import { Building2, Loader2, Plus, Trash2, User } from "lucide-react"
+import { Building2, Loader2, LogOut, Plus, Trash2, User } from "lucide-react"
 import { useRouter } from "@/lib/navigation"
 import { useState, useTransition } from "react"
 import { useTranslations } from "next-intl"
@@ -22,8 +23,24 @@ export function EntityManager({ entities: initialEntities }: Props) {
   const handleRemove = (id: string, name: string) => {
     if (!confirm(t("removeEntityConfirm", { name }))) return
     startTransition(async () => {
-      const result = await removeEntityAction(id)
-      if (!result.success) alert(result.error)
+      try {
+        const result = await removeEntityAction(id)
+        if (!result.success) { alert(result.error); return }
+      } catch {
+        // Server restarted
+      }
+      setTimeout(() => window.location.reload(), 3000)
+    })
+  }
+
+  const handleDisconnect = () => {
+    startTransition(async () => {
+      const result = await disconnectAction()
+      if (!result.success) {
+        alert(result.error)
+        return
+      }
+      router.push("/")
       router.refresh()
     })
   }
@@ -46,15 +63,27 @@ export function EntityManager({ entities: initialEntities }: Props) {
                 </p>
               </div>
             </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => handleRemove(entity.id, entity.name)}
-              disabled={isPending || initialEntities.length <= 1}
-              className="text-destructive hover:text-destructive"
-            >
-              <Trash2 className="h-4 w-4" />
-            </Button>
+            <div className="flex items-center gap-1">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleDisconnect}
+                disabled={isPending}
+                title={t("disconnect")}
+              >
+                <LogOut className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => handleRemove(entity.id, entity.name)}
+                disabled={isPending || initialEntities.length <= 1}
+                className="text-destructive hover:text-destructive"
+                title={t("delete")}
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </div>
           </CardContent>
         </Card>
       ))}
@@ -90,13 +119,17 @@ function AddEntityForm({ onClose, onSuccess }: { onClose: () => void; onSuccess:
     }
     setSubmitting(true)
     setError("")
-    const result = await createLocalEntityAction({ name, type })
-    if (result.success) {
-      onSuccess()
-    } else {
-      setError(result.error ?? t("failedToAdd"))
-      setSubmitting(false)
+    try {
+      const result = await createLocalEntityAction({ name, type })
+      if (result && !result.success) {
+        setError(result.error ?? t("failedToAdd"))
+        setSubmitting(false)
+        return
+      }
+    } catch {
+      // Server restarted
     }
+    setTimeout(() => window.location.reload(), 3000)
   }
 
   return (

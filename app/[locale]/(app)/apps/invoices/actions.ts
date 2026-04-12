@@ -11,6 +11,7 @@ import { getAppData, setAppData } from "@/models/apps"
 import { createFile } from "@/models/files"
 import { createTransaction, updateTransactionFiles } from "@/models/transactions"
 import type { Transaction, User } from "@/lib/db-types"
+import { getActiveEntityId } from "@/lib/entities"
 import { renderToBuffer } from "@react-pdf/renderer"
 import { randomUUID } from "crypto"
 import { mkdir, writeFile } from "fs/promises"
@@ -90,7 +91,8 @@ export async function saveInvoiceAsTransactionAction(
     const fileUuid = randomUUID()
     const fileName = `invoice-${formData.invoiceNumber}.pdf`
     const relativeFilePath = getTransactionFileUploadPath(fileUuid, fileName, transaction)
-    const userUploadsDirectory = getUserUploadsDirectory(user)
+    const entityId = await getActiveEntityId()
+    const userUploadsDirectory = getUserUploadsDirectory(entityId)
     const fullFilePath = safePathJoin(userUploadsDirectory, relativeFilePath)
 
     await mkdir(path.dirname(fullFilePath), { recursive: true })

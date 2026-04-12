@@ -4,6 +4,8 @@ import { twMerge } from "tailwind-merge"
 import { violet, tomato, red, crimson, pink, plum, purple, indigo, blue, sky, cyan, teal, mint, grass, lime, yellow, amber, orange, brown } from "@radix-ui/colors"
 
 const LOCALE = "en-US"
+const ENTITY_CODE_MAX_LENGTH = 32
+const ENTITY_FOLDER_MAX_LENGTH = 32
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -42,7 +44,7 @@ export function formatNumber(number: number) {
   }).format(number)
 }
 
-export function codeFromName(name: string, maxLength: number = 16) {
+export function codeFromName(name: string, maxLength: number = ENTITY_CODE_MAX_LENGTH) {
   const code = slugify(name, {
     replacement: "_",
     lower: true,
@@ -50,6 +52,16 @@ export function codeFromName(name: string, maxLength: number = 16) {
     trim: true,
   })
   return code.slice(0, maxLength)
+}
+
+export function folderNameFromName(name: string, maxLength: number = ENTITY_FOLDER_MAX_LENGTH) {
+  const folderName = slugify(name, {
+    replacement: "-",
+    lower: true,
+    strict: true,
+    trim: true,
+  })
+  return folderName.slice(0, maxLength)
 }
 
 export function randomHexColor() {

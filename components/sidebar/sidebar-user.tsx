@@ -15,11 +15,23 @@ import { UserProfile } from "@/lib/auth"
 import { disconnectAction } from "@/actions/auth"
 import { formatBytes } from "@/lib/utils"
 import { Building2, HardDrive, LogOut, MoreVertical, Settings, User } from "lucide-react"
-import { Link } from "@/lib/navigation"
+import { Link, useRouter } from "@/lib/navigation"
 import { useTranslations } from "next-intl"
+import { useTransition } from "react"
 
 export default function SidebarUser({ profile }: { profile: UserProfile }) {
   const t = useTranslations("sidebar")
+  const router = useRouter()
+  const [isDisconnecting, startDisconnectTransition] = useTransition()
+
+  const handleDisconnect = () => {
+    startDisconnectTransition(async () => {
+      const result = await disconnectAction()
+      if (!result.success) return
+      router.push("/")
+      router.refresh()
+    })
+  }
 
   return (
     <DropdownMenu>
@@ -76,13 +88,16 @@ export default function SidebarUser({ profile }: { profile: UserProfile }) {
           </DropdownMenuItem>
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
-        <DropdownMenuItem asChild>
-          <form suppressHydrationWarning action={disconnectAction}>
-            <button type="submit" className="flex items-center gap-2 text-red-600 cursor-pointer w-full text-left">
-              <LogOut className="h-4 w-4" />
-              {t("disconnect")}
-            </button>
-          </form>
+        <DropdownMenuItem
+          onSelect={(event) => {
+            event.preventDefault()
+            handleDisconnect()
+          }}
+          disabled={isDisconnecting}
+          className="text-red-600"
+        >
+          <LogOut className="h-4 w-4" />
+          {t("disconnect")}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
