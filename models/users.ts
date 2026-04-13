@@ -11,17 +11,13 @@ export const SELF_HOSTED_USER = {
   membershipPlan: "unlimited",
 }
 
-export const getSelfHostedUser = cache(async () => {
-  if (!process.env.DATABASE_URL) {
-    return null // fix for CI, do not remove
-  }
-
+export async function getSelfHostedUser() {
   return await queryOne<User>(
     sql`SELECT * FROM users WHERE email = ${SELF_HOSTED_USER.email}`
   )
-})
+}
 
-export const getOrCreateSelfHostedUser = cache(async (): Promise<User> => {
+export async function getOrCreateSelfHostedUser(): Promise<User> {
   const id = randomUUID()
   const now = new Date().toISOString()
   const user = await queryOne<User>(
@@ -31,8 +27,11 @@ export const getOrCreateSelfHostedUser = cache(async (): Promise<User> => {
         DO UPDATE SET name = ${SELF_HOSTED_USER.name}, membership_plan = ${SELF_HOSTED_USER.membershipPlan}, updated_at = ${now}
         RETURNING *`
   )
+  if (user && await isDatabaseEmpty(user.id)) {
+    await createUserDefaults(user.id)
+  }
   return user!
-})
+}
 
 export async function getOrCreateCloudUser(email: string, data: Record<string, unknown>): Promise<User> {
   if (!data.id) data.id = randomUUID()

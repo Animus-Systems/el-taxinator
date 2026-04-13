@@ -1,4 +1,3 @@
-"use client"
 
 import { createTimeEntryAction, deleteTimeEntryAction, updateTimeEntryAction } from "@/actions/time"
 import { Button } from "@/components/ui/button"
@@ -76,7 +75,7 @@ export function TimeEntryForm({ entry, projects, clients, defaultStartedAt, defa
   }
 
   return (
-    <form suppressHydrationWarning onSubmit={handleSubmit} className="space-y-5">
+    <form onSubmit={handleSubmit} className="space-y-5">
       {entry && <input type="hidden" name="id" value={entry.id} />}
 
       <div className="space-y-1">

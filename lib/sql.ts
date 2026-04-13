@@ -287,6 +287,8 @@ export function mapCategoryFromRow(row: Record<string, unknown>, prefix = "cat_"
     name: row[`${prefix}name`] as string,
     color: row[`${prefix}color`] as string,
     llmPrompt: (row[`${prefix}llm_prompt`] as string) ?? null,
+    taxFormRef: (row[`${prefix}tax_form_ref`] as string) ?? null,
+    isDefault: Boolean(row[`${prefix}is_default`]),
     createdAt: row[`${prefix}created_at`] ? new Date(row[`${prefix}created_at`] as string) : new Date(),
   }
 }

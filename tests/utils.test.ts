@@ -14,8 +14,8 @@ import {
   sanitizeError,
   sanitizeValidationError,
   createSanitizedErrorResponse,
-  createRateLimitHeaders,
 } from "@/lib/error-sanitizer"
+import { createRateLimitHeaders } from "@/lib/rate-limit"
 import {
   safePathJoin,
   unsortedFilePath,

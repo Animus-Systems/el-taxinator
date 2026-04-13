@@ -1,4 +1,3 @@
-"use client"
 
 import { deleteTimeEntryAction } from "@/actions/time"
 import { Badge } from "@/components/ui/badge"

@@ -1,4 +1,3 @@
-"use client"
 
 import { createQuoteAction } from "@/actions/quotes"
 import { Button } from "@/components/ui/button"
@@ -48,7 +47,7 @@ export function QuoteForm({ clients, products }: Props) {
   }
 
   return (
-    <form suppressHydrationWarning ref={formRef} onSubmit={handleSubmit} className="space-y-6">
+    <form ref={formRef} onSubmit={handleSubmit} className="space-y-6">
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-1">
           <Label htmlFor="number">{t("quoteNumber")}</Label>

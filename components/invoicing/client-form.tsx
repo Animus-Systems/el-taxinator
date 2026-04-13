@@ -1,4 +1,3 @@
-"use client"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -15,7 +14,7 @@ type Props = {
 export function ClientForm({ client, onSubmit, isPending }: Props) {
   const t = useTranslations("clients")
   return (
-    <form suppressHydrationWarning action={onSubmit} className="space-y-4">
+    <form action={onSubmit} className="space-y-4">
       {client && <input type="hidden" name="clientId" value={client.id} />}
       <div className="space-y-1">
         <Label htmlFor="name">{t("name")} *</Label>

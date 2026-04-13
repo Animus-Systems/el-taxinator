@@ -30,6 +30,7 @@ export type TransactionData = {
   files?: string[] | undefined
   extra?: Record<string, unknown>
   categoryCode?: string | null
+  accountId?: string | null
   projectCode?: string | null
   issuedAt?: Date | string | null
   text?: string | null
@@ -42,6 +43,7 @@ export type TransactionFilters = {
   dateTo?: string
   ordering?: string
   categoryCode?: string
+  accountId?: string
   projectCode?: string
   type?: string
   page?: number
@@ -122,6 +124,12 @@ export function buildTransactionWhere(
       values.push(filters.type)
       idx++
     }
+
+    if (filters.accountId) {
+      conditions.push(`${col("account_id")} = $${idx}`)
+      values.push(filters.accountId)
+      idx++
+    }
   }
 
   if (extraConditions) {
@@ -137,7 +145,7 @@ export function buildTransactionWhere(
 
 const SORTABLE_COLUMNS = new Set([
   "name", "merchant", "total", "converted_total", "issued_at", "created_at",
-  "updated_at", "currency_code", "type", "category_code", "project_code",
+  "updated_at", "currency_code", "type", "category_code", "project_code", "account_id",
 ])
 
 function buildOrderBy(filters?: TransactionFilters): string {
@@ -154,12 +162,20 @@ function buildOrderBy(filters?: TransactionFilters): string {
 }
 
 /**
- * Maps a flat JOINed row into a Transaction with nested category/project.
+ * Maps a flat JOINed row into a Transaction with nested category/project/account.
  */
 function mapTransactionRow(row: Record<string, unknown>): TransactionRow {
   const tx = mapRow<TransactionRow>(row)
   tx.category = mapCategoryFromRow(row)
   tx.project = mapProjectFromRow(row)
+  // Map account fields from aliased columns
+  if (row.account_name !== null && row.account_name !== undefined) {
+    ;(tx as Record<string, unknown>).accountName = row.account_name
+    ;(tx as Record<string, unknown>).accountBankName = row.account_bank_name ?? null
+  } else {
+    ;(tx as Record<string, unknown>).accountName = null
+    ;(tx as Record<string, unknown>).accountBankName = null
+  }
   return tx
 }
 
@@ -178,10 +194,12 @@ const SELECT_WITH_JOINS = `
     p.name      AS proj_name,
     p.color     AS proj_color,
     p.llm_prompt AS proj_llm_prompt,
-    p.created_at AS proj_created_at
+    p.created_at AS proj_created_at,
+    a.name AS account_name, a.bank_name AS account_bank_name
   FROM transactions t
   LEFT JOIN categories c ON c.code = t.category_code AND c.user_id = t.user_id
   LEFT JOIN projects   p ON p.code = t.project_code  AND p.user_id = t.user_id
+  LEFT JOIN accounts   a ON a.id = t.account_id AND a.user_id = t.user_id
 `
 
 export const getTransactions = cache(

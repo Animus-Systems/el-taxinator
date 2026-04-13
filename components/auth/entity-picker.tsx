@@ -1,4 +1,3 @@
-"use client"
 
 import { connectAction, addAndConnectAction } from "@/actions/auth"
 import { removeEntityAction, disconnectEntityAction, listDirectoriesAction } from "@/actions/entities"
@@ -109,9 +108,12 @@ export function EntityPicker({ entities }: Props) {
     }
   }
 
+  const [schemaMessage, setSchemaMessage] = useState("")
+
   const handleConnect = async (entityId: string) => {
     setConnecting(entityId)
     setError("")
+    setSchemaMessage("")
     const result = await connectAction(entityId)
     if (!result.success) {
       setError(result.error ?? "Connection failed")
@@ -119,8 +121,18 @@ export function EntityPicker({ entities }: Props) {
       return
     }
 
-    router.push("/dashboard")
-    router.refresh()
+    const schema = (result as Record<string, unknown>).schema as { status: string; migrationsRan?: number; descriptions?: string[] } | undefined
+    if (schema?.status === "migrated") {
+      setSchemaMessage(`Database updated (${schema.migrationsRan} migration${(schema.migrationsRan ?? 0) > 1 ? "s" : ""}): ${schema.descriptions?.join(", ")}`)
+      // Brief pause so user sees the message before navigating
+      await new Promise(r => setTimeout(r, 2000))
+    } else if (schema?.status === "fresh") {
+      setSchemaMessage("New database initialized")
+      await new Promise(r => setTimeout(r, 1000))
+    }
+
+    // Hard navigate — server state changed (new DB connection), SPA cache is stale
+    window.location.href = "/dashboard"
   }
 
   const [confirmAction, setConfirmAction] = useState<{ id: string; action: "disconnect" | "delete" } | null>(null)
@@ -323,6 +335,10 @@ export function EntityPicker({ entities }: Props) {
 
         {error && (
           <p className="text-sm text-red-600 text-center">{error}</p>
+        )}
+
+        {schemaMessage && (
+          <p className="text-sm text-blue-600 text-center bg-blue-50 rounded-lg px-3 py-2">{schemaMessage}</p>
         )}
 
         {/* Action buttons */}

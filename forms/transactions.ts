@@ -32,6 +32,7 @@ export const transactionFormSchema = z
         return Math.round(num * 100) // convert to cents
       }),
     convertedCurrencyCode: z.string().max(5).optional(),
+    accountId: z.string().nullable().optional(),
     categoryCode: z.string().optional(),
     projectCode: z.string().optional(),
     issuedAt: z

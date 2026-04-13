@@ -1,4 +1,3 @@
-"use client"
 
 import { getLocalizedValue } from "@/lib/i18n-db"
 import { useLocale } from "next-intl"

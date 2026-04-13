@@ -1,5 +1,3 @@
-"use server"
-
 import { fileExists, getUserPreviewsDirectory, safePathJoin } from "@/lib/files"
 import fs from "fs/promises"
 import path from "path"

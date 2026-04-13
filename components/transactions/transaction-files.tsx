@@ -1,4 +1,3 @@
-"use client"
 
 import { deleteTransactionFileAction, uploadTransactionFilesAction } from "@/actions/transactions"
 import { FilePreview } from "@/components/files/preview"

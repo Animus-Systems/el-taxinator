@@ -1,4 +1,3 @@
-"use client"
 
 import { saveSettingsAction } from "@/actions/settings"
 import { FormError } from "@/components/forms/error"
@@ -24,7 +23,7 @@ export default function GlobalSettingsForm({
   const t = useTranslations("settings")
 
   return (
-    <form suppressHydrationWarning action={saveAction} className="space-y-4">
+    <form action={saveAction} className="space-y-4">
       <FormSelectCurrency
         title={t("defaultCurrency")}
         name="default_currency"

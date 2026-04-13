@@ -1,4 +1,3 @@
-"use client"
 
 import { DateRangePicker } from "@/components/forms/date-range-picker"
 import { useTransactionFilters } from "@/hooks/use-transaction-filters"

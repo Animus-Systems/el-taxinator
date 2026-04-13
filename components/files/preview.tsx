@@ -1,4 +1,3 @@
-"use client"
 
 import { formatBytes } from "@/lib/utils"
 import type { File } from "@/lib/db-types"

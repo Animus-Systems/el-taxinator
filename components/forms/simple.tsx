@@ -1,4 +1,3 @@
-"use client"
 import Image from "next/image"
 
 import { Badge } from "@/components/ui/badge"
@@ -274,7 +273,6 @@ export const FormAvatar = ({
         </div>
         <div className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg">
           <input
-            suppressHydrationWarning
             type="file"
             accept="image/*"
             className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"

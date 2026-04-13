@@ -1,4 +1,3 @@
-"use client"
 
 import { deleteClientAction } from "@/actions/clients"
 import { Button } from "@/components/ui/button"

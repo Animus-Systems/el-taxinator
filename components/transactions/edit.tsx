@@ -1,4 +1,3 @@
-"use client"
 
 import { deleteTransactionAction, saveTransactionAction } from "@/actions/transactions"
 import { ItemsDetectTool } from "@/components/agents/items-detect"
@@ -90,7 +89,7 @@ export default function TransactionEditForm({
   }, [saveState, router])
 
   return (
-    <form suppressHydrationWarning action={saveAction} className="space-y-4">
+    <form action={saveAction} className="space-y-4">
       <input type="hidden" name="transactionId" value={transaction.id} />
 
       <FormInput

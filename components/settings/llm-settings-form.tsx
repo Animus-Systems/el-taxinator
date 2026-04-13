@@ -1,4 +1,3 @@
-"use client"
 
 import { fieldsToJsonSchema } from "@/ai/schema"
 import { saveSettingsAction } from "@/actions/settings"
@@ -7,7 +6,8 @@ import { FormTextarea } from "@/components/forms/simple"
 import { Button } from "@/components/ui/button"
 import { Card, CardTitle } from "@/components/ui/card"
 import type { Field } from "@/lib/db-types"
-import { CircleCheckBig, Edit, GripVertical, Star } from "lucide-react"
+import { testProviderAction } from "@/actions/settings"
+import { CircleCheckBig, Edit, GripVertical, Loader2, Star, Zap } from "lucide-react"
 import { Link } from "@/lib/navigation"
 import { useState, useActionState } from "react"
 import {
@@ -81,7 +81,7 @@ export default function LLMSettingsForm({
 
   return (
     <>
-      <form suppressHydrationWarning action={saveAction} className="space-y-6" data-form-type="other" autoComplete="off">
+      <form action={saveAction} className="space-y-6" data-form-type="other" autoComplete="off">
         {/* Hidden fields */}
         <input type="hidden" name="llm_providers" value={providerOrder.join(",")} />
         <input type="hidden" name="llm_primary_provider" value={primaryProvider} />
@@ -189,7 +189,23 @@ function SortableProviderCard({ id, providerKey, isPrimary, isBackup, onSetPrima
   const t = useTranslations("settings")
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id })
   const provider = PROVIDERS.find(p => p.key === providerKey)
+  const [testing, setTesting] = useState(false)
+  const [testResult, setTestResult] = useState<{ success: boolean; error?: string; responseTime?: number } | null>(null)
   if (!provider) return null
+
+  const handleTest = async () => {
+    setTesting(true)
+    setTestResult(null)
+    const result = await testProviderAction({
+      provider: providerKey,
+      apiKey: value.apiKey,
+      model: value.model,
+      thinking: value.thinking || undefined,
+      baseUrl: value.baseUrl || undefined,
+    })
+    setTestResult(result)
+    setTesting(false)
+  }
 
   return (
     <div
@@ -328,7 +344,35 @@ function SortableProviderCard({ id, providerKey, isPrimary, isBackup, onSetPrima
             </select>
           </div>
         )}
+
+        {/* Test button */}
+        <div className="flex items-end">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={handleTest}
+            disabled={testing || (!provider.isSubscription && !value.apiKey) || !value.model}
+            className="h-[34px]"
+          >
+            {testing ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <Zap className="w-3.5 h-3.5" />
+            )}
+            {t("test")}
+          </Button>
+        </div>
       </div>
+
+      {/* Test result */}
+      {testResult && (
+        <div className={`mt-2 text-xs px-2 py-1.5 rounded ${testResult.success ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"}`}>
+          {testResult.success
+            ? `${t("testSuccess")} (${testResult.responseTime}ms)`
+            : `${t("testFailed")}: ${testResult.error}`}
+        </div>
+      )}
     </div>
   )
 }

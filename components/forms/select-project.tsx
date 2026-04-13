@@ -1,4 +1,3 @@
-"use client"
 
 import type { Project } from "@/lib/db-types"
 import { getLocalizedValue } from "@/lib/i18n-db"

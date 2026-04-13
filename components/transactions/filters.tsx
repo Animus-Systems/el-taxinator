@@ -1,4 +1,3 @@
-"use client"
 
 import { DateRangePicker } from "@/components/forms/date-range-picker"
 import { ColumnSelector } from "@/components/transactions/fields-selector"
@@ -7,7 +6,7 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { isFiltered, useTransactionFilters } from "@/hooks/use-transaction-filters"
 import type { TransactionFilters } from "@/models/transactions"
-import type { Category, Field, Project } from "@/lib/db-types"
+import type { BankAccount, Category, Field, Project } from "@/lib/db-types"
 import { format } from "date-fns"
 import { X } from "lucide-react"
 import { useTranslations, useLocale } from "next-intl"
@@ -17,10 +16,12 @@ export function TransactionSearchAndFilters({
   categories,
   projects,
   fields,
+  accounts = [],
 }: {
   categories: Category[]
   projects: Project[]
   fields: Field[]
+  accounts?: BankAccount[]
 }) {
   const t = useTranslations("transactions")
   const locale = useLocale()
@@ -65,6 +66,22 @@ export function TransactionSearchAndFilters({
             ))}
           </SelectContent>
         </Select>
+
+        {accounts.length > 0 && (
+          <Select value={filters.accountId} onValueChange={(value) => handleFilterChange("accountId", value)}>
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder={t("allAccounts")} />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="-">{t("allAccounts")}</SelectItem>
+              {accounts.map((account) => (
+                <SelectItem key={account.id} value={account.id}>
+                  {account.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
 
         {projects.length > 1 && (
           <Select value={filters.projectCode} onValueChange={(value) => handleFilterChange("projectCode", value)}>

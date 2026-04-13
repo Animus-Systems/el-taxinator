@@ -1,4 +1,3 @@
-"use client"
 
 import { updateFieldVisibilityAction } from "@/actions/transactions"
 import { Button } from "@/components/ui/button"

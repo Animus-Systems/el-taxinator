@@ -1,4 +1,3 @@
-"use client"
 
 import { updateDataLocationAction } from "@/actions/config"
 import { listDirectoriesAction } from "@/actions/entities"

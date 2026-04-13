@@ -1,4 +1,3 @@
-"use client"
 
 import { formatCurrency, formatPeriodLabel } from "@/lib/utils"
 import type { DetailedTimeSeriesData } from "@/models/stats"

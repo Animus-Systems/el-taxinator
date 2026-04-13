@@ -1,4 +1,3 @@
-"use client"
 
 import { DateRangePicker } from "@/components/forms/date-range-picker"
 import { FormSelectCategory } from "@/components/forms/select-category"
@@ -11,7 +10,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog"
 import { Separator } from "@/components/ui/separator"
 import { useDownload } from "@/hooks/use-download"
@@ -30,13 +28,13 @@ export function ExportTransactionsDialog({
   categories,
   projects,
   total,
-  children,
+  onClose,
 }: {
   fields: Field[]
   categories: Category[]
   projects: Project[]
   total: number
-  children: React.ReactNode
+  onClose: () => void
 }) {
   const t = useTranslations("export")
   const locale = useLocale()
@@ -79,10 +77,7 @@ export function ExportTransactionsDialog({
   }
 
   return (
-    <Dialog>
-      <DialogTrigger asChild>
-        {children}
-      </DialogTrigger>
+    <Dialog defaultOpen onOpenChange={(open) => { if (!open) onClose() }}>
       <DialogContent className="max-w-xl">
         <DialogHeader>
           <DialogTitle className="text-2xl font-bold">{t("exportNTransactions", { count: total })}</DialogTitle>

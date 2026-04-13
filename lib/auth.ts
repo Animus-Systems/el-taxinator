@@ -1,8 +1,6 @@
 import { getSelfHostedUser, SELF_HOSTED_USER } from "@/models/users"
-import { hasAnyEntities, getEntityById } from "@/lib/entities"
+import { hasAnyEntities, getEntityById, getActiveEntityIdFromFile } from "@/lib/entities"
 import type { User } from "@/lib/db-types"
-import { cookies } from "next/headers"
-import { redirect } from "next/navigation"
 
 export type UserProfile = {
   id: string
@@ -17,11 +15,10 @@ export type UserProfile = {
 
 /**
  * Check if a user is connected to an entity with a working database.
- * Returns true only if: cookie exists, entity is in config, and DB has the schema.
+ * Returns true only if: active entity is in config and DB has the schema.
  */
 export async function isConnected(): Promise<boolean> {
-  const cookieStore = await cookies()
-  const entityId = cookieStore.get("TAXINATOR_ENTITY")?.value
+  const entityId = getActiveEntityIdFromFile()
   if (!entityId) return false
   const entity = getEntityById(entityId)
   if (!entity) return false
@@ -37,16 +34,16 @@ export async function isConnected(): Promise<boolean> {
 
 /**
  * Get the current user from the active entity's database.
- * Redirects to the entity picker (root page) if not connected.
+ * Throws if not connected (callers should redirect as appropriate).
  */
 export async function getCurrentUser(): Promise<User> {
   if (!hasAnyEntities()) {
-    redirect("/")
+    throw new Error("No entities configured")
   }
 
   const connected = await isConnected()
   if (!connected) {
-    redirect("/")
+    throw new Error("Not connected to an entity")
   }
 
   try {
@@ -55,17 +52,15 @@ export async function getCurrentUser(): Promise<User> {
       return user
     }
   } catch {
-    // Database may not have schema yet (fresh DB) — redirect to entity picker
-    // which will run ensureSchema on connect
+    // Database may not have schema yet (fresh DB)
   }
 
-  // No user or no schema — redirect to entity picker
-  redirect("/")
+  throw new Error("No user found")
 }
 
 /**
  * Get session — returns user if connected, null otherwise.
- * Does not redirect.
+ * Does not throw.
  */
 export async function getSession() {
   const connected = await isConnected()

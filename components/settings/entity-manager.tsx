@@ -1,4 +1,3 @@
-"use client"
 
 import { createLocalEntityAction, removeEntityAction } from "@/actions/entities"
 import { disconnectAction } from "@/actions/auth"
@@ -122,7 +121,7 @@ function AddEntityForm({ onClose, onSuccess }: { onClose: () => void; onSuccess:
     try {
       const result = await createLocalEntityAction({ name, type })
       if (result && !result.success) {
-        setError(result.error ?? t("failedToAdd"))
+        setError("error" in result && result.error ? result.error : t("failedToAdd"))
         setSubmitting(false)
         return
       }

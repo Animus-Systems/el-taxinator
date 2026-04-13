@@ -1,4 +1,3 @@
-"use client"
 
 import { useNotification } from "@/lib/context"
 import { analyzeFileAction, deleteUnsortedFileAction, saveFileAsTransactionAction } from "@/actions/unsorted"
@@ -17,10 +16,11 @@ import type { Category, Currency, Field, File, Project } from "@/lib/db-types"
 import type { InvoiceWithRelations } from "@/models/invoices"
 import { findInvoiceMatches } from "@/ai/invoice-matcher"
 import { format } from "date-fns"
-import { ArrowDownToLine, Brain, Loader2, Trash2 } from "lucide-react"
+import { ArrowDownToLine, Brain, FileSpreadsheet, Loader2, Trash2 } from "lucide-react"
 import { startTransition, useActionState, useMemo, useState } from "react"
 import { useTranslations, useLocale } from "next-intl"
 import { getLocalizedValue } from "@/lib/i18n-db"
+import { Link } from "@/lib/navigation"
 
 export default function AnalyzeForm({
   file,
@@ -42,6 +42,9 @@ export default function AnalyzeForm({
   const { showNotification } = useNotification()
   const t = useTranslations("unsorted")
   const locale = useLocale()
+
+  const isCsvFile = file.mimetype === "text/csv" || file.filename.toLowerCase().endsWith(".csv")
+
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [analyzeStep, setAnalyzeStep] = useState<string>("")
   const [analyzeError, setAnalyzeError] = useState<string>("")
@@ -150,6 +153,42 @@ export default function AnalyzeForm({
     }
   }
 
+  if (isCsvFile) {
+    return (
+      <div className="flex flex-col gap-4">
+        <div className="flex items-center gap-2">
+          <Badge variant="secondary" className="text-sm">
+            <FileSpreadsheet className="mr-1 h-3.5 w-3.5" />
+            {t("bankStatement")}
+          </Badge>
+        </div>
+
+        <p className="text-sm text-muted-foreground">{t("bankStatementDesc")}</p>
+
+        <div className="flex justify-between gap-4 pt-2">
+          <Button
+            type="button"
+            onClick={() => startTransition(() => deleteAction(file.id))}
+            variant="destructive"
+            disabled={isDeleting}
+          >
+            <Trash2 className="h-4 w-4" />
+            {isDeleting ? t("deleting") : t("delete")}
+          </Button>
+
+          <Button asChild>
+            <Link href="/settings/import">
+              <FileSpreadsheet className="h-4 w-4" />
+              {t("importAsBankStatement")}
+            </Link>
+          </Button>
+        </div>
+
+        {deleteState?.error && <FormError>{deleteState.error}</FormError>}
+      </div>
+    )
+  }
+
   return (
     <>
       {file.isSplitted ? (
@@ -174,7 +213,7 @@ export default function AnalyzeForm({
 
       <div>{analyzeError && <FormError>{analyzeError}</FormError>}</div>
 
-      <form suppressHydrationWarning className="space-y-4" action={saveAsTransaction}>
+      <form className="space-y-4" action={saveAsTransaction}>
         <input type="hidden" name="fileId" value={file.id} />
         <FormInput
           title={getLocalizedValue(fieldMap.name.name, locale)}

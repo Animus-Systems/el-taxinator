@@ -1,4 +1,3 @@
-"use client"
 
 import { updateProductAction } from "@/actions/products"
 import {

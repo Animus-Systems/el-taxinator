@@ -1,4 +1,3 @@
-"use client"
 
 import { useNotification } from "@/lib/context"
 import { uploadFilesAction } from "@/actions/files"

@@ -1,4 +1,3 @@
-"use client"
 
 import { formatCurrency } from "@/lib/utils"
 import { splitFileIntoItemsAction, splitAndSaveAllAction } from "@/actions/unsorted"

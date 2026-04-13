@@ -1,4 +1,3 @@
-"use client"
 
 import { saveProfileAction } from "@/actions/settings"
 import { FormError } from "@/components/forms/error"
@@ -23,7 +22,7 @@ export default function BusinessSettingsForm({ user }: { user: User }) {
 
   return (
     <div>
-      <form suppressHydrationWarning action={saveAction} className="space-y-4">
+      <form action={saveAction} className="space-y-4">
         <FormInput
           title={t("businessName")}
           name="businessName"

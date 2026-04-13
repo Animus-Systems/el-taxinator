@@ -1,4 +1,3 @@
-"use client"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -15,7 +14,7 @@ type Props = {
 export function ProductForm({ product, onSubmit, isPending }: Props) {
   const t = useTranslations("products")
   return (
-    <form suppressHydrationWarning action={onSubmit} className="space-y-4">
+    <form action={onSubmit} className="space-y-4">
       {product && <input type="hidden" name="productId" value={product.id} />}
       <div className="space-y-1">
         <Label htmlFor="name">{t("name")} *</Label>

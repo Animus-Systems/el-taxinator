@@ -1,4 +1,3 @@
-"use client"
 
 import { parseCSVAction, saveTransactionsAction } from "@/actions/import"
 import { FormError } from "@/components/forms/error"

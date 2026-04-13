@@ -1,4 +1,3 @@
-"use client"
 
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
@@ -152,7 +151,7 @@ export function AccountantInviteManager({ invites }: { invites: InviteWithUrl[] 
       {showForm ? (
         <div className="rounded-lg border p-4">
           <h3 className="font-medium mb-4">{t("newAccountantInvite")}</h3>
-          <form suppressHydrationWarning action={handleCreate} className="space-y-4">
+          <form action={handleCreate} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1">
                 <Label htmlFor="name">{t("name")}</Label>

@@ -1,4 +1,3 @@
-"use client"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -130,7 +129,6 @@ export function BackupSettings({
               <div>
                 <label className="text-xs text-muted-foreground">{t("clientId")}</label>
                 <input
-                  suppressHydrationWarning
                   type="text"
                   value={clientId}
                   onChange={(e) => setClientId(e.target.value)}
@@ -143,7 +141,6 @@ export function BackupSettings({
               <div>
                 <label className="text-xs text-muted-foreground">{t("clientSecret")}</label>
                 <input
-                  suppressHydrationWarning
                   type="password"
                   value={clientSecret}
                   onChange={(e) => setClientSecret(e.target.value)}

@@ -1,4 +1,3 @@
-"use client"
 
 import { bulkDeleteTransactionsAction } from "@/actions/transactions"
 import { Button } from "@/components/ui/button"

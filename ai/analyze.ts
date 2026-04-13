@@ -32,7 +32,7 @@ export async function analyzeTransaction(
       throw new Error(response.error)
     }
 
-    const result = response.output
+    const result = response.output as Record<string, string>
     const tokensUsed = response.tokensUsed || 0
 
     console.log("LLM response:", result)

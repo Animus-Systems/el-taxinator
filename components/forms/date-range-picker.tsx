@@ -1,4 +1,3 @@
-"use client"
 
 import { format, startOfMonth, startOfQuarter, subMonths, subWeeks } from "date-fns"
 import { CalendarIcon } from "lucide-react"

@@ -72,7 +72,7 @@ const CLI_SPECS: Record<string, CLISpec> = {
   },
 }
 
-async function requestCLI(config: LLMConfig, req: LLMRequest): Promise<LLMResponse> {
+async function requestCLI(config: LLMConfig, req: LLMRequest, timeoutMs?: number): Promise<LLMResponse> {
   const spec = CLI_SPECS[config.provider]
   if (!spec) {
     return { output: {}, provider: config.provider, error: `No CLI spec for provider: ${config.provider}` }
@@ -115,10 +115,13 @@ async function requestCLI(config: LLMConfig, req: LLMRequest): Promise<LLMRespon
       args[1] = fullPrompt
     }
 
-    console.info(`Running ${spec.binary} CLI (model: ${config.model || "default"}, thinking: ${config.thinking || "medium"})...`)
+    const hasAttachments = (req.attachments?.length ?? 0) > 0
+    const effectiveTimeout = timeoutMs ?? (hasAttachments ? 300_000 : 120_000)
+
+    console.info(`Running ${spec.binary} CLI (model: ${config.model || "default"}${config.thinking ? `, thinking: ${config.thinking}` : ""}, timeout: ${effectiveTimeout / 1000}s)...`)
 
     const result = execFileSync(spec.binary, args, {
-      timeout: 120_000,
+      timeout: effectiveTimeout,
       encoding: "utf-8",
       env: process.env as NodeJS.ProcessEnv,
       input: spec.useStdin ? fullPrompt : undefined,
@@ -141,10 +144,10 @@ async function requestCLI(config: LLMConfig, req: LLMRequest): Promise<LLMRespon
   }
 }
 
-async function requestLLMUnified(config: LLMConfig, req: LLMRequest): Promise<LLMResponse> {
+async function requestLLMUnified(config: LLMConfig, req: LLMRequest, timeoutMs?: number): Promise<LLMResponse> {
   try {
     if (subscriptionProviders.has(config.provider)) {
-      return await requestCLI(config, req)
+      return await requestCLI(config, req, timeoutMs)
     }
 
     let model: ReturnType<typeof ChatOpenAI.prototype.withStructuredOutput> extends infer T ? T : never
@@ -199,7 +202,7 @@ async function requestLLMUnified(config: LLMConfig, req: LLMRequest): Promise<LL
   }
 }
 
-export async function requestLLM(settings: LLMSettings, req: LLMRequest): Promise<LLMResponse> {
+export async function requestLLM(settings: LLMSettings, req: LLMRequest, timeoutMs?: number): Promise<LLMResponse> {
   for (const config of settings.providers) {
     const isSubscription = subscriptionProviders.has(config.provider)
     if (!config.model) {
@@ -212,7 +215,7 @@ export async function requestLLM(settings: LLMSettings, req: LLMRequest): Promis
     }
     console.info("Use provider:", config.provider, isSubscription ? "(subscription)" : "(API key)")
 
-    const response = await requestLLMUnified(config, req)
+    const response = await requestLLMUnified(config, req, timeoutMs)
     if (!response.error) return response
     console.error(response.error)
   }

@@ -1,5 +1,3 @@
-"use client"
-
 import { Check, X, Trash2 } from "lucide-react"
 import { createContext, ReactNode, useContext, useState } from "react"
 

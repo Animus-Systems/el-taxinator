@@ -1,0 +1,525 @@
+import { requestLLM } from "./providers/llmProvider"
+import { getCategories } from "@/models/categories"
+import { getProjects } from "@/models/projects"
+import { getSettings, getLLMSettings } from "@/models/settings"
+import { getActiveRules } from "@/models/rules"
+import type { Category, Project, I18nText } from "@/lib/db-types"
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
+export type TransactionCandidate = {
+  rowIndex: number
+  name: string | null
+  merchant: string | null
+  description: string | null
+  total: number | null // in cents
+  currencyCode: string | null
+  type: string | null // "expense" | "income"
+  categoryCode: string | null
+  projectCode: string | null
+  issuedAt: string | null // ISO date string
+  confidence: {
+    category: number
+    type: number
+    overall: number
+  }
+  selected: boolean
+  ruleMatched?: boolean
+}
+
+export type SuggestedCategory = {
+  code: string
+  name: { en: string; es: string }
+  taxFormRef: string
+  reason: string
+  affectedRowIndexes: number[]
+}
+
+export type CSVColumnMapping = {
+  bank: string
+  bankConfidence: number
+  columnMapping: Record<string, string>
+  dateFormat: string
+  amountFormat: "negative_expense" | "separate_columns" | "absolute_with_type"
+  skipRows: number[]
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function i18nToString(value: I18nText): string {
+  if (typeof value === "string") return value
+  return value["en"] || Object.values(value)[0] || ""
+}
+
+function formatCategoryList(categories: Category[]): string {
+  return categories
+    .map((c) => `- code: "${c.code}", name: "${i18nToString(c.name)}"`)
+    .join("\n")
+}
+
+function formatProjectList(projects: Project[]): string {
+  return projects
+    .map((p) => `- code: "${p.code}", name: "${i18nToString(p.name)}"`)
+    .join("\n")
+}
+
+function parseAmount(raw: string): number | null {
+  if (!raw || raw.trim() === "") return null
+  // Remove currency symbols, spaces, and thousands separators, but keep minus and decimal
+  const cleaned = raw.replace(/[^0-9.,\-+]/g, "").trim()
+
+  if (cleaned === "" || cleaned === "-" || cleaned === "+") return null
+
+  // Handle European format (1.234,56) vs US format (1,234.56)
+  const hasCommaDecimal = /\d,\d{1,2}$/.test(cleaned)
+  const hasDotDecimal = /\d\.\d{1,2}$/.test(cleaned)
+
+  let normalized: string
+  if (hasCommaDecimal && !hasDotDecimal) {
+    // European: remove dots (thousands), replace comma with dot (decimal)
+    normalized = cleaned.replace(/\./g, "").replace(",", ".")
+  } else {
+    // US or unambiguous: remove commas (thousands)
+    normalized = cleaned.replace(/,/g, "")
+  }
+
+  const value = parseFloat(normalized)
+  if (isNaN(value)) return null
+
+  // Convert to cents
+  return Math.round(value * 100)
+}
+
+// ---------------------------------------------------------------------------
+// 1. detectCSVMapping
+// ---------------------------------------------------------------------------
+
+export async function detectCSVMapping(
+  headers: string[],
+  sampleRows: string[][],
+  userId: string
+): Promise<CSVColumnMapping> {
+  const settings = await getSettings(userId)
+  const llmSettings = getLLMSettings(settings)
+  const [categories, projects] = await Promise.all([
+    getCategories(userId),
+    getProjects(userId),
+  ])
+
+  const sampleData = sampleRows.slice(0, 5)
+
+  const prompt = `You are analyzing a CSV file from a bank or financial institution to map its columns to transaction fields.
+
+CSV Headers: ${JSON.stringify(headers)}
+
+Sample data rows (first ${sampleData.length}):
+${sampleData.map((row, i) => `Row ${i}: ${JSON.stringify(row)}`).join("\n")}
+
+Available categories:
+${categories.length > 0 ? formatCategoryList(categories) : "(none defined)"}
+
+Available projects:
+${projects.length > 0 ? formatProjectList(projects) : "(none defined)"}
+
+Analyze this CSV and determine:
+1. Which bank or institution this CSV likely comes from
+2. How each CSV column maps to our transaction fields: name, merchant, description, total, currencyCode, type, issuedAt
+3. The date format used (e.g. "yyyy-MM-dd", "MM/dd/yyyy", "dd/MM/yyyy")
+4. How amounts are represented:
+   - "negative_expense": negative values are expenses, positive are income
+   - "separate_columns": expenses and income are in separate columns
+   - "absolute_with_type": amounts are always positive with a separate type/direction column
+5. Any rows in the sample that should be skipped (summary rows, totals, etc.)
+
+For columnMapping, map CSV column names to our field names. Only include columns that have a clear mapping. If a column maps to "total" but contains expenses in a separate column, use the format "total:expense" or "total:income" for separate_columns format.`
+
+  const schema = {
+    type: "object",
+    properties: {
+      bank: { type: "string", description: "Detected bank or institution name" },
+      bankConfidence: {
+        type: "number",
+        description: "Confidence in bank detection, 0 to 1",
+      },
+      columnMapping: {
+        type: "object",
+        description:
+          "Maps CSV column names to transaction fields (name, merchant, description, total, currencyCode, type, issuedAt). For separate_columns amount format, use total:expense and total:income as values.",
+        additionalProperties: { type: "string" },
+      },
+      dateFormat: {
+        type: "string",
+        description: "The date format used, e.g. yyyy-MM-dd, MM/dd/yyyy",
+      },
+      amountFormat: {
+        type: "string",
+        enum: ["negative_expense", "separate_columns", "absolute_with_type"],
+        description: "How amounts are represented in the CSV",
+      },
+      skipRows: {
+        type: "array",
+        items: { type: "number" },
+        description:
+          "Indexes of sample rows that should be skipped (summary/total rows)",
+      },
+    },
+    required: [
+      "bank",
+      "bankConfidence",
+      "columnMapping",
+      "dateFormat",
+      "amountFormat",
+      "skipRows",
+    ],
+    additionalProperties: false,
+  }
+
+  const response = await requestLLM(llmSettings, { prompt, schema })
+
+  if (response.error) {
+    // Return a sensible default on failure so the caller can still proceed
+    return {
+      bank: "Unknown",
+      bankConfidence: 0,
+      columnMapping: {},
+      dateFormat: "yyyy-MM-dd",
+      amountFormat: "negative_expense",
+      skipRows: [],
+    }
+  }
+
+  const output = response.output as Record<string, unknown>
+
+  return {
+    bank: (output.bank as string) || "Unknown",
+    bankConfidence:
+      typeof output.bankConfidence === "number" ? output.bankConfidence : 0,
+    columnMapping: (output.columnMapping as Record<string, string>) || {},
+    dateFormat: (output.dateFormat as string) || "yyyy-MM-dd",
+    amountFormat:
+      (output.amountFormat as CSVColumnMapping["amountFormat"]) ||
+      "negative_expense",
+    skipRows: Array.isArray(output.skipRows)
+      ? (output.skipRows as number[])
+      : [],
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 2. applyCSVMapping
+// ---------------------------------------------------------------------------
+
+export function applyCSVMapping(
+  headers: string[],
+  rows: string[][],
+  mapping: CSVColumnMapping,
+  defaultCurrency: string
+): TransactionCandidate[] {
+  const { columnMapping, amountFormat, skipRows } = mapping
+
+  // Build a reverse map: transaction field -> column index
+  const fieldToIndex: Record<string, number> = {}
+  // For separate_columns: track expense and income column indexes
+  let expenseColIndex = -1
+  let incomeColIndex = -1
+
+  for (const [csvCol, field] of Object.entries(columnMapping)) {
+    const colIndex = headers.indexOf(csvCol)
+    if (colIndex === -1) continue
+
+    if (field === "total:expense") {
+      expenseColIndex = colIndex
+    } else if (field === "total:income") {
+      incomeColIndex = colIndex
+    } else {
+      fieldToIndex[field] = colIndex
+    }
+  }
+
+  const skipSet = new Set(skipRows)
+  const candidates: TransactionCandidate[] = []
+
+  for (let i = 0; i < rows.length; i++) {
+    if (skipSet.has(i)) continue
+
+    const row = rows[i]
+    if (!row || row.every((cell) => cell.trim() === "")) continue
+
+    const getValue = (field: string): string | null => {
+      const idx = fieldToIndex[field]
+      if (idx === undefined || idx < 0 || idx >= row.length) return null
+      const val = row[idx]?.trim()
+      return val === "" ? null : val
+    }
+
+    // Parse amount and determine type
+    let total: number | null = null
+    let type: string | null = null
+
+    if (amountFormat === "separate_columns") {
+      const expenseRaw =
+        expenseColIndex >= 0 && expenseColIndex < row.length
+          ? row[expenseColIndex]?.trim()
+          : null
+      const incomeRaw =
+        incomeColIndex >= 0 && incomeColIndex < row.length
+          ? row[incomeColIndex]?.trim()
+          : null
+
+      const expenseAmt = expenseRaw ? parseAmount(expenseRaw) : null
+      const incomeAmt = incomeRaw ? parseAmount(incomeRaw) : null
+
+      if (incomeAmt !== null && incomeAmt !== 0) {
+        total = Math.abs(incomeAmt)
+        type = "income"
+      } else if (expenseAmt !== null) {
+        total = Math.abs(expenseAmt)
+        type = "expense"
+      }
+    } else if (amountFormat === "absolute_with_type") {
+      const rawTotal = getValue("total")
+      total = rawTotal ? parseAmount(rawTotal) : null
+      if (total !== null) total = Math.abs(total)
+      const rawType = getValue("type")
+      if (rawType) {
+        const lower = rawType.toLowerCase()
+        if (
+          lower.includes("income") ||
+          lower.includes("credit") ||
+          lower.includes("deposit")
+        ) {
+          type = "income"
+        } else {
+          type = "expense"
+        }
+      }
+    } else {
+      // negative_expense (default)
+      const rawTotal = getValue("total")
+      const parsed = rawTotal ? parseAmount(rawTotal) : null
+      if (parsed !== null) {
+        if (parsed < 0) {
+          total = Math.abs(parsed)
+          type = "expense"
+        } else {
+          total = parsed
+          type = "income"
+        }
+      }
+    }
+
+    const candidate: TransactionCandidate = {
+      rowIndex: i,
+      name: getValue("name"),
+      merchant: getValue("merchant"),
+      description: getValue("description"),
+      total,
+      currencyCode: getValue("currencyCode") || defaultCurrency,
+      type,
+      categoryCode: null,
+      projectCode: null,
+      issuedAt: getValue("issuedAt"),
+      confidence: {
+        category: 0.5,
+        type: type !== null ? 0.8 : 0.5,
+        overall: 0.5,
+      },
+      selected: true,
+    }
+
+    candidates.push(candidate)
+  }
+
+  return candidates
+}
+
+// ---------------------------------------------------------------------------
+// 3. categorizeTransactions
+// ---------------------------------------------------------------------------
+
+const CATEGORIZE_BATCH_SIZE = 50
+
+/**
+ * Internal categorization logic shared by public functions.
+ * When `feedback` is provided, it is appended to each batch prompt.
+ */
+async function categorizeTransactionsInternal(
+  candidates: TransactionCandidate[],
+  userId: string,
+  feedback?: string,
+): Promise<void> {
+  const settings = await getSettings(userId)
+  const llmSettings = getLLMSettings(settings)
+  const [categories, projects, rules] = await Promise.all([
+    getCategories(userId),
+    getProjects(userId),
+    getActiveRules(userId),
+  ])
+
+  if (categories.length === 0 && projects.length === 0) return
+
+  const categoryCodes = categories.map((c) => c.code)
+  const projectCodes = projects.map((p) => p.code)
+
+  // Build rules context string for the prompt
+  const rulesContext = rules.length > 0
+    ? `\n\nThe user has categorization rules (DO NOT contradict manual rules):\n${rules.map(r => `- If ${r.matchField} ${r.matchType} "${r.matchValue}" → category: ${r.categoryCode || "auto"}, project: ${r.projectCode || "auto"}, type: ${r.type || "auto"} [${r.source}]`).join("\n")}`
+    : ""
+
+  const feedbackContext = feedback
+    ? `\n\nUser feedback (apply these instructions):\n${feedback}`
+    : ""
+
+  // Only send candidates not already matched by a manual rule
+  const uncategorized = candidates.filter((c) => !c.ruleMatched)
+
+  for (let i = 0; i < uncategorized.length; i += CATEGORIZE_BATCH_SIZE) {
+    const batch = uncategorized.slice(i, i + CATEGORIZE_BATCH_SIZE)
+
+    const transactionsForPrompt = batch.map((c, idx) => ({
+      index: idx,
+      name: c.name,
+      merchant: c.merchant,
+      description: c.description,
+      total: c.total !== null ? (c.total / 100).toFixed(2) : null,
+      type: c.type,
+      issuedAt: c.issuedAt,
+    }))
+
+    const prompt = `You are categorizing bank transactions. For each transaction, suggest the best matching category, project, and type.
+
+Available categories:
+${categories.length > 0 ? formatCategoryList(categories) : "(none)"}
+
+Available projects:
+${projects.length > 0 ? formatProjectList(projects) : "(none)"}${rulesContext}
+
+Transactions to categorize:
+${JSON.stringify(transactionsForPrompt, null, 2)}
+
+For each transaction, return:
+- categoryCode: the best matching category code, or null if unsure
+- projectCode: the best matching project code, or null if unsure
+- type: "expense" or "income"
+- confidence: 0 to 1, how confident you are in the categorization${feedbackContext}`
+
+    const schema = {
+      type: "object",
+      properties: {
+        transactions: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              index: { type: "number" },
+              categoryCode: {
+                type: ["string", "null"],
+              },
+              projectCode: {
+                type: ["string", "null"],
+              },
+              type: { type: "string", enum: ["expense", "income"] },
+              confidence: { type: "number" },
+            },
+            required: [
+              "index",
+              "categoryCode",
+              "projectCode",
+              "type",
+              "confidence",
+            ],
+            additionalProperties: false,
+          },
+        },
+      },
+      required: ["transactions"],
+      additionalProperties: false,
+    }
+
+    try {
+      const response = await requestLLM(llmSettings, { prompt, schema })
+
+      if (response.error) {
+        console.error(
+          `Categorization batch ${i / CATEGORIZE_BATCH_SIZE} failed:`,
+          response.error
+        )
+        continue
+      }
+
+      const output = response.output as {
+        transactions?: Array<{
+          index: number
+          categoryCode: string | null
+          projectCode: string | null
+          type: string
+          confidence: number
+        }>
+      }
+
+      if (!Array.isArray(output.transactions)) continue
+
+      for (const result of output.transactions) {
+        if (
+          typeof result.index !== "number" ||
+          result.index < 0 ||
+          result.index >= batch.length
+        )
+          continue
+
+        const candidate = batch[result.index]
+
+        if (
+          result.categoryCode &&
+          categoryCodes.includes(result.categoryCode)
+        ) {
+          candidate.categoryCode = result.categoryCode
+        }
+
+        if (result.projectCode && projectCodes.includes(result.projectCode)) {
+          candidate.projectCode = result.projectCode
+        }
+
+        if (result.type === "expense" || result.type === "income") {
+          candidate.type = result.type
+        }
+
+        const conf =
+          typeof result.confidence === "number"
+            ? Math.max(0, Math.min(1, result.confidence))
+            : 0.5
+
+        candidate.confidence = {
+          category: candidate.categoryCode !== null ? conf : 0,
+          type: conf,
+          overall: conf,
+        }
+      }
+    } catch (err) {
+      console.error(
+        `Categorization batch ${i / CATEGORIZE_BATCH_SIZE} error:`,
+        err
+      )
+      // Silently skip failed batch - user can categorize manually
+    }
+  }
+}
+
+export async function categorizeTransactions(
+  candidates: TransactionCandidate[],
+  userId: string,
+): Promise<void> {
+  return categorizeTransactionsInternal(candidates, userId)
+}
+
+export async function categorizeTransactionsWithFeedback(
+  candidates: TransactionCandidate[],
+  userId: string,
+  feedback: string,
+): Promise<void> {
+  return categorizeTransactionsInternal(candidates, userId, feedback)
+}

@@ -1,4 +1,3 @@
-"use client"
 
 import { createClientAction } from "@/actions/clients"
 import { Button } from "@/components/ui/button"

@@ -1,4 +1,3 @@
-"use client"
 
 import { Badge, type BadgeProps } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"

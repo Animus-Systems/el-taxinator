@@ -1,4 +1,3 @@
-"use client"
 
 import { deleteInvoiceAction, updateInvoiceStatusAction } from "@/actions/invoices"
 import { Badge } from "@/components/ui/badge"

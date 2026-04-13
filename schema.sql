@@ -42,6 +42,8 @@ CREATE TABLE categories (
     name text NOT NULL,
     color text DEFAULT '#000000' NOT NULL,
     llm_prompt text,
+    tax_form_ref text,
+    is_default boolean DEFAULT false,
     created_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
 CREATE UNIQUE INDEX categories_user_id_code_key ON categories (user_id, code);
@@ -118,6 +120,7 @@ CREATE TABLE transactions (
     text text,
     items jsonb DEFAULT '[]' NOT NULL,
     deductible boolean,
+    account_id uuid REFERENCES accounts(id) ON DELETE SET NULL,
     FOREIGN KEY (category_code, user_id) REFERENCES categories(code, user_id) ON UPDATE CASCADE ON DELETE RESTRICT,
     FOREIGN KEY (project_code, user_id) REFERENCES projects(code, user_id) ON UPDATE CASCADE ON DELETE RESTRICT
 );
@@ -128,6 +131,7 @@ CREATE INDEX transactions_project_code_idx ON transactions (project_code);
 CREATE INDEX transactions_merchant_idx ON transactions (merchant);
 CREATE INDEX transactions_name_idx ON transactions (name);
 CREATE INDEX transactions_total_idx ON transactions (total);
+CREATE INDEX transactions_account_id_idx ON transactions (account_id);
 
 -- ─── Invoicing ───────────────────────────────────────────────────────────────
 
@@ -278,6 +282,40 @@ CREATE TABLE accountant_comments (
 CREATE INDEX accountant_comments_invite_id_idx ON accountant_comments (invite_id);
 CREATE INDEX accountant_comments_entity_type_entity_id_idx ON accountant_comments (entity_type, entity_id);
 
+-- ─── Accounts ───────────────────────────────────────────────────────────────
+
+CREATE TABLE accounts (
+    id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
+    user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name text NOT NULL,
+    bank_name text,
+    currency_code text NOT NULL DEFAULT 'EUR',
+    account_number text,
+    notes text,
+    is_active boolean DEFAULT true NOT NULL,
+    created_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+CREATE UNIQUE INDEX accounts_user_id_name_key ON accounts (user_id, name);
+CREATE INDEX accounts_user_id_idx ON accounts (user_id);
+
+-- ─── Import Sessions ────────────────────────────────────────────────────────
+
+CREATE TABLE import_sessions (
+    id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
+    user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    account_id uuid REFERENCES accounts(id) ON DELETE SET NULL,
+    file_name text NOT NULL,
+    file_type text NOT NULL,
+    row_count integer NOT NULL DEFAULT 0,
+    data jsonb NOT NULL DEFAULT '[]',
+    column_mapping jsonb,
+    status text NOT NULL DEFAULT 'pending',
+    suggested_categories jsonb DEFAULT '[]',
+    created_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+CREATE INDEX import_sessions_user_id_idx ON import_sessions (user_id);
+
 -- ─── Misc ────────────────────────────────────────────────────────────────────
 
 CREATE TABLE app_data (
@@ -298,3 +336,51 @@ CREATE TABLE progress (
     created_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
 CREATE INDEX progress_user_id_idx ON progress (user_id);
+
+-- ─── Categorization Rules ────────────────────────────────────────────────────
+
+CREATE TABLE categorization_rules (
+    id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
+    user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name text NOT NULL,
+    match_type text NOT NULL DEFAULT 'contains',
+    match_field text NOT NULL DEFAULT 'name',
+    match_value text NOT NULL,
+    category_code text,
+    project_code text,
+    type text,
+    note text,
+    priority integer DEFAULT 0 NOT NULL,
+    source text NOT NULL DEFAULT 'manual',
+    confidence double precision DEFAULT 1.0 NOT NULL,
+    is_active boolean DEFAULT true NOT NULL,
+    created_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    FOREIGN KEY (category_code, user_id) REFERENCES categories(code, user_id) ON DELETE SET NULL,
+    FOREIGN KEY (project_code, user_id) REFERENCES projects(code, user_id) ON DELETE SET NULL
+);
+CREATE INDEX categorization_rules_user_id_idx ON categorization_rules (user_id);
+
+-- ─── Past Searches ──────────────────────────────────────────────────────────
+
+CREATE TABLE past_searches (
+    id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
+    user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    query text NOT NULL,
+    topic text NOT NULL,
+    results jsonb NOT NULL DEFAULT '[]',
+    result_count integer NOT NULL DEFAULT 0,
+    created_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+CREATE INDEX past_searches_user_id_idx ON past_searches (user_id);
+CREATE INDEX past_searches_user_id_topic_idx ON past_searches (user_id, topic);
+CREATE INDEX past_searches_user_id_created_at_idx ON past_searches (user_id, created_at);
+
+-- ─── Schema Version ─────────────────────────────────────────────────────────
+
+CREATE TABLE schema_version (
+    id integer PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+    version integer NOT NULL DEFAULT 3,
+    migrated_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+INSERT INTO schema_version (id, version) VALUES (1, 4);

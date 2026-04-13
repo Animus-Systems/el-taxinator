@@ -17,23 +17,107 @@
     "isolatedModules": true,
     "jsx": "react-jsx",
     "incremental": true,
-    "plugins": [
-      {
-        "name": "next"
-      }
-    ],
+    "ignoreDeprecations": "6.0",
+    "baseUrl": ".",
     "paths": {
+      "~/trpc": [
+        "./src/trpc.ts"
+      ],
+      "~/*": [
+        "./src/*"
+      ],
+      "next-intl": [
+        "./src/compat/next-intl.ts"
+      ],
+      "next-intl/server": [
+        "./src/compat/next-intl-server.ts"
+      ],
+      "next-intl/navigation": [
+        "./src/compat/next-intl-navigation.ts"
+      ],
+      "next-intl/routing": [
+        "./src/compat/next-intl-routing.ts"
+      ],
+      "next/image": [
+        "./src/compat/next-image.tsx"
+      ],
+      "next/link": [
+        "./src/compat/next-link.tsx"
+      ],
+      "next/head": [
+        "./src/compat/next-head.tsx"
+      ],
+      "next/navigation": [
+        "./src/compat/next-navigation.ts"
+      ],
+      "next/cache": [
+        "./src/compat/next-cache.ts"
+      ],
+      "next/headers": [
+        "./src/compat/next-headers.ts"
+      ],
+      "@/actions/accountant": [
+        "./src/compat/actions/accountant.ts"
+      ],
+      "@/actions/ai-import": [
+        "./src/compat/actions/ai-import.ts"
+      ],
+      "@/actions/auth": [
+        "./src/compat/actions/auth.ts"
+      ],
+      "@/actions/bundle": [
+        "./src/compat/actions/bundle.ts"
+      ],
+      "@/actions/clients": [
+        "./src/compat/actions/clients.ts"
+      ],
+      "@/actions/config": [
+        "./src/compat/actions/config.ts"
+      ],
+      "@/actions/entities": [
+        "./src/compat/actions/entities.ts"
+      ],
+      "@/actions/files": [
+        "./src/compat/actions/files.ts"
+      ],
+      "@/actions/import": [
+        "./src/compat/actions/import.ts"
+      ],
+      "@/actions/invoices": [
+        "./src/compat/actions/invoices.ts"
+      ],
+      "@/actions/products": [
+        "./src/compat/actions/products.ts"
+      ],
+      "@/actions/quotes": [
+        "./src/compat/actions/quotes.ts"
+      ],
+      "@/actions/reanalyze": [
+        "./src/compat/actions/reanalyze.ts"
+      ],
+      "@/actions/rules": [
+        "./src/compat/actions/rules.ts"
+      ],
+      "@/actions/settings": [
+        "./src/compat/actions/settings.ts"
+      ],
+      "@/actions/time": [
+        "./src/compat/actions/time.ts"
+      ],
+      "@/actions/transactions": [
+        "./src/compat/actions/transactions.ts"
+      ],
+      "@/actions/unsorted": [
+        "./src/compat/actions/unsorted.ts"
+      ],
       "@/*": [
         "./*"
       ]
     }
   },
   "include": [
-    "next-env.d.ts",
     "**/*.ts",
-    "**/*.tsx",
-    ".next/types/**/*.ts",
-    ".next/dev/types/**/*.ts"
+    "**/*.tsx"
   ],
   "exclude": [
     "node_modules"

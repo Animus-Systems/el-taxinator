@@ -1,4 +1,3 @@
-"use client"
 
 import { createTransactionAction } from "@/actions/transactions"
 import { FormError } from "@/components/forms/error"
@@ -52,7 +51,7 @@ export default function TransactionCreateForm({
   }, [createState, router])
 
   return (
-    <form suppressHydrationWarning action={createAction} className="space-y-4">
+    <form action={createAction} className="space-y-4">
       <FormInput title={t("name")} name="name" defaultValue={formData.name} />
 
       <FormInput title={t("merchant")} name="merchant" defaultValue={formData.merchant} />
@@ -116,7 +115,7 @@ export default function TransactionCreateForm({
 
       <div className="flex justify-between space-x-4 pt-6">
         <Button type="button" variant="outline" className="aspect-square">
-          <Link href="/import/csv">
+          <Link href="/settings/import">
             <Import className="h-4 w-4" />
           </Link>
         </Button>

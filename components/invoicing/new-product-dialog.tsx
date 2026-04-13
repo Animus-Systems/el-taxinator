@@ -1,4 +1,3 @@
-"use client"
 
 import { createProductAction } from "@/actions/products"
 import { Button } from "@/components/ui/button"

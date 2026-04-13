@@ -1,4 +1,3 @@
-"use client"
 
 import { deleteQuoteAction } from "@/actions/quotes"
 import { convertQuoteToInvoiceAction } from "@/actions/invoices"

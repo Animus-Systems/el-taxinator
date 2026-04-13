@@ -91,6 +91,8 @@ export const categorySchema = z.object({
   name: i18nText,
   color: z.string(),
   llmPrompt: i18nText.nullable(),
+  taxFormRef: z.string().nullable().optional().default(null),
+  isDefault: z.boolean().optional().default(false),
   createdAt: z.date(),
 })
 
@@ -154,6 +156,7 @@ export const transactionSchema = z.object({
   updatedAt: z.date(),
   text: z.string().nullable(),
   deductible: z.boolean().nullable(),
+  accountId: z.string().nullable(),
 })
 
 export const currencySchema = z.object({
@@ -163,12 +166,87 @@ export const currencySchema = z.object({
   name: z.string(),
 })
 
+export const bankAccountSchema = z.object({
+  id: z.string(),
+  userId: z.string(),
+  name: z.string(),
+  bankName: z.string().nullable(),
+  currencyCode: z.string(),
+  accountNumber: z.string().nullable(),
+  notes: z.string().nullable(),
+  isActive: z.boolean(),
+  createdAt: z.date(),
+  updatedAt: z.date(),
+})
+
+export type BankAccount = z.infer<typeof bankAccountSchema>
+
+export const importSessionSchema = z.object({
+  id: z.string(),
+  userId: z.string(),
+  accountId: z.string().nullable(),
+  fileName: z.string(),
+  fileType: z.string(),
+  rowCount: z.number(),
+  data: jsonValueSchema,
+  columnMapping: jsonValueSchema.nullable(),
+  status: z.string(),
+  suggestedCategories: jsonValueSchema,
+  createdAt: z.date(),
+})
+
+export type ImportSession = z.infer<typeof importSessionSchema>
+
+export const categorizationRuleSchema = z.object({
+  id: z.string(),
+  userId: z.string(),
+  name: z.string(),
+  matchType: z.string(),
+  matchField: z.string(),
+  matchValue: z.string(),
+  categoryCode: z.string().nullable(),
+  projectCode: z.string().nullable(),
+  type: z.string().nullable(),
+  note: z.string().nullable(),
+  priority: z.number(),
+  source: z.string(),
+  confidence: z.number(),
+  isActive: z.boolean(),
+  createdAt: z.date(),
+  updatedAt: z.date(),
+})
+export type CategorizationRule = z.infer<typeof categorizationRuleSchema>
+
 export const appDataSchema = z.object({
   id: z.string(),
   app: z.string(),
   userId: z.string(),
   data: jsonValueSchema,
 })
+
+// ---------------------------------------------------------------------------
+// Past Search result item
+// ---------------------------------------------------------------------------
+
+export const searchResultItemSchema = z.object({
+  title: z.string(),
+  url: z.string(),
+  snippet: z.string().optional().default(""),
+  source: z.string().optional().default(""),
+  publishedDate: z.string().nullable().optional().default(null),
+})
+export type SearchResultItem = z.infer<typeof searchResultItemSchema>
+
+export const pastSearchSchema = z.object({
+  id: z.string(),
+  userId: z.string(),
+  query: z.string(),
+  topic: z.string(),
+  results: z.array(searchResultItemSchema),
+  resultCount: z.number(),
+  createdAt: z.date(),
+})
+export type PastSearch = z.infer<typeof pastSearchSchema>
 
 export const progressSchema = z.object({
   id: z.string(),
@@ -539,4 +617,11 @@ export interface SettingUpsertInput {
   name: string
   description?: string | null
   value?: string | null
+}
+
+export interface PastSearchCreateInput {
+  userId: string
+  query: string
+  topic: string
+  results: SearchResultItem[]
 }

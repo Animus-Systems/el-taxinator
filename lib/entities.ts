@@ -1,5 +1,4 @@
-import pg from "pg"
-import { cookies } from "next/headers"
+import pg, { type Pool } from "pg"
 import fs from "fs"
 import path from "path"
 import {
@@ -187,14 +186,8 @@ export function getActiveEntityIdFromFile(): string {
   return entities.length > 0 ? entities[0].id : "default"
 }
 
-/** Set the active entity cookie and persist to file. */
+/** Set the active entity and persist to file. */
 export async function setActiveEntity(entityId: string): Promise<void> {
-  const cookieStore = await cookies()
-  cookieStore.set(ENTITY_COOKIE, entityId, {
-    path: "/",
-    maxAge: 365 * 24 * 60 * 60,
-    sameSite: "lax",
-  })
   saveActiveEntityToFile(entityId)
 }
 
@@ -203,10 +196,10 @@ export async function getActiveEntityId(): Promise<string> {
   if (entities.length === 0) return "default"
   if (entities.length === 1) return entities[0].id
 
-  const cookieStore = await cookies()
-  const stored = cookieStore.get(ENTITY_COOKIE)?.value
-  if (stored && entities.some((e) => e.id === stored)) {
-    return stored
+  const fromFile = getActiveEntityIdFromFile()
+  if (fromFile) {
+    const entity = getEntityById(fromFile)
+    if (entity) return entity.id
   }
   return entities[0].id
 }
@@ -230,10 +223,10 @@ export async function getActiveEntity(): Promise<Entity> {
 // ---------------------------------------------------------------------------
 
 const globalForPools = globalThis as unknown as {
-  entityPools: Map<string, pg.Pool> | undefined
+  entityPools: Map<string, Pool> | undefined
 }
 
-const poolMap = globalForPools.entityPools ?? new Map<string, pg.Pool>()
+const poolMap = globalForPools.entityPools ?? new Map<string, Pool>()
 
 if (process.env.NODE_ENV !== "production") {
   globalForPools.entityPools = poolMap
@@ -258,7 +251,7 @@ async function resolveConnectionString(entity: Entity): Promise<string> {
   return getEmbeddedConnectionString()
 }
 
-export async function getPoolForEntity(entityId: string): Promise<pg.Pool> {
+export async function getPoolForEntity(entityId: string): Promise<Pool> {
   const entity = getEntityById(entityId)
   if (!entity) throw new Error(`Entity "${entityId}" not found`)
 
@@ -312,7 +305,7 @@ export async function shutdownRunningEntitySession(): Promise<void> {
   await stopCluster()
 }
 
-export async function getPool(): Promise<pg.Pool> {
+export async function getPool(): Promise<Pool> {
   const entityId = await getActiveEntityId()
   return getPoolForEntity(entityId)
 }

@@ -1,4 +1,3 @@
-"use client"
 
 import { createTimeEntryAction } from "@/actions/time"
 import { Button } from "@/components/ui/button"

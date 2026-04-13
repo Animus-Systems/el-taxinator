@@ -32,6 +32,7 @@
 .claude
 .planning
 .skills
+.tmp*
 
 # debug
 npm-debug.log*

@@ -25,7 +25,7 @@ export async function WelcomeWidget() {
           <span className="text-2xl font-bold">
             <ColoredText>{t("welcomeToTaxinator")}</ColoredText>
           </span>
-          <form suppressHydrationWarning action={async () => {
+          <form action={async () => {
             "use server"
             await updateSettings(user.id, "is_welcome_message_hidden", "true")
             revalidatePath("/dashboard")

@@ -1,6 +1,7 @@
-"use client"
 
 import { BulkActionsMenu } from "@/components/transactions/bulk-actions"
+import { ReanalyzeDialog } from "@/components/transactions/reanalyze-dialog"
+import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -8,7 +9,7 @@ import { calcNetTotalPerCurrency, calcTotalPerCurrency, isTransactionIncomplete 
 import { cn, formatCurrency } from "@/lib/utils"
 import type { Category, Field, Project, Transaction } from "@/lib/db-types"
 import { formatDate } from "date-fns"
-import { ArrowDownIcon, ArrowUpIcon, File } from "lucide-react"
+import { ArrowDownIcon, ArrowUpIcon, File, Sparkles } from "lucide-react"
 import { useSearchParams } from "next/navigation"
 import { useRouter } from "@/lib/navigation"
 import { useEffect, useMemo, useState } from "react"
@@ -80,6 +81,19 @@ export const standardFieldRenderers: Record<string, FieldRenderer> = {
       ) : (
         "-"
       ),
+  },
+  accountName: {
+    name: "Account",
+    code: "accountName",
+    classes: "min-w-[120px] max-w-[200px] overflow-hidden",
+    sortable: true,
+    formatValue: (transaction: TransactionWithRelations) => {
+      const accountName = (transaction as Record<string, unknown>).accountName as string | null
+      const accountBankName = (transaction as Record<string, unknown>).accountBankName as string | null
+      if (!accountName) return <span className="text-muted-foreground">-</span>
+      const titleAttr = accountBankName ? `${accountName} (${accountBankName})` : undefined
+      return <span title={titleAttr}>{accountName}</span>
+    },
   },
   files: {
     name: "Files",
@@ -193,6 +207,7 @@ export function TransactionList({ transactions, fields = [] }: { transactions: T
   const router = useRouter()
   const locale = useLocale()
   const searchParams = useSearchParams()
+  const searchKey = searchParams.toString()
 
   const [sorting, setSorting] = useState<{ field: string | null; direction: "asc" | "desc" | null }>(() => {
     const ordering = searchParams.get("ordering")
@@ -261,15 +276,18 @@ export function TransactionList({ transactions, fields = [] }: { transactions: T
   }
 
   useEffect(() => {
-    const params = new URLSearchParams(searchParams.toString())
+    const params = new URLSearchParams(searchKey)
     if (sorting.field && sorting.direction) {
       const ordering = sorting.direction === "desc" ? `-${sorting.field}` : sorting.field
       params.set("ordering", ordering)
     } else {
       params.delete("ordering")
     }
-    router.push(`/transactions?${params.toString()}`)
-  }, [router, searchParams, sorting])
+    const nextSearch = params.toString()
+    if (nextSearch === searchKey) return
+    const href = nextSearch ? `/transactions?${nextSearch}` : "/transactions"
+    router.replace(href)
+  }, [router, searchKey, sorting])
 
   const getSortIcon = (field: string) => {
     if (sorting.field !== field) return null
@@ -344,7 +362,20 @@ export function TransactionList({ transactions, fields = [] }: { transactions: T
         </TableFooter>
       </Table>
       {selectedIds.length > 0 && (
-        <BulkActionsMenu selectedIds={selectedIds} onActionComplete={() => setSelectedIds([])} />
+        <>
+          <BulkActionsMenu selectedIds={selectedIds} onActionComplete={() => setSelectedIds([])} />
+          <div className="fixed bottom-4 right-56 z-50">
+            <ReanalyzeDialog
+              transactionIds={selectedIds}
+              onComplete={() => setSelectedIds([])}
+            >
+              <Button variant="outline" className="min-w-48 gap-2 bg-background shadow-md">
+                <Sparkles className="h-4 w-4" />
+                Re-analyze {selectedIds.length} selected
+              </Button>
+            </ReanalyzeDialog>
+          </div>
+        </>
       )}
     </div>
   )
