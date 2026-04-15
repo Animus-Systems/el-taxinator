@@ -74,6 +74,20 @@ export function filtersToSearchParams(
   return searchParams
 }
 
+export function applyTransactionFilterPatch(
+  currentSearchParams: URLSearchParams,
+  patch: Partial<TransactionFilters>,
+): URLSearchParams {
+  const currentFilters = searchParamsToFilters(currentSearchParams)
+  return filtersToSearchParams(
+    {
+      ...currentFilters,
+      ...patch,
+    },
+    currentSearchParams,
+  )
+}
+
 export function isFiltered(filters: TransactionFilters) {
   return Object.values(filters).some((value) => value !== "" && value !== "-")
 }

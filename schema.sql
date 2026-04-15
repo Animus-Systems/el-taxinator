@@ -21,7 +21,8 @@ CREATE TABLE users (
     business_bank_details text,
     business_logo text,
     business_name text,
-    business_tax_id text
+    business_tax_id text,
+    entity_type text
 );
 CREATE UNIQUE INDEX users_email_key ON users (email);
 
@@ -121,6 +122,7 @@ CREATE TABLE transactions (
     items jsonb DEFAULT '[]' NOT NULL,
     deductible boolean,
     account_id uuid REFERENCES accounts(id) ON DELETE SET NULL,
+    status text NOT NULL DEFAULT 'business',
     FOREIGN KEY (category_code, user_id) REFERENCES categories(code, user_id) ON UPDATE CASCADE ON DELETE RESTRICT,
     FOREIGN KEY (project_code, user_id) REFERENCES projects(code, user_id) ON UPDATE CASCADE ON DELETE RESTRICT
 );
@@ -132,6 +134,47 @@ CREATE INDEX transactions_merchant_idx ON transactions (merchant);
 CREATE INDEX transactions_name_idx ON transactions (name);
 CREATE INDEX transactions_total_idx ON transactions (total);
 CREATE INDEX transactions_account_id_idx ON transactions (account_id);
+CREATE INDEX transactions_crypto_idx ON transactions (user_id) WHERE (extra ? 'crypto');
+
+-- ─── Crypto FIFO ledger ─────────────────────────────────────────────────────
+--
+-- `crypto_lots` tracks open positions per asset in acquisition order. Each
+-- purchase or airdrop inserts one lot; disposals decrement `quantity_remaining`
+-- FIFO-style and insert `crypto_disposal_matches` rows freezing the realised
+-- gain at match time so it survives later edits of the source transaction.
+
+CREATE TABLE crypto_lots (
+    id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
+    user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    asset text NOT NULL,
+    acquired_at timestamp(3) NOT NULL,
+    quantity_total numeric(28,12) NOT NULL,
+    quantity_remaining numeric(28,12) NOT NULL,
+    cost_per_unit_cents bigint NOT NULL,
+    fees_cents bigint NOT NULL DEFAULT 0,
+    source_transaction_id uuid REFERENCES transactions(id) ON DELETE SET NULL,
+    created_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+CREATE INDEX crypto_lots_user_asset_idx ON crypto_lots (user_id, asset, acquired_at) WHERE quantity_remaining > 0;
+CREATE INDEX crypto_lots_user_idx ON crypto_lots (user_id);
+
+CREATE TABLE crypto_disposal_matches (
+    id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
+    user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    disposal_transaction_id uuid NOT NULL REFERENCES transactions(id) ON DELETE CASCADE,
+    lot_id uuid NOT NULL REFERENCES crypto_lots(id) ON DELETE RESTRICT,
+    asset text NOT NULL,
+    quantity_consumed numeric(28,12) NOT NULL,
+    cost_basis_cents bigint NOT NULL,
+    proceeds_cents bigint NOT NULL,
+    realized_gain_cents bigint NOT NULL,
+    matched_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+CREATE INDEX crypto_disposal_matches_user_idx ON crypto_disposal_matches (user_id);
+CREATE INDEX crypto_disposal_matches_disposal_idx ON crypto_disposal_matches (disposal_transaction_id);
+CREATE INDEX crypto_disposal_matches_user_year_idx
+    ON crypto_disposal_matches (user_id, (EXTRACT(YEAR FROM matched_at)));
 
 -- ─── Invoicing ───────────────────────────────────────────────────────────────
 
@@ -292,12 +335,15 @@ CREATE TABLE accounts (
     currency_code text NOT NULL DEFAULT 'EUR',
     account_number text,
     notes text,
+    account_type text NOT NULL DEFAULT 'bank',
+    -- values: 'bank' | 'credit_card' | 'crypto_exchange' | 'crypto_wallet' | 'cash'
     is_active boolean DEFAULT true NOT NULL,
     created_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updated_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
 CREATE UNIQUE INDEX accounts_user_id_name_key ON accounts (user_id, name);
 CREATE INDEX accounts_user_id_idx ON accounts (user_id);
+CREATE INDEX accounts_user_type_idx ON accounts (user_id, account_type) WHERE is_active;
 
 -- ─── Import Sessions ────────────────────────────────────────────────────────
 
@@ -305,16 +351,27 @@ CREATE TABLE import_sessions (
     id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
     user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     account_id uuid REFERENCES accounts(id) ON DELETE SET NULL,
-    file_name text NOT NULL,
-    file_type text NOT NULL,
+    file_name text,
+    file_type text,
     row_count integer NOT NULL DEFAULT 0,
     data jsonb NOT NULL DEFAULT '[]',
     column_mapping jsonb,
     status text NOT NULL DEFAULT 'pending',
     suggested_categories jsonb DEFAULT '[]',
+    entry_mode text NOT NULL DEFAULT 'csv',
+    messages jsonb NOT NULL DEFAULT '[]',
+    business_context_snapshot jsonb,
+    prompt_version text,
+    title text,
+    last_activity_at timestamp(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    pending_turn_at timestamp(3),
     created_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
 CREATE INDEX import_sessions_user_id_idx ON import_sessions (user_id);
+CREATE INDEX import_sessions_entry_mode_idx ON import_sessions (entry_mode, status);
+CREATE INDEX import_sessions_resumable_idx
+    ON import_sessions (user_id, status, last_activity_at DESC)
+    WHERE status = 'pending';
 
 -- ─── Misc ────────────────────────────────────────────────────────────────────
 
@@ -349,6 +406,7 @@ CREATE TABLE categorization_rules (
     category_code text,
     project_code text,
     type text,
+    status text,
     note text,
     priority integer DEFAULT 0 NOT NULL,
     source text NOT NULL DEFAULT 'manual',
@@ -376,6 +434,63 @@ CREATE INDEX past_searches_user_id_idx ON past_searches (user_id);
 CREATE INDEX past_searches_user_id_topic_idx ON past_searches (user_id, topic);
 CREATE INDEX past_searches_user_id_created_at_idx ON past_searches (user_id, created_at);
 
+-- ─── Wizard: business facts & AI audit trail ───────────────────────────────
+
+CREATE TABLE business_facts (
+    id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
+    user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    key text NOT NULL,
+    value jsonb NOT NULL,
+    source text NOT NULL DEFAULT 'wizard',
+    learned_from_session_id uuid REFERENCES import_sessions(id) ON DELETE SET NULL,
+    created_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+CREATE UNIQUE INDEX business_facts_user_id_key_key ON business_facts (user_id, key);
+CREATE INDEX business_facts_user_id_idx ON business_facts (user_id);
+
+CREATE TABLE ai_analysis_results (
+    id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
+    user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    session_id uuid REFERENCES import_sessions(id) ON DELETE CASCADE,
+    transaction_id uuid REFERENCES transactions(id) ON DELETE CASCADE,
+    row_index integer,
+    provider text NOT NULL,
+    model text,
+    prompt_version text NOT NULL,
+    reasoning text,
+    category_code text,
+    project_code text,
+    suggested_status text,
+    confidence jsonb NOT NULL,
+    clarifying_question text,
+    tokens_used integer,
+    created_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+CREATE INDEX ai_analysis_results_session_idx ON ai_analysis_results (session_id);
+CREATE INDEX ai_analysis_results_transaction_idx ON ai_analysis_results (transaction_id);
+CREATE INDEX ai_analysis_results_user_idx ON ai_analysis_results (user_id);
+
+-- ─── Wizard: knowledge packs (curated tax domain content) ──────────────────
+
+CREATE TABLE knowledge_packs (
+    id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
+    user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    slug text NOT NULL,
+    title text NOT NULL,
+    content text NOT NULL,
+    source_prompt text,
+    last_refreshed_at timestamp(3),
+    refresh_interval_days integer NOT NULL DEFAULT 30,
+    provider text,
+    model text,
+    review_status text NOT NULL DEFAULT 'verified',
+    created_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+CREATE UNIQUE INDEX knowledge_packs_user_slug_key ON knowledge_packs (user_id, slug);
+CREATE INDEX knowledge_packs_user_idx ON knowledge_packs (user_id);
+
 -- ─── Schema Version ─────────────────────────────────────────────────────────
 
 CREATE TABLE schema_version (
@@ -383,4 +498,4 @@ CREATE TABLE schema_version (
     version integer NOT NULL DEFAULT 3,
     migrated_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
-INSERT INTO schema_version (id, version) VALUES (1, 4);
+INSERT INTO schema_version (id, version) VALUES (1, 7);

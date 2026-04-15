@@ -1,12 +1,12 @@
 
 import { useState } from "react"
 import { useTranslations } from "next-intl"
+import { useNavigate } from "@tanstack/react-router"
 import { Button } from "@/components/ui/button"
-import { Download, Import, Plus } from "lucide-react"
-import { AIImportDialog } from "@/components/import/import-dialog"
+import { Download, Loader2, Plus, Sparkles } from "lucide-react"
 import { ExportTransactionsDialog } from "@/components/export/transactions"
-import { NewTransactionDialog } from "@/components/transactions/new-transaction-dialog"
 import type { BankAccount, Category, Field, Project } from "@/lib/db-types"
+import { trpc } from "~/trpc"
 
 type Props = {
   accounts: BankAccount[]
@@ -17,33 +17,38 @@ type Props = {
 }
 
 /**
- * Client component that renders header action buttons and mounts dialogs
- * only on demand — never during SSR, eliminating Radix hydration mismatches.
+ * Transactions header toolbar. "Add transaction" and "AI import" both route
+ * into the unified wizard — manual entry creates a blank wizard session via
+ * tRPC, file import lands on /wizard/new's upload zone.
  */
-export function TransactionsToolbar({ accounts, categories, projects, fields, total }: Props) {
+export function TransactionsToolbar({ accounts: _accounts, categories, projects, fields, total }: Props) {
   const t = useTranslations("transactions")
-  const [activeDialog, setActiveDialog] = useState<"import" | "export" | "new" | null>(null)
+  const navigate = useNavigate()
+  const [activeDialog, setActiveDialog] = useState<"export" | null>(null)
+
+  const startManual = trpc.wizard.startManual.useMutation({
+    onSuccess: ({ sessionId }) => {
+      navigate({ to: `/wizard/${sessionId}` as string })
+    },
+  })
 
   const close = () => setActiveDialog(null)
 
   return (
     <>
       <div className="flex gap-2">
-        <Button variant="outline" onClick={() => setActiveDialog("import")}>
-          <Import /> <span className="hidden md:block">{t("aiImport")}</span>
+        <Button variant="outline" onClick={() => navigate({ to: "/wizard/new" as string })}>
+          <Sparkles /> <span className="hidden md:block">{t("aiImport")}</span>
         </Button>
         <Button variant="outline" onClick={() => setActiveDialog("export")}>
           <Download /> <span className="hidden md:block">{t("export")}</span>
         </Button>
-        <Button onClick={() => setActiveDialog("new")}>
-          <Plus /> <span className="hidden md:block">{t("addTransaction")}</span>
+        <Button onClick={() => startManual.mutate({ accountId: null })} disabled={startManual.isPending}>
+          {startManual.isPending ? <Loader2 className="animate-spin" /> : <Plus />}
+          <span className="hidden md:block">{t("addTransaction")}</span>
         </Button>
       </div>
 
-      {/* Dialogs mount only when opened — no SSR, no hydration issues */}
-      {activeDialog === "import" && (
-        <AIImportDialog accounts={accounts} onClose={close} />
-      )}
       {activeDialog === "export" && (
         <ExportTransactionsDialog
           fields={fields}
@@ -52,9 +57,6 @@ export function TransactionsToolbar({ accounts, categories, projects, fields, to
           total={total}
           onClose={close}
         />
-      )}
-      {activeDialog === "new" && (
-        <NewTransactionDialog onClose={close} />
       )}
     </>
   )

@@ -344,3 +344,245 @@ export const getTaxYearSummary = cache(
     return summaries
   },
 )
+
+// ─── Modelo 100 — Annual IRPF for autónomos (with base del ahorro) ─────────
+//
+// Phase 3 focuses on the crypto-relevant portion: capital gains on the base
+// del ahorro (ganancia patrimonial from FIFO matches) and rendimiento del
+// capital mobiliario (staking rewards). The business-income portion is a
+// cumulative Jan 1–Dec 31 rendimiento neto derived from invoices and
+// deductible expenses, matching the Modelo 130 methodology.
+
+/**
+ * 2026 "base del ahorro" progressive brackets. Amounts are in EUR cents.
+ * Subject to annual law changes — knowledge pack carries the plain-language
+ * description; this is the single source of truth for the calculator.
+ */
+const BASE_AHORRO_BRACKETS_2026: Array<{ upToCents: number; rate: number }> = [
+  { upToCents: 600000, rate: 0.19 },
+  { upToCents: 5000000, rate: 0.21 },
+  { upToCents: 20000000, rate: 0.23 },
+  { upToCents: 30000000, rate: 0.27 },
+  { upToCents: Infinity, rate: 0.28 },
+]
+
+export type AhorroBracketBreakdown = {
+  upToCents: number
+  rate: number
+  amountInBracketCents: number
+  taxInBracketCents: number
+}
+
+/**
+ * Apply the base-del-ahorro progressive brackets to a positive amount (cents).
+ * Returns both the per-bracket breakdown and the total cuota in cents.
+ */
+export function applyBaseAhorroBrackets(
+  baseCents: number,
+  brackets: Array<{ upToCents: number; rate: number }> = BASE_AHORRO_BRACKETS_2026,
+): { breakdown: AhorroBracketBreakdown[]; totalCuotaCents: number } {
+  const breakdown: AhorroBracketBreakdown[] = []
+  let remaining = Math.max(0, Math.round(baseCents))
+  let previousCap = 0
+  let totalCuotaCents = 0
+  // Walk every bracket so the breakdown is the full schedule — consumers can
+  // display zero-amount bands without extra plumbing.
+  for (const b of brackets) {
+    const bandSize = b.upToCents === Infinity ? remaining : Math.max(0, b.upToCents - previousCap)
+    const amountInBracket = Math.min(Math.max(0, remaining), bandSize)
+    const taxInBracket = Math.round(amountInBracket * b.rate)
+    breakdown.push({
+      upToCents: b.upToCents,
+      rate: b.rate,
+      amountInBracketCents: amountInBracket,
+      taxInBracketCents: taxInBracket,
+    })
+    totalCuotaCents += taxInBracket
+    remaining -= amountInBracket
+    previousCap = b.upToCents
+  }
+  return { breakdown, totalCuotaCents }
+}
+
+export type Modelo100Result = {
+  year: number
+  // Business activity (cumulative annual)
+  ingresosActividad: number
+  gastosActividad: number
+  rendimientoNetoActividad: number
+  // Base del ahorro components (from crypto)
+  gananciasPatrimoniales: number      // net, can be negative (carry-over rule not applied here)
+  rendimientoCapitalMobiliario: number // staking rewards, lending interest (positive)
+  baseImponibleAhorro: number          // max(0, ganancias + rendimiento)
+  cuotaAhorro: number
+  ahorroBreakdown: AhorroBracketBreakdown[]
+  // Untracked disposals (flagged so the user can fill cost basis)
+  untrackedDisposalsCount: number
+}
+
+export const calcModelo100 = cache(
+  async (userId: string, year: number): Promise<Modelo100Result> => {
+    const pool = await getPool()
+    const yearStart = new Date(year, 0, 1)
+    const yearEnd = new Date(year, 11, 31, 23, 59, 59, 999)
+
+    const [invoiceResult, expenses, fifoRes, stakingRes, untrackedRes] = await Promise.all([
+      pool.query(
+        `SELECT COALESCE(SUM(ii.quantity * ii.unit_price), 0)::float AS total_ingresos
+         FROM invoices i
+         JOIN invoice_items ii ON ii.invoice_id = i.id
+         WHERE i.user_id = $1
+           AND i.status IN ('sent', 'paid')
+           AND i.issue_date >= $2
+           AND i.issue_date <= $3`,
+        [userId, yearStart, yearEnd],
+      ),
+      queryExpenses(pool, userId, yearStart, yearEnd),
+      pool.query(
+        `SELECT COALESCE(SUM(realized_gain_cents), 0)::text AS total
+         FROM crypto_disposal_matches
+         WHERE user_id = $1
+           AND EXTRACT(YEAR FROM matched_at) = $2`,
+        [userId, year],
+      ),
+      pool.query(
+        `SELECT COALESCE(SUM(COALESCE(converted_total, total, 0)), 0)::text AS total
+         FROM transactions
+         WHERE user_id = $1
+           AND category_code = 'crypto_staking_reward'
+           AND EXTRACT(YEAR FROM issued_at) = $2`,
+        [userId, year],
+      ),
+      pool.query(
+        `SELECT COUNT(*)::int AS n
+         FROM transactions
+         WHERE user_id = $1
+           AND category_code = 'crypto_disposal'
+           AND (extra ? 'crypto')
+           AND (extra -> 'crypto' -> 'costBasisPerUnit' IS NULL
+                OR extra -> 'crypto' ->> 'costBasisPerUnit' = '')
+           AND EXTRACT(YEAR FROM issued_at) = $2`,
+        [userId, year],
+      ),
+    ])
+
+    const ingresosActividad = Math.round(invoiceResult.rows[0]?.total_ingresos ?? 0)
+    const gastosActividad = Math.round(expenses.totalExpenses)
+    const rendimientoNetoActividad = Math.max(0, ingresosActividad - gastosActividad)
+
+    const gananciasPatrimoniales = Number(fifoRes.rows[0]?.total ?? 0)
+    const rendimientoCapitalMobiliario = Number(stakingRes.rows[0]?.total ?? 0)
+    const baseImponibleAhorro = Math.max(
+      0,
+      gananciasPatrimoniales + rendimientoCapitalMobiliario,
+    )
+    const { breakdown, totalCuotaCents } = applyBaseAhorroBrackets(baseImponibleAhorro)
+
+    return {
+      year,
+      ingresosActividad,
+      gastosActividad,
+      rendimientoNetoActividad,
+      gananciasPatrimoniales,
+      rendimientoCapitalMobiliario,
+      baseImponibleAhorro,
+      cuotaAhorro: totalCuotaCents,
+      ahorroBreakdown: breakdown,
+      untrackedDisposalsCount: Number(untrackedRes.rows[0]?.n ?? 0),
+    }
+  },
+)
+
+// ─── Modelo 721 — Informativa for foreign crypto holdings ─────────────────
+//
+// If aggregate year-end value on foreign exchanges/wallets exceeds €50K
+// (2026 threshold — may change), Modelo 721 must be filed between 1 Jan
+// and 31 March of the following year. Filing is informational, no tax due.
+
+const MODELO_721_THRESHOLD_CENTS_2026 = 5000000 // €50,000.00
+
+export type Modelo721AssetRow = {
+  asset: string
+  quantity: string
+  weightedAvgCostCents: number | null
+  yearEndValueCents: number // best-effort from last known disposal price per asset
+}
+
+export type Modelo721Result = {
+  year: number
+  thresholdCents: number
+  totalValueCents: number
+  obligation: boolean
+  deadline: Date
+  assets: Modelo721AssetRow[]
+}
+
+export const calcModelo721 = cache(
+  async (userId: string, year: number): Promise<Modelo721Result> => {
+    const pool = await getPool()
+
+    // Year-end snapshot: all lots with quantity remaining > 0 as of Dec 31.
+    // For value we use (a) last disposal price per asset within the year, else
+    // (b) the weighted avg cost — the user can override later via /settings.
+    const lotsRes = await pool.query(
+      `SELECT
+         asset,
+         COALESCE(SUM(quantity_remaining)::text, '0') AS total_quantity,
+         CASE WHEN SUM(quantity_remaining) > 0
+           THEN ROUND(SUM(quantity_remaining * cost_per_unit_cents) / SUM(quantity_remaining))::text
+           ELSE NULL
+         END AS weighted_avg_cost_cents
+       FROM crypto_lots
+       WHERE user_id = $1 AND quantity_remaining > 0
+       GROUP BY asset`,
+      [userId],
+    )
+
+    const priceRes = await pool.query(
+      `SELECT DISTINCT ON (extra -> 'crypto' ->> 'asset')
+         extra -> 'crypto' ->> 'asset' AS asset,
+         (extra -> 'crypto' ->> 'pricePerUnit')::bigint AS price_cents
+       FROM transactions
+       WHERE user_id = $1
+         AND category_code = 'crypto_disposal'
+         AND (extra ? 'crypto')
+         AND EXTRACT(YEAR FROM issued_at) = $2
+         AND (extra -> 'crypto' ->> 'pricePerUnit') IS NOT NULL
+       ORDER BY extra -> 'crypto' ->> 'asset',
+                issued_at DESC`,
+      [userId, year],
+    )
+    const latestPriceByAsset = new Map<string, number>()
+    for (const r of priceRes.rows as Array<{ asset: string; price_cents: string | number }>) {
+      latestPriceByAsset.set(r.asset, Number(r.price_cents))
+    }
+
+    const assets: Modelo721AssetRow[] = (
+      lotsRes.rows as Array<{
+        asset: string
+        total_quantity: string
+        weighted_avg_cost_cents: string | null
+      }>
+    ).map((r) => {
+      const qty = Number(r.total_quantity)
+      const avgCost = r.weighted_avg_cost_cents === null ? null : Number(r.weighted_avg_cost_cents)
+      const referencePrice = latestPriceByAsset.get(r.asset) ?? avgCost ?? 0
+      return {
+        asset: r.asset,
+        quantity: r.total_quantity,
+        weightedAvgCostCents: avgCost,
+        yearEndValueCents: Math.round(qty * referencePrice),
+      }
+    })
+
+    const totalValueCents = assets.reduce((sum, a) => sum + a.yearEndValueCents, 0)
+    return {
+      year,
+      thresholdCents: MODELO_721_THRESHOLD_CENTS_2026,
+      totalValueCents,
+      obligation: totalValueCents > MODELO_721_THRESHOLD_CENTS_2026,
+      deadline: new Date(year + 1, 2, 31, 23, 59, 59, 999), // 31 March next year
+      assets,
+    }
+  },
+)

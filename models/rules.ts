@@ -15,6 +15,7 @@ export interface RuleCreateInput {
   categoryCode?: string | null
   projectCode?: string | null
   type?: string | null
+  status?: string | null
   note?: string | null
   priority?: number
   source?: string
@@ -30,6 +31,7 @@ export interface RuleUpdateInput {
   categoryCode?: string | null
   projectCode?: string | null
   type?: string | null
+  status?: string | null
   note?: string | null
   priority?: number
   confidence?: number
@@ -44,7 +46,7 @@ export const getRules = cache(async (userId: string): Promise<CategorizationRule
   return queryMany<CategorizationRule>(
     sql`SELECT * FROM categorization_rules
         WHERE user_id = ${userId}
-        ORDER BY priority DESC, created_at DESC
+        ORDER BY CASE WHEN source = 'manual' THEN 0 ELSE 1 END, priority DESC, created_at DESC
         LIMIT 1000`
   )
 })
@@ -53,7 +55,7 @@ export const getActiveRules = cache(async (userId: string): Promise<Categorizati
   return queryMany<CategorizationRule>(
     sql`SELECT * FROM categorization_rules
         WHERE user_id = ${userId} AND is_active = true
-        ORDER BY priority DESC, created_at DESC
+        ORDER BY CASE WHEN source = 'manual' THEN 0 ELSE 1 END, priority DESC, created_at DESC
         LIMIT 1000`
   )
 })
@@ -79,6 +81,7 @@ export const createRule = async (userId: string, data: RuleCreateInput): Promise
       categoryCode: data.categoryCode ?? null,
       projectCode: data.projectCode ?? null,
       type: data.type ?? null,
+      status: data.status ?? null,
       note: data.note ?? null,
       priority: data.priority ?? 0,
       source: data.source ?? "manual",
@@ -163,8 +166,19 @@ export function applyRulesToCandidates(
   candidates: TransactionCandidate[],
   rules: CategorizationRule[]
 ): void {
+  const sortedRules = [...rules].sort((left, right) => {
+    const leftManual = left.source === "manual" ? 0 : 1
+    const rightManual = right.source === "manual" ? 0 : 1
+    if (leftManual !== rightManual) return leftManual - rightManual
+    if (left.priority !== right.priority) return right.priority - left.priority
+
+    const leftTime = left.updatedAt?.getTime?.() ?? left.createdAt?.getTime?.() ?? 0
+    const rightTime = right.updatedAt?.getTime?.() ?? right.createdAt?.getTime?.() ?? 0
+    return rightTime - leftTime
+  })
+
   for (const candidate of candidates) {
-    for (const rule of rules) {
+    for (const rule of sortedRules) {
       // Determine which field to match against
       let fieldValue: string | null
       switch (rule.matchField) {
@@ -186,10 +200,16 @@ export function applyRulesToCandidates(
       if (rule.categoryCode) candidate.categoryCode = rule.categoryCode
       if (rule.projectCode) candidate.projectCode = rule.projectCode
       if (rule.type) candidate.type = rule.type
+      if (rule.status) candidate.suggestedStatus = rule.status as TransactionCandidate["suggestedStatus"]
 
       // Set confidence based on source
       if (rule.source === "manual") {
-        candidate.confidence = { category: 1, type: 1, overall: 1 }
+        candidate.confidence = {
+          category: candidate.categoryCode !== null ? 1 : 0,
+          type: candidate.type !== null ? 1 : 0,
+          status: candidate.suggestedStatus !== null ? 1 : 0,
+          overall: 1,
+        }
         candidate.ruleMatched = true
       } else {
         // Learned rule — use rule.confidence value
@@ -197,6 +217,7 @@ export function applyRulesToCandidates(
         candidate.confidence = {
           category: candidate.categoryCode !== null ? conf : 0,
           type: conf,
+          status: candidate.suggestedStatus !== null ? conf : 0,
           overall: conf,
         }
       }

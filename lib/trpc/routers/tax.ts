@@ -5,6 +5,8 @@ import {
   calcModelo420,
   calcModelo130,
   calcModelo425,
+  calcModelo100,
+  calcModelo721,
   getUpcomingDeadlines,
 } from "@/models/tax"
 import { calcModelo202, calcModelo200, getSLTaxYearSummary } from "@/models/tax-sl"
@@ -72,11 +74,49 @@ const modelo200Schema = z.object({
   quarters: z.array(modelo202Schema),
   totalRevenue: z.number(),
   totalExpenses: z.number(),
+  cryptoGainCents: z.number(),
+  stakingIncomeCents: z.number(),
   baseImponible: z.number(),
   tipoGravamen: z.number(),
   cuotaIntegra: z.number(),
   totalPagosACuenta: z.number(),
   cuotaDiferencial: z.number(),
+})
+
+const ahorroBracketBreakdownSchema = z.object({
+  upToCents: z.number(),
+  rate: z.number(),
+  amountInBracketCents: z.number(),
+  taxInBracketCents: z.number(),
+})
+
+const modelo100Schema = z.object({
+  year: z.number(),
+  ingresosActividad: z.number(),
+  gastosActividad: z.number(),
+  rendimientoNetoActividad: z.number(),
+  gananciasPatrimoniales: z.number(),
+  rendimientoCapitalMobiliario: z.number(),
+  baseImponibleAhorro: z.number(),
+  cuotaAhorro: z.number(),
+  ahorroBreakdown: z.array(ahorroBracketBreakdownSchema),
+  untrackedDisposalsCount: z.number(),
+})
+
+const modelo721AssetSchema = z.object({
+  asset: z.string(),
+  quantity: z.string(),
+  weightedAvgCostCents: z.number().nullable(),
+  yearEndValueCents: z.number(),
+})
+
+const modelo721Schema = z.object({
+  year: z.number(),
+  thresholdCents: z.number(),
+  totalValueCents: z.number(),
+  obligation: z.boolean(),
+  deadline: z.date(),
+  assets: z.array(modelo721AssetSchema),
 })
 
 const modelo425Schema = z.object({
@@ -175,5 +215,21 @@ export const taxRouter = router({
     .output(z.array(deadlineSchema))
     .query(async ({ input }) => {
       return getUpcomingDeadlines(input.year, input.locale)
+    }),
+
+  modelo100: authedProcedure
+    .meta({ openapi: { method: "GET", path: "/api/v1/tax/{year}/100" } })
+    .input(z.object({ year: z.number().int() }))
+    .output(modelo100Schema)
+    .query(async ({ ctx, input }) => {
+      return calcModelo100(ctx.user.id, input.year)
+    }),
+
+  modelo721: authedProcedure
+    .meta({ openapi: { method: "GET", path: "/api/v1/tax/{year}/721" } })
+    .input(z.object({ year: z.number().int() }))
+    .output(modelo721Schema)
+    .query(async ({ ctx, input }) => {
+      return calcModelo721(ctx.user.id, input.year)
     }),
 })

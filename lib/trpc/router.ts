@@ -20,6 +20,9 @@ import { accountsRouter } from "./routers/accounts"
 import { rulesRouter } from "./routers/rules"
 import { entitiesRouter } from "./routers/entities"
 import { pastSearchesRouter } from "./routers/past-searches"
+import { wizardRouter } from "./routers/wizard"
+import { knowledgeRouter } from "./routers/knowledge"
+import { cryptoRouter } from "./routers/crypto"
 
 export const appRouter = router({
   transactions: transactionsRouter,
@@ -43,6 +46,9 @@ export const appRouter = router({
   rules: rulesRouter,
   entities: entitiesRouter,
   pastSearches: pastSearchesRouter,
+  wizard: wizardRouter,
+  knowledge: knowledgeRouter,
+  crypto: cryptoRouter,
 })
 
 export type AppRouter = typeof appRouter

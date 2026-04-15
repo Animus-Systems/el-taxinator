@@ -23,6 +23,10 @@ import { NewQuotePage } from "./routes/_app/quotes-new"
 import { QuoteDetailPage } from "./routes/_app/quote-detail"
 import { TaxPage } from "./routes/_app/tax"
 import { AppsPage } from "./routes/_app/apps"
+import { WizardNewPage } from "./routes/_app/wizard-new"
+import { WizardDetailPage } from "./routes/_app/wizard-detail"
+import { WizardCommittedPage } from "./routes/_app/wizard-committed"
+import { CryptoPage } from "./routes/_app/crypto"
 
 // Pages — settings layout
 import { SettingsLayout } from "./routes/_app/settings"
@@ -41,6 +45,7 @@ import { EntitiesSettingsPage } from "./routes/_app/settings/entities"
 import { DangerSettingsPage } from "./routes/_app/settings/danger"
 import { ImportSettingsPage } from "./routes/_app/settings/import"
 import { ProfileSettingsPage } from "./routes/_app/settings/profile"
+import { KnowledgeSettingsPage } from "./routes/_app/settings/knowledge"
 
 // Pages — outside app layout
 import { EntityPickerPage } from "./routes/index"
@@ -183,6 +188,30 @@ const appsRoute = createRoute({
   component: AppsPage,
 })
 
+const wizardNewRoute = createRoute({
+  getParentRoute: () => appLayoutRoute,
+  path: "/wizard/new",
+  component: WizardNewPage,
+})
+
+const wizardDetailRoute = createRoute({
+  getParentRoute: () => appLayoutRoute,
+  path: "/wizard/$sessionId",
+  component: WizardDetailPage,
+})
+
+const wizardCommittedRoute = createRoute({
+  getParentRoute: () => appLayoutRoute,
+  path: "/wizard/$sessionId/committed",
+  component: WizardCommittedPage,
+})
+
+const cryptoRoute = createRoute({
+  getParentRoute: () => appLayoutRoute,
+  path: "/crypto",
+  component: CryptoPage,
+})
+
 // ---------------------------------------------------------------------------
 // Settings layout (has sub-routes)
 // ---------------------------------------------------------------------------
@@ -282,6 +311,12 @@ const settingsProfileRoute = createRoute({
   component: ProfileSettingsPage,
 })
 
+const settingsKnowledgeRoute = createRoute({
+  getParentRoute: () => settingsRoute,
+  path: "/knowledge",
+  component: KnowledgeSettingsPage,
+})
+
 // ---------------------------------------------------------------------------
 // Wire the route tree
 // ---------------------------------------------------------------------------
@@ -301,6 +336,7 @@ const settingsChildren = settingsRoute.addChildren([
   settingsDangerRoute,
   settingsImportRoute,
   settingsProfileRoute,
+  settingsKnowledgeRoute,
 ])
 
 const appChildren = appLayoutRoute.addChildren([
@@ -320,6 +356,10 @@ const appChildren = appLayoutRoute.addChildren([
   quoteDetailRoute,
   taxRoute,
   appsRoute,
+  wizardNewRoute,
+  wizardDetailRoute,
+  wizardCommittedRoute,
+  cryptoRoute,
   settingsChildren,
 ])
 

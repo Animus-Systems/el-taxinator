@@ -7,6 +7,7 @@ import { writeFileSync, unlinkSync, mkdtempSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { PROVIDERS } from "@/lib/llm-providers"
+import { parseLLMJson } from "./parse-json"
 
 export type LLMProvider = (typeof PROVIDERS)[number]["key"]
 
@@ -19,6 +20,9 @@ export interface LLMConfig {
   provider: LLMProvider
   apiKey: string
   model: string
+  /** True when `model` fell back to the provider's default because the user
+   *  hasn't set one explicitly. Used only for log clarity. */
+  modelIsDefault?: boolean
   thinking?: string
   baseUrl?: string
 }
@@ -46,15 +50,19 @@ const subscriptionProviders = new Set(
 
 interface CLISpec {
   binary: string
-  buildArgs: (prompt: string, model: string) => string[]
+  buildArgs: (prompt: string, model: string, hasAttachments: boolean) => string[]
   useStdin: boolean
 }
 
 const CLI_SPECS: Record<string, CLISpec> = {
   anthropic: {
     binary: "claude",
-    buildArgs: (_, model) => {
-      const args = ["-p", "", "--output-format", "text", "--allowedTools", "Read"]
+    buildArgs: (_, model, hasAttachments) => {
+      const args = ["-p", "", "--output-format", "text"]
+      // Only enable the Read tool when we're feeding image temp files.
+      // Without attachments, granting tools puts Claude into agent mode and
+      // can blow past the 120s budget on big prompts.
+      if (hasAttachments) args.push("--allowedTools", "Read")
       if (model) args.push("--model", model)
       return args
     },
@@ -108,31 +116,64 @@ async function requestCLI(config: LLMConfig, req: LLMRequest, timeoutMs?: number
       )
     }
 
+    const hasAttachments = (req.attachments?.length ?? 0) > 0
     const fullPrompt = parts.join("\n")
-    const args = spec.buildArgs(fullPrompt, config.model || "")
+    const args = spec.buildArgs(fullPrompt, config.model || "", hasAttachments)
 
     if (!spec.useStdin) {
       args[1] = fullPrompt
     }
 
-    const hasAttachments = (req.attachments?.length ?? 0) > 0
-    const effectiveTimeout = timeoutMs ?? (hasAttachments ? 300_000 : 120_000)
+    const effectiveTimeout = timeoutMs ?? (hasAttachments ? 300_000 : 240_000)
 
-    console.info(`Running ${spec.binary} CLI (model: ${config.model || "default"}${config.thinking ? `, thinking: ${config.thinking}` : ""}, timeout: ${effectiveTimeout / 1000}s)...`)
+    const approxTokens = Math.ceil(fullPrompt.length / 4)
+    const modelSource = config.model
+      ? config.modelIsDefault
+        ? `${config.model} (default)`
+        : config.model
+      : "default"
+    console.info(
+      `[llm] ${spec.binary} CLI → model=${modelSource}${config.thinking ? ` thinking=${config.thinking}` : ""} timeout=${effectiveTimeout / 1000}s prompt=${fullPrompt.length}ch (~${approxTokens}tok)${hasAttachments ? ` attachments=${req.attachments?.length}` : ""}`,
+    )
 
+    const startedAt = Date.now()
     const result = execFileSync(spec.binary, args, {
       timeout: effectiveTimeout,
       encoding: "utf-8",
       env: process.env as NodeJS.ProcessEnv,
       input: spec.useStdin ? fullPrompt : undefined,
     })
+    const durationMs = Date.now() - startedAt
 
-    const jsonMatch = result.match(/\{[\s\S]*\}/)
-    if (!jsonMatch) {
-      return { output: {}, provider: config.provider, error: `CLI returned no JSON. Output: ${result.substring(0, 500)}` }
+    const requiredKeys = extractRequiredKeys(req.schema)
+    const parsed = parseLLMJson(result, { requiredKeys })
+    if (!parsed) {
+      console.warn(
+        `[llm] ${spec.binary} returned unparsable output after ${durationMs}ms (${result.length}ch). Snippet: ${truncateForLog(result, 300)}`,
+      )
+      return {
+        output: {},
+        provider: config.provider,
+        error: `CLI returned no parsable JSON. Output: ${truncateForLog(result, 500)}`,
+      }
     }
 
-    return { output: JSON.parse(jsonMatch[0]), provider: config.provider }
+    const missing = requiredKeys.filter((k) => !(k in parsed))
+    if (missing.length > 0) {
+      console.warn(
+        `[llm] ${spec.binary} parsed JSON is missing required keys [${missing.join(", ")}]. Found keys: [${Object.keys(parsed).join(", ")}]. Raw snippet: ${truncateForLog(result, 300)}`,
+      )
+      return {
+        output: {},
+        provider: config.provider,
+        error: `CLI returned JSON missing required fields: [${missing.join(", ")}]. Try a different provider or tell the model to return exactly the schema.`,
+      }
+    }
+
+    console.info(
+      `[llm] ${spec.binary} ok in ${durationMs}ms → ${Object.keys(parsed).length} keys`,
+    )
+    return { output: parsed, provider: config.provider }
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : `${spec.binary} CLI failed`
     return { output: {}, provider: config.provider, error: message }
@@ -203,21 +244,33 @@ async function requestLLMUnified(config: LLMConfig, req: LLMRequest, timeoutMs?:
 }
 
 export async function requestLLM(settings: LLMSettings, req: LLMRequest, timeoutMs?: number): Promise<LLMResponse> {
+  const eligibleCount = settings.providers.filter(
+    (p) => p.model && (subscriptionProviders.has(p.provider) || p.apiKey),
+  ).length
+  let tried = 0
+
   for (const config of settings.providers) {
     const isSubscription = subscriptionProviders.has(config.provider)
     if (!config.model) {
-      console.info("Skipping provider (no model):", config.provider)
+      console.info(`[llm] skip ${config.provider} (no model configured)`)
       continue
     }
     if (!isSubscription && !config.apiKey) {
-      console.info("Skipping provider (no API key):", config.provider)
+      console.info(`[llm] skip ${config.provider} (no API key)`)
       continue
     }
-    console.info("Use provider:", config.provider, isSubscription ? "(subscription)" : "(API key)")
+
+    tried += 1
+    console.info(
+      `[llm] try ${config.provider} (${isSubscription ? "subscription" : "API key"}) — attempt ${tried}/${eligibleCount}`,
+    )
 
     const response = await requestLLMUnified(config, req, timeoutMs)
-    if (!response.error) return response
-    console.error(response.error)
+    if (!response.error) {
+      console.info(`[llm] ✓ ${config.provider} succeeded`)
+      return response
+    }
+    console.error(`[llm] ✗ ${config.provider} failed: ${response.error}`)
   }
 
   return {
@@ -225,4 +278,20 @@ export async function requestLLM(settings: LLMSettings, req: LLMRequest, timeout
     provider: settings.providers[0]?.provider || ("openai" as LLMProvider),
     error: "All LLM providers failed or are not configured",
   }
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function extractRequiredKeys(schema: Record<string, unknown> | undefined): string[] {
+  if (!schema || typeof schema !== "object") return []
+  const required = (schema as { required?: unknown }).required
+  if (!Array.isArray(required)) return []
+  return required.filter((k): k is string => typeof k === "string")
+}
+
+function truncateForLog(text: string, limit: number): string {
+  if (text.length <= limit) return text
+  return text.slice(0, limit) + `… (+${text.length - limit} chars elided)`
 }

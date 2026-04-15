@@ -8,26 +8,40 @@ import { Outlet } from "@tanstack/react-router"
 import { AppSidebar } from "@/components/sidebar/sidebar"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 import { NotificationProvider } from "@/lib/context"
+import { WizardDockProvider } from "@/lib/wizard-dock-context"
+import { WizardDock } from "@/components/wizard/wizard-dock"
 import { trpc } from "~/trpc"
 
 export function AppLayout() {
-  // Fetch unsorted files count for the sidebar badge
+  // Fetch unsorted files + in-progress wizard sessions for the sidebar badge
   const { data: unsortedFiles } = trpc.files.listUnsorted.useQuery({})
+  const { data: resumableSessions } = trpc.wizard.listResumable.useQuery()
   const { data: entities } = trpc.entities.list.useQuery()
   const { data: activeEntityId } = trpc.entities.getActive.useQuery()
+  const { data: cryptoSummary } = trpc.crypto.summary.useQuery({})
   const unsortedFilesCount = unsortedFiles?.length ?? 0
+  const resumableSessionsCount = resumableSessions?.length ?? 0
+  const inboxCount = unsortedFilesCount + resumableSessionsCount
+  const untrackedCryptoCount = cryptoSummary?.untrackedDisposalsCount ?? 0
   const entityName = entities?.find((entity) => entity.id === activeEntityId)?.name
 
   return (
     <NotificationProvider>
-      <SidebarProvider>
-        <AppSidebar unsortedFilesCount={unsortedFilesCount} entityName={entityName} />
-        <SidebarInset>
-          <div className="flex flex-1 flex-col p-4 md:p-6 overflow-x-hidden">
-            <Outlet />
-          </div>
-        </SidebarInset>
-      </SidebarProvider>
+      <WizardDockProvider>
+        <SidebarProvider>
+          <AppSidebar
+            unsortedFilesCount={inboxCount}
+            untrackedCryptoCount={untrackedCryptoCount}
+            entityName={entityName}
+          />
+          <SidebarInset>
+            <div className="flex flex-1 flex-col p-4 md:p-6 overflow-x-hidden">
+              <Outlet />
+            </div>
+          </SidebarInset>
+        </SidebarProvider>
+        <WizardDock />
+      </WizardDockProvider>
     </NotificationProvider>
   )
 }

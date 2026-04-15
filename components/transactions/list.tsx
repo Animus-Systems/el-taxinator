@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { calcNetTotalPerCurrency, calcTotalPerCurrency, isTransactionIncomplete } from "@/lib/stats"
+import { getVisibleTransactionFields } from "@/lib/transaction-list-fields"
 import { cn, formatCurrency } from "@/lib/utils"
 import type { Category, Field, Project, Transaction } from "@/lib/db-types"
 import { formatDate } from "date-fns"
@@ -221,8 +222,7 @@ export function TransactionList({ transactions, fields = [] }: { transactions: T
 
   const visibleFields = useMemo(
     (): FieldWithRenderer[] =>
-      fields
-        .filter((field) => field.isVisibleInList)
+      getVisibleTransactionFields(fields)
         .map((field) => ({
           ...field,
           renderer: getFieldRenderer(field),

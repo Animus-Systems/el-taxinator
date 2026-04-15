@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { AnalyzeAllButton } from "@/components/unsorted/analyze-all-button"
 import AnalyzeForm from "@/components/unsorted/analyze-form"
+import { WizardSessionsInline } from "@/components/wizard/wizard-sessions-inline"
 import config from "@/lib/config"
 import { FileText, PartyPopper, Settings, Upload } from "lucide-react"
 import { Link } from "@/lib/navigation"
@@ -47,6 +48,8 @@ export function UnsortedPage() {
         <h2 className="text-3xl font-bold tracking-tight">{t("unsortedFiles", { count: fileList.length })}</h2>
         {fileList.length > 1 && <AnalyzeAllButton />}
       </header>
+
+      <WizardSessionsInline />
 
       {config.selfHosted.isEnabled &&
         !s.openai_api_key &&

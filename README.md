@@ -15,14 +15,16 @@ El Taxinator is a self-hosted accounting and tax management app built for freela
 ## Features
 
 - **Zero-setup database** — Ships with an embedded PostgreSQL 17 binary that boots in-process. No Docker, no `apt install postgres`, no setup steps. Run `yarn dev` and you're done.
-- **AI-powered document processing** — Upload photos of receipts, invoices, or bank statement PDFs. AI extracts transactions, categorizes them, and matches bank entries to invoices automatically.
-- **Canary Islands tax calculators** — Modelo 420 (quarterly IGIC), Modelo 425 (annual IGIC summary), Modelo 130 (quarterly IRPF for autónomos), Modelo 202/200 (corporate tax for SLs). All with IGIC rates (0%, 3%, 7%, 9.5%, 15%).
+- **AI Accountant wizard** — Upload a CSV or PDF bank statement, or click "Add Transaction", and a conversational accountant greets you. It asks clarifying questions, batch-confirms obvious rows, remembers durable business facts across sessions (profession, mixed-use accounts, regime), and proactively suggests lawful alternatives when something isn't deductible — always with a legal citation (Modelo casilla, BOE article, LIRPF section). Sessions are resumable, dockable while you use other pages, and end with a downloadable PDF report.
+- **Living Spanish tax knowledge packs** — Canary Islands autónomo and SL knowledge ship as markdown (IGIC rates, Modelo deadlines, deductibility rules). Refresh them at any time with your own configured LLM — no paid web-search provider needed. Refreshed packs land as `needs_review` until you mark them verified.
+- **Crypto as a first-class object** — Dedicated `/crypto` page, five default categories (disposal, purchase, fee, staking, airdrop), FIFO cost-basis ledger across all holdings, automatic gateway pairing between bank deposits and exchange disposals (Swissborg/Coinbase/Binance/etc.), and per-disposal realised-gain breakdown into matched lots.
+- **Canary Islands tax calculators** — Modelo 420 (quarterly IGIC), Modelo 425 (annual IGIC summary), Modelo 130 (quarterly IRPF for autónomos), Modelo 202/200 (corporate tax for SLs), **Modelo 100 annual IRPF with base del ahorro brackets (19/21/23/27/28%)**, and **Modelo 721 informativa** for foreign crypto holdings. All with IGIC rates (0%, 3%, 7%, 9.5%, 15%).
 - **Multi-company support** — Manage multiple businesses from one instance. Each company gets its own database inside the embedded cluster. Supports both Autónomo and Sociedad Limitada entity types.
 - **Per-company uploads folder** — Each company can keep its receipts and files in its own folder, anywhere on disk (local, external drive, or a Google Drive–synced folder).
 - **Invoicing & quotes** — Create, track, and export professional invoices with IGIC and IRPF withholding. Convert quotes to invoices. Import billable time entries.
 - **Time tracking** — Log billable hours, track by project and client, import into invoices.
 - **Multi-language** — Full English and Spanish UI with locale-aware database content (category names, field names, etc. stored in both languages).
-- **Multiple AI providers** — Claude, OpenAI, Google Gemini, Mistral, OpenRouter, or any custom OpenAI-compatible API (Ollama, vLLM, etc.).
+- **Multiple AI providers** — Claude, OpenAI, Google Gemini, Mistral, OpenRouter, subscription CLIs (Claude Code, codex), or any custom OpenAI-compatible API (Ollama, vLLM, etc.). Enhanced logging shows which provider/model/thinking level is actually serving each request.
 - **Accountant data export** — Generate organized ZIP bundles with transactions, invoices, tax calculations, time entries, and receipt attachments — by quarter or full year.
 - **Portable backups** — Full database dump + uploaded files in a single `.taxinator.zip`. Import on any instance with one click. Auto-backup to Google Drive with configurable frequency.
 - **Bank statement processing** — Upload a bank statement PDF, AI splits it into individual transactions, auto-categorizes, and matches to existing invoices.
@@ -85,21 +87,26 @@ Built for the Canary Islands tax regime (REF — Régimen Económico y Fiscal):
 
 | Entity Type | Quarterly | Annual |
 |-------------|-----------|--------|
-| **Autónomo** | Modelo 420 (IGIC) + Modelo 130 (IRPF) | Modelo 425 (IGIC summary) |
-| **Sociedad Limitada** | Modelo 420 (IGIC) + Modelo 202 (Corporate tax) | Modelo 425 + Modelo 200 (Corporate annual) |
+| **Autónomo** | Modelo 420 (IGIC) + Modelo 130 (IRPF) | Modelo 425 (IGIC summary) + **Modelo 100** (annual IRPF with base del ahorro for crypto gains) |
+| **Sociedad Limitada** | Modelo 420 (IGIC) + Modelo 202 (Corporate tax) | Modelo 425 + **Modelo 200** (Corporate annual with crypto P&L and staking income) |
+| **Both** | — | **Modelo 721** informativa when foreign crypto holdings exceed the €50K year-end threshold |
 
 IGIC rates: 0% (zero), 3% (reduced), 7% (general), 9.5% (increased), 15% (special)
 
-Filing deadlines: Q1 → April 20, Q2 → July 20, Q3 → October 20, Q4 → January 30
+Base del ahorro brackets (Modelo 100, 2026): 19% (0–6K) · 21% (6K–50K) · 23% (50K–200K) · 27% (200K–300K) · 28% (300K+)
+
+Filing deadlines: Q1 → April 20, Q2 → July 20, Q3 → October 20, Q4 → January 30, Modelo 721 → March 31
 
 ## Tech Stack
 
-- **Next.js 16** with Turbopack
+- **Vite + React 19** SPA front-end with [TanStack Router](https://tanstack.com/router)
+- **Fastify** API server (`/api/*`) handling uploads, commits, and PDF rendering
 - **PostgreSQL 17** via [`embedded-postgres`](https://www.npmjs.com/package/embedded-postgres) — real PG binary spawned in-process, one database per company inside a single cluster
 - **Raw SQL** — no ORM, parameterized queries via `pg`
-- **tRPC** — type-safe API layer
-- **next-intl** — internationalization (English + Spanish)
-- **LangChain** — AI provider abstraction
+- **tRPC** — type-safe API layer with OpenAPI passthrough
+- **react-i18next** — internationalization (English + Spanish) with ICU-style single-brace interpolation
+- **LangChain** + subscription-CLI adapters (Claude Code, codex) — AI provider abstraction with balanced-brace JSON parsing for envelope-style CLI output
+- **`@react-pdf/renderer`** — session report + invoice PDFs
 - **JSZip** — backup/export bundles
 - **sharp** — image processing
 - **googleapis** — Google Drive auto-backup

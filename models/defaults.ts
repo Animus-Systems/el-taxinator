@@ -300,6 +300,16 @@ export const DEFAULT_FIELDS = [
     isExtra: false,
   },
   {
+    code: "accountName",
+    name: i18n("Account", "Cuenta"),
+    type: "string",
+    llmPrompt: "",
+    isVisibleInList: true,
+    isVisibleInAnalysis: false,
+    isRequired: false,
+    isExtra: false,
+  },
+  {
     code: "issuedAt",
     name: i18n("Issued At", "Fecha de emisión"),
     type: "string",

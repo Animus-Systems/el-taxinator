@@ -4,10 +4,23 @@ import { getProjects } from "@/models/projects"
 import { getSettings, getLLMSettings } from "@/models/settings"
 import { getActiveRules } from "@/models/rules"
 import type { Category, Project, I18nText } from "@/lib/db-types"
+import type { TransactionReviewStatus } from "@/lib/import-review"
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
+
+export type CandidateCryptoMeta = {
+  asset?: string
+  quantity?: string
+  pricePerUnit?: number | null
+  costBasisPerUnit?: number | null
+  costBasisSource?: "manual" | "fifo" | "imported"
+  realizedGainCents?: number | null
+  fxRate?: number | null
+  gatewayTransactionId?: string | null
+  fingerprint?: string | null
+}
 
 export type TransactionCandidate = {
   rowIndex: number
@@ -19,14 +32,25 @@ export type TransactionCandidate = {
   type: string | null // "expense" | "income"
   categoryCode: string | null
   projectCode: string | null
+  accountId: string | null
   issuedAt: string | null // ISO date string
+  status: TransactionReviewStatus
+  suggestedStatus: TransactionReviewStatus | null
   confidence: {
     category: number
     type: number
+    status: number
     overall: number
   }
   selected: boolean
   ruleMatched?: boolean
+  // `extra.crypto` is populated by the wizard when the AI identifies a crypto
+  // disposal/purchase/reward. Phase 1 accepts partial metadata; unknown fields
+  // (e.g. missing cost basis) keep the candidate in `needs_review`.
+  extra?: {
+    crypto?: CandidateCryptoMeta
+    [key: string]: unknown
+  }
 }
 
 export type SuggestedCategory = {
@@ -322,10 +346,14 @@ export function applyCSVMapping(
       type,
       categoryCode: null,
       projectCode: null,
+      accountId: null,
       issuedAt: getValue("issuedAt"),
+      status: "needs_review",
+      suggestedStatus: null,
       confidence: {
         category: 0.5,
         type: type !== null ? 0.8 : 0.5,
+        status: 0,
         overall: 0.5,
       },
       selected: true,
@@ -367,7 +395,7 @@ async function categorizeTransactionsInternal(
 
   // Build rules context string for the prompt
   const rulesContext = rules.length > 0
-    ? `\n\nThe user has categorization rules (DO NOT contradict manual rules):\n${rules.map(r => `- If ${r.matchField} ${r.matchType} "${r.matchValue}" → category: ${r.categoryCode || "auto"}, project: ${r.projectCode || "auto"}, type: ${r.type || "auto"} [${r.source}]`).join("\n")}`
+    ? `\n\nThe user has categorization rules (DO NOT contradict manual rules):\n${rules.map(r => `- If ${r.matchField} ${r.matchType} "${r.matchValue}" → category: ${r.categoryCode || "auto"}, project: ${r.projectCode || "auto"}, type: ${r.type || "auto"}, status: ${r.status || "auto"} [${r.source}]`).join("\n")}`
     : ""
 
   const feedbackContext = feedback
@@ -390,7 +418,7 @@ async function categorizeTransactionsInternal(
       issuedAt: c.issuedAt,
     }))
 
-    const prompt = `You are categorizing bank transactions. For each transaction, suggest the best matching category, project, and type.
+    const prompt = `You are categorizing bank transactions. For each transaction, suggest the best matching category, project, type, and business treatment status.
 
 Available categories:
 ${categories.length > 0 ? formatCategoryList(categories) : "(none)"}
@@ -405,6 +433,7 @@ For each transaction, return:
 - categoryCode: the best matching category code, or null if unsure
 - projectCode: the best matching project code, or null if unsure
 - type: "expense" or "income"
+- status: "business", "business_non_deductible", "personal_ignored", or null if unsure
 - confidence: 0 to 1, how confident you are in the categorization${feedbackContext}`
 
     const schema = {
@@ -423,6 +452,10 @@ For each transaction, return:
                 type: ["string", "null"],
               },
               type: { type: "string", enum: ["expense", "income"] },
+              status: {
+                type: ["string", "null"],
+                enum: ["business", "business_non_deductible", "personal_ignored", null],
+              },
               confidence: { type: "number" },
             },
             required: [
@@ -430,6 +463,7 @@ For each transaction, return:
               "categoryCode",
               "projectCode",
               "type",
+              "status",
               "confidence",
             ],
             additionalProperties: false,
@@ -457,6 +491,7 @@ For each transaction, return:
           categoryCode: string | null
           projectCode: string | null
           type: string
+          status: TransactionReviewStatus | null
           confidence: number
         }>
       }
@@ -473,20 +508,26 @@ For each transaction, return:
 
         const candidate = batch[result.index]
 
-        if (
-          result.categoryCode &&
-          categoryCodes.includes(result.categoryCode)
-        ) {
-          candidate.categoryCode = result.categoryCode
-        }
+        candidate.categoryCode =
+          result.categoryCode && categoryCodes.includes(result.categoryCode)
+            ? result.categoryCode
+            : null
 
-        if (result.projectCode && projectCodes.includes(result.projectCode)) {
-          candidate.projectCode = result.projectCode
-        }
+        candidate.projectCode =
+          result.projectCode && projectCodes.includes(result.projectCode)
+            ? result.projectCode
+            : null
 
         if (result.type === "expense" || result.type === "income") {
           candidate.type = result.type
         }
+
+        candidate.suggestedStatus =
+          result.status === "business" ||
+          result.status === "business_non_deductible" ||
+          result.status === "personal_ignored"
+            ? result.status
+            : null
 
         const conf =
           typeof result.confidence === "number"
@@ -496,6 +537,7 @@ For each transaction, return:
         candidate.confidence = {
           category: candidate.categoryCode !== null ? conf : 0,
           type: conf,
+          status: candidate.suggestedStatus !== null ? conf : 0,
           overall: conf,
         }
       }

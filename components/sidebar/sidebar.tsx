@@ -21,6 +21,7 @@ import {
   Calculator,
   Clock,
   ClockArrowUp,
+  Coins,
   FileText,
   House,
   LogOut,
@@ -76,9 +77,11 @@ function NavItem({ href, icon: Icon, label, badge, blink }: {
 
 export function AppSidebar({
   unsortedFilesCount,
+  untrackedCryptoCount = 0,
   entityName,
 }: {
   unsortedFilesCount: number
+  untrackedCryptoCount?: number
   entityName?: string
 }) {
   const { t } = useTranslation("sidebar")
@@ -131,6 +134,12 @@ export function AppSidebar({
                   label={t("inbox")}
                   badge={unsortedFilesCount}
                   blink={notification?.code === "sidebar.unsorted" && !!notification.message}
+                />
+                <NavItem
+                  href="/crypto"
+                  icon={Coins}
+                  label={t("crypto")}
+                  badge={untrackedCryptoCount}
                 />
                 <NavItem href="/invoices" icon={Receipt} label={t("invoices")} />
                 <NavItem href="/quotes" icon={ScrollText} label={t("quotes")} />

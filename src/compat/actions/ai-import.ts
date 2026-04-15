@@ -11,6 +11,11 @@ type ImportSession = {
 type ImportResult = {
   success: boolean
   error?: string
+  validationErrors?: Array<{
+    rowIndex: number
+    code: string
+    message: string
+  }>
   bank?: string
   bankConfidence?: number
   sessionId?: string
@@ -44,8 +49,18 @@ export async function startCSVImportAction(formData: FormData): Promise<ImportRe
   return postFormData("/api/import/csv", formData)
 }
 
-export async function categorizeSessionAction(sessionId: string): Promise<ImportResult> {
-  return postJson(`/api/import/session/${sessionId}/categorize`)
+export async function saveReviewSessionAction(
+  sessionId: string,
+  reviewedCandidates: TransactionCandidate[],
+): Promise<ImportResult> {
+  return postJson(`/api/import/session/${sessionId}/review`, { reviewedCandidates })
+}
+
+export async function categorizeSessionAction(
+  sessionId: string,
+  reviewedCandidates?: TransactionCandidate[],
+): Promise<ImportResult> {
+  return postJson(`/api/import/session/${sessionId}/categorize`, reviewedCandidates ? { reviewedCandidates } : undefined)
 }
 
 export async function detectPDFTypeAction(formData: FormData): Promise<ImportResult> {
@@ -68,13 +83,15 @@ export async function getImportSessionAction(sessionId: string): Promise<ImportR
 export async function recategorizeWithFeedbackAction(
   sessionId: string,
   feedback: string,
+  reviewedCandidates?: TransactionCandidate[],
 ): Promise<ImportResult> {
-  return postJson(`/api/import/session/${sessionId}/recategorize`, { feedback })
+  return postJson(`/api/import/session/${sessionId}/recategorize`, { feedback, reviewedCandidates })
 }
 
 export async function commitImportAction(
   sessionId: string,
   selectedRowIndexes: number[],
+  reviewedCandidates?: TransactionCandidate[],
   acceptedCategories?: Array<{
     code: string
     name: { en: string; es: string }
@@ -84,6 +101,7 @@ export async function commitImportAction(
 ): Promise<ImportResult> {
   return postJson(`/api/import/session/${sessionId}/commit`, {
     selectedRowIndexes,
+    reviewedCandidates,
     acceptedCategories,
   })
 }

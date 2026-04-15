@@ -1,1 +1,0 @@
-{"nodes": [{"id": "manifest", "label": "manifest.ts", "file_type": "code", "source_file": "app/[locale]/(app)/apps/invoices/manifest.ts", "source_location": "L1"}], "edges": [{"source": "manifest", "target": "common", "relation": "imports_from", "confidence": "EXTRACTED", "source_file": "app/[locale]/(app)/apps/invoices/manifest.ts", "source_location": "L1", "weight": 1.0}]}

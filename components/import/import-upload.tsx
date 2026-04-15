@@ -1,5 +1,5 @@
 
-import { useState, useCallback, useRef } from "react"
+import { useState, useCallback, useRef, useEffect } from "react"
 import { useTranslations } from "next-intl"
 import type { BankAccount } from "@/lib/db-types"
 import type { TransactionCandidate } from "@/ai/import-csv"
@@ -24,6 +24,7 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { ReviewTable } from "@/components/import/review-table"
 import { Loader2, Upload, CheckCircle } from "lucide-react"
+import { trpc } from "~/trpc"
 
 type State = "idle" | "parsing" | "categorizing" | "detecting" | "extracting" | "reviewing" | "complete"
 
@@ -44,6 +45,8 @@ type Props = {
 
 export function ImportUpload({ accounts, onComplete }: Props) {
   const t = useTranslations("settings")
+  const { data: categories = [] } = trpc.categories.list.useQuery({})
+  const { data: projects = [] } = trpc.projects.list.useQuery({})
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [state, setState] = useState<State>("idle")
   const [file, setFile] = useState<File | null>(null)
@@ -53,6 +56,38 @@ export function ImportUpload({ accounts, onComplete }: Props) {
   const [sessionData, setSessionData] = useState<SessionData | null>(null)
   const [dragActive, setDragActive] = useState(false)
   const [importedCount, setImportedCount] = useState(0)
+
+  const categoryOptions = categories.map((category) => ({
+    code: category.code,
+    name: typeof category.name === "string" ? category.name : category.name.en || Object.values(category.name)[0] || category.code,
+  }))
+  const projectOptions = projects.map((project) => ({
+    code: project.code,
+    name: typeof project.name === "string" ? project.name : project.name.en || Object.values(project.name)[0] || project.code,
+  }))
+
+  useEffect(() => {
+    setSessionData((prev) => {
+      if (!prev) return prev
+
+      const categoriesUnchanged =
+        prev.categories.length === categoryOptions.length &&
+        prev.categories.every((category, index) => category.code === categoryOptions[index]?.code)
+      const projectsUnchanged =
+        prev.projects.length === projectOptions.length &&
+        prev.projects.every((project, index) => project.code === projectOptions[index]?.code)
+
+      if (categoriesUnchanged && projectsUnchanged) {
+        return prev
+      }
+
+      return {
+        ...prev,
+        categories: categoryOptions,
+        projects: projectOptions,
+      }
+    })
+  }, [categories, projects])
 
   const handleFile = useCallback((f: File) => {
     const ext = f.name.toLowerCase()
@@ -92,7 +127,7 @@ export function ImportUpload({ accounts, onComplete }: Props) {
       const detectResult = await detectPDFTypeAction(formData)
       if (!detectResult.success) {
         setState("idle")
-        setError(detectResult.error)
+        setError(detectResult.error ?? "Failed to detect PDF type")
         return
       }
 
@@ -100,12 +135,13 @@ export function ImportUpload({ accounts, onComplete }: Props) {
       const result = await extractPDFImportAction(formData)
       if (!result.success) {
         setState("idle")
-        setError(result.error)
+        setError(result.error ?? "Failed to extract PDF transactions")
         return
       }
 
       setBank(result.bank ?? null)
-      const sessionResult = await getImportSessionAction(result.sessionId)
+      const sessionId = result.sessionId ?? ""
+      const sessionResult = await getImportSessionAction(sessionId)
       if (!sessionResult.success || !sessionResult.session) {
         setState("idle")
         setError(sessionResult.error ?? "Failed to load session")
@@ -113,12 +149,12 @@ export function ImportUpload({ accounts, onComplete }: Props) {
       }
 
       setSessionData({
-        sessionId: result.sessionId ?? "",
+        sessionId,
         candidates: sessionResult.session.data,
         bank: result.bank ?? "",
         fileName: file.name,
-        categories: [],
-        projects: [],
+        categories: categoryOptions,
+        projects: projectOptions,
         suggestedCategories: sessionResult.session.suggestedCategories || [],
       })
       setState("reviewing")
@@ -128,16 +164,17 @@ export function ImportUpload({ accounts, onComplete }: Props) {
       const result = await startCSVImportAction(formData)
       if (!result.success) {
         setState("idle")
-        setError(result.error)
+        setError(result.error ?? "Failed to start CSV import")
         return
       }
 
       setBank(result.bank ?? null)
 
       setState("categorizing")
-      await categorizeSessionAction(result.sessionId)
+      const sessionId = result.sessionId ?? ""
+      await categorizeSessionAction(sessionId)
 
-      const sessionResult = await getImportSessionAction(result.sessionId)
+      const sessionResult = await getImportSessionAction(sessionId)
       if (!sessionResult.success || !sessionResult.session) {
         setState("idle")
         setError(sessionResult.error ?? "Failed to load session")
@@ -145,12 +182,12 @@ export function ImportUpload({ accounts, onComplete }: Props) {
       }
 
       setSessionData({
-        sessionId: result.sessionId ?? "",
+        sessionId,
         candidates: sessionResult.session.data,
         bank: result.bank ?? "",
         fileName: file.name,
-        categories: [],
-        projects: [],
+        categories: categoryOptions,
+        projects: projectOptions,
         suggestedCategories: sessionResult.session.suggestedCategories || [],
       })
       setState("reviewing")
@@ -193,8 +230,8 @@ export function ImportUpload({ accounts, onComplete }: Props) {
         categories={sessionData.categories}
         projects={sessionData.projects}
         suggestedCategories={sessionData.suggestedCategories}
-        onRecategorize={async (feedback) => {
-          await recategorizeWithFeedbackAction(sessionData.sessionId, feedback)
+        onRecategorize={async (feedback, reviewedCandidates) => {
+          await recategorizeWithFeedbackAction(sessionData.sessionId, feedback, reviewedCandidates)
           const updated = await getImportSessionAction(sessionData.sessionId)
           if (updated.success && updated.session) {
             setSessionData({

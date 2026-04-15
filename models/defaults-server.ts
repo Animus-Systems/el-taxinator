@@ -88,6 +88,16 @@ export async function createUserDefaults(userId: string) {
   } finally {
     client.release()
   }
+
+  // Seed Canary Islands knowledge packs outside the main transaction so a
+  // disk/fs error on the seed markdown doesn't roll back the user's defaults.
+  // `seedKnowledgePacksForUser` is idempotent (only inserts missing slugs).
+  try {
+    const { seedKnowledgePacksForUser } = await import("@/ai/knowledge-refresh")
+    await seedKnowledgePacksForUser(userId)
+  } catch (err) {
+    console.warn("[defaults] knowledge pack seeding skipped:", err instanceof Error ? err.message : err)
+  }
 }
 
 export async function isDatabaseEmpty(userId: string) {

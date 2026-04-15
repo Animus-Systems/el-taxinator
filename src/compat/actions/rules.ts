@@ -31,6 +31,7 @@ export async function addRuleAction(data: {
   categoryCode?: string | null
   projectCode?: string | null
   type?: string | null
+  status?: string | null
   note?: string | null
   priority?: number
 }) {

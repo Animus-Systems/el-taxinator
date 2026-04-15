@@ -11,7 +11,8 @@ import {
   mapProjectFromRow,
 } from "@/lib/sql"
 import { getPool } from "@/lib/pg"
-import type { Transaction, Category, Project, Field } from "@/lib/db-types"
+import { splitTransactionDataByFieldDefinitions } from "@/lib/transaction-data"
+import type { Transaction, Category, Project } from "@/lib/db-types"
 import { cache } from "react"
 import { getFields } from "./fields"
 import { deleteFile } from "./files"
@@ -34,6 +35,7 @@ export type TransactionData = {
   projectCode?: string | null
   issuedAt?: Date | string | null
   text?: string | null
+  status?: string | null
   [key: string]: unknown
 }
 
@@ -375,27 +377,5 @@ const splitTransactionDataExtraFields = async (
   userId: string,
 ): Promise<{ standard: TransactionData; extra: Record<string, unknown> }> => {
   const fields = await getFields(userId)
-  const fieldMap = fields.reduce(
-    (acc, field) => {
-      acc[field.code] = field
-      return acc
-    },
-    {} as Record<string, Field>,
-  )
-
-  const standard: TransactionData = {}
-  const extra: Record<string, unknown> = {}
-
-  Object.entries(data).forEach(([key, value]) => {
-    const fieldDef = fieldMap[key]
-    if (fieldDef) {
-      if (fieldDef.isExtra) {
-        extra[key] = value
-      } else {
-        standard[key] = value
-      }
-    }
-  })
-
-  return { standard, extra }
+  return splitTransactionDataByFieldDefinitions(data, fields)
 }

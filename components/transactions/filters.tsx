@@ -4,13 +4,16 @@ import { ColumnSelector } from "@/components/transactions/fields-selector"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { isFiltered, useTransactionFilters } from "@/hooks/use-transaction-filters"
+import { isFiltered } from "@/hooks/use-transaction-filters"
+import { useSearchParams } from "next/navigation"
+import { useRouter } from "@/lib/navigation"
 import type { TransactionFilters } from "@/models/transactions"
 import type { BankAccount, Category, Field, Project } from "@/lib/db-types"
 import { format } from "date-fns"
 import { X } from "lucide-react"
 import { useTranslations, useLocale } from "next-intl"
 import { getLocalizedValue } from "@/lib/i18n-db"
+import { applyTransactionFilterPatch, filtersToSearchParams, searchParamsToFilters } from "@/lib/transaction-filters"
 
 export function TransactionSearchAndFilters({
   categories,
@@ -25,13 +28,19 @@ export function TransactionSearchAndFilters({
 }) {
   const t = useTranslations("transactions")
   const locale = useLocale()
-  const [filters, setFilters] = useTransactionFilters()
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const filters = searchParamsToFilters(searchParams)
 
-  const handleFilterChange = (name: keyof TransactionFilters, value: TransactionFilters[keyof TransactionFilters]) => {
-    setFilters((prev) => ({
-      ...prev,
-      [name]: value,
-    }))
+  const handleFilterChange = (
+    name: keyof TransactionFilters,
+    value: TransactionFilters[keyof TransactionFilters],
+  ) => {
+    const nextSearch = applyTransactionFilterPatch(searchParams, {
+      [name]: value ?? "",
+    })
+    const href = nextSearch.toString() ? `/transactions?${nextSearch}` : "/transactions"
+    router.replace(href)
   }
 
   return (
@@ -39,6 +48,7 @@ export function TransactionSearchAndFilters({
       <div className="flex flex-wrap gap-4">
         <div className="flex-1 min-w-[200px]">
           <Input
+            key={`search-${filters.search || ""}`}
             placeholder="Search transactions..."
             defaultValue={filters.search}
             onKeyDown={(e) => {
@@ -50,7 +60,7 @@ export function TransactionSearchAndFilters({
           />
         </div>
 
-        <Select value={filters.categoryCode} onValueChange={(value) => handleFilterChange("categoryCode", value)}>
+        <Select value={filters.categoryCode || "-"} onValueChange={(value) => handleFilterChange("categoryCode", value)}>
           <SelectTrigger className="w-[180px]">
             <SelectValue placeholder="All categories" />
           </SelectTrigger>
@@ -68,7 +78,7 @@ export function TransactionSearchAndFilters({
         </Select>
 
         {accounts.length > 0 && (
-          <Select value={filters.accountId} onValueChange={(value) => handleFilterChange("accountId", value)}>
+          <Select value={filters.accountId || "-"} onValueChange={(value) => handleFilterChange("accountId", value)}>
             <SelectTrigger className="w-[180px]">
               <SelectValue placeholder={t("allAccounts")} />
             </SelectTrigger>
@@ -84,7 +94,7 @@ export function TransactionSearchAndFilters({
         )}
 
         {projects.length > 1 && (
-          <Select value={filters.projectCode} onValueChange={(value) => handleFilterChange("projectCode", value)}>
+          <Select value={filters.projectCode || "-"} onValueChange={(value) => handleFilterChange("projectCode", value)}>
             <SelectTrigger className="w-[180px]">
               <SelectValue placeholder="All projects" />
             </SelectTrigger>
@@ -118,7 +128,9 @@ export function TransactionSearchAndFilters({
             variant="ghost"
             size="icon"
             onClick={() => {
-              setFilters({})
+              const nextSearch = filtersToSearchParams({}, searchParams)
+              const href = nextSearch.toString() ? `/transactions?${nextSearch}` : "/transactions"
+              router.replace(href)
             }}
             className="text-muted-foreground hover:text-foreground"
             title={t("clearFilters")}

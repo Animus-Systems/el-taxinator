@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest"
 import {
+  applyTransactionFilterPatch,
   filtersToSearchParams,
   searchParamsToFilters,
 } from "@/lib/transaction-filters"
+import { DEFAULT_FIELDS } from "@/models/defaults"
 
 describe("transaction filter URL helpers", () => {
   it("preserves all supported filters from the URL", () => {
@@ -42,5 +44,48 @@ describe("transaction filter URL helpers", () => {
     expect(result.get("type")).toBe("income")
     expect(result.has("categoryCode")).toBe(false)
     expect(result.has("projectCode")).toBe(false)
+  })
+
+  it("applies a filter patch while preserving unrelated params and existing filters", () => {
+    const params = new URLSearchParams("page=4&tab=all&ordering=-issuedAt&type=expense")
+
+    const result = applyTransactionFilterPatch(params, {
+      search: "spotify",
+      accountId: "acc-2",
+      categoryCode: "software",
+    })
+
+    expect(result.get("page")).toBe("4")
+    expect(result.get("tab")).toBe("all")
+    expect(result.get("ordering")).toBe("-issuedAt")
+    expect(result.get("type")).toBe("expense")
+    expect(result.get("search")).toBe("spotify")
+    expect(result.get("accountId")).toBe("acc-2")
+    expect(result.get("categoryCode")).toBe("software")
+  })
+
+  it("drops only supported filter keys when clearing filters", () => {
+    const params = new URLSearchParams(
+      "page=2&tab=all&search=coffee&accountId=acc-1&type=expense&ordering=-issuedAt",
+    )
+
+    const result = filtersToSearchParams({}, params)
+
+    expect(result.get("page")).toBe("2")
+    expect(result.get("tab")).toBe("all")
+    expect(result.has("search")).toBe(false)
+    expect(result.has("accountId")).toBe(false)
+    expect(result.has("type")).toBe(false)
+    expect(result.has("ordering")).toBe(false)
+  })
+})
+
+describe("transaction default fields", () => {
+  it("includes accountName as a visible default transaction field", () => {
+    expect(DEFAULT_FIELDS.find((field) => field.code === "accountName")).toMatchObject({
+      code: "accountName",
+      isVisibleInList: true,
+      isExtra: false,
+    })
   })
 })

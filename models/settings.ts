@@ -27,10 +27,14 @@ export function getLLMSettings(settings: SettingsMap) {
     const providerMeta = PROVIDERS.find(p => p.key === providerKey)
     if (!providerMeta) return null
 
+    const userSetModel = settings[providerMeta.modelName]
+    const model = userSetModel || providerMeta.defaultModelName
+
     return {
       provider: providerKey as LLMProvider,
       apiKey: settings[providerMeta.apiKeyName] || "",
-      model: settings[providerMeta.modelName] || providerMeta.defaultModelName,
+      model,
+      modelIsDefault: !userSetModel,
       thinking: providerMeta.thinkingSettingName
         ? (settings[providerMeta.thinkingSettingName] || "medium")
         : undefined,

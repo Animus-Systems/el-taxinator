@@ -14,6 +14,9 @@ const jsonValueSchema = z.any() as z.ZodType<JsonValue>
 // Zod schemas (used for runtime validation of raw DB rows after camelCase mapping)
 // ---------------------------------------------------------------------------
 
+export const entityTypeSchema = z.enum(["autonomo", "sl"])
+export type EntityType = z.infer<typeof entityTypeSchema>
+
 export const userSchema = z.object({
   id: z.string(),
   email: z.string(),
@@ -33,6 +36,7 @@ export const userSchema = z.object({
   businessBankDetails: z.string().nullable(),
   businessLogo: z.string().nullable(),
   businessTaxId: z.string().nullable(),
+  entityType: entityTypeSchema.nullable(),
 })
 
 export const sessionSchema = z.object({
@@ -157,6 +161,7 @@ export const transactionSchema = z.object({
   text: z.string().nullable(),
   deductible: z.boolean().nullable(),
   accountId: z.string().nullable(),
+  status: z.string(),
 })
 
 export const currencySchema = z.object({
@@ -166,6 +171,15 @@ export const currencySchema = z.object({
   name: z.string(),
 })
 
+export const accountTypeSchema = z.enum([
+  "bank",
+  "credit_card",
+  "crypto_exchange",
+  "crypto_wallet",
+  "cash",
+])
+export type AccountTypeValue = z.infer<typeof accountTypeSchema>
+
 export const bankAccountSchema = z.object({
   id: z.string(),
   userId: z.string(),
@@ -174,6 +188,7 @@ export const bankAccountSchema = z.object({
   currencyCode: z.string(),
   accountNumber: z.string().nullable(),
   notes: z.string().nullable(),
+  accountType: accountTypeSchema,
   isActive: z.boolean(),
   createdAt: z.date(),
   updatedAt: z.date(),
@@ -181,21 +196,225 @@ export const bankAccountSchema = z.object({
 
 export type BankAccount = z.infer<typeof bankAccountSchema>
 
+// Crypto metadata lives inside `transactions.extra.crypto`. All fields are
+// optional so the wizard can populate partially and flag `needs_review` when
+// cost basis is unknown.
+export const costBasisSourceSchema = z.enum(["manual", "fifo", "imported"])
+
+export const cryptoMetaSchema = z.object({
+  asset: z.string(),                              // ticker: BTC, ETH, ...
+  quantity: z.string(),                           // decimal string for precision
+  pricePerUnit: z.number().int().nullable(),      // EUR cents at disposal
+  costBasisPerUnit: z.number().int().nullable(),  // EUR cents at acquisition
+  costBasisSource: costBasisSourceSchema.default("manual"),
+  realizedGainCents: z.number().int().nullable(),
+  fxRate: z.number().nullable(),
+  gatewayTransactionId: z.string().uuid().nullable(),
+  fingerprint: z.string().nullable(),
+})
+export type CryptoMeta = z.infer<typeof cryptoMetaSchema>
+
+// ---------------------------------------------------------------------------
+// Wizard / conversational session
+// ---------------------------------------------------------------------------
+
+export const transactionReviewStatusSchema = z.enum([
+  "needs_review",
+  "business",
+  "business_non_deductible",
+  "personal_ignored",
+])
+export type TransactionReviewStatusValue = z.infer<typeof transactionReviewStatusSchema>
+
+export const candidateConfidenceSchema = z.object({
+  category: z.number(),
+  type: z.number(),
+  status: z.number(),
+  overall: z.number(),
+})
+
+// Wizard LLM output for a candidate. `extra.crypto` populates the transaction's
+// crypto metadata when the AI identifies a crypto disposal/purchase/reward.
+export const candidateExtraSchema = z.object({
+  crypto: cryptoMetaSchema.partial().optional(),
+}).passthrough()
+
+export const candidateUpdateSchema = z.object({
+  rowIndex: z.number(),
+  name: z.string().nullable().optional(),
+  merchant: z.string().nullable().optional(),
+  description: z.string().nullable().optional(),
+  total: z.number().nullable().optional(),
+  currencyCode: z.string().nullable().optional(),
+  type: z.enum(["expense", "income"]).nullable().optional(),
+  categoryCode: z.string().nullable().optional(),
+  projectCode: z.string().nullable().optional(),
+  accountId: z.string().nullable().optional(),
+  issuedAt: z.string().nullable().optional(),
+  status: transactionReviewStatusSchema.nullable().optional(),
+  reasoning: z.string().optional(),
+  confidence: candidateConfidenceSchema.optional(),
+  extra: candidateExtraSchema.optional(),
+})
+export type CandidateUpdate = z.infer<typeof candidateUpdateSchema>
+
+export const bulkActionSchema = z.object({
+  description: z.string(),
+  match: z.object({
+    field: z.enum(["name", "merchant", "description"]),
+    type: z.enum(["contains", "exact", "regex", "starts_with"]),
+    value: z.string(),
+  }),
+  apply: z.object({
+    categoryCode: z.string().nullable().optional(),
+    projectCode: z.string().nullable().optional(),
+    type: z.enum(["expense", "income"]).nullable().optional(),
+    status: transactionReviewStatusSchema.nullable().optional(),
+  }),
+  affectedRowIndexes: z.array(z.number()).default([]),
+  offerAsRule: z.boolean().default(false),
+})
+export type BulkAction = z.infer<typeof bulkActionSchema>
+
+// ---------------------------------------------------------------------------
+// Tax-optimization tips surfaced inline by the wizard
+// ---------------------------------------------------------------------------
+
+export const taxTipActionableSchema = z.enum([
+  "save_as_fact",
+  "propose_recategorization",
+  "advisory",
+])
+
+export const taxTipSchema = z.object({
+  rowIndex: z.number().nullable(),
+  title: z.string(),
+  body: z.string(),
+  legalBasis: z.string(),
+  actionable: taxTipActionableSchema.default("advisory"),
+})
+export type TaxTip = z.infer<typeof taxTipSchema>
+
+export const wizardMessageRoleSchema = z.enum(["user", "assistant", "system"])
+
+export const wizardMessageSchema = z.object({
+  id: z.string(),
+  role: wizardMessageRoleSchema,
+  content: z.string(),
+  createdAt: z.string(), // ISO timestamp
+  candidateUpdates: z.array(candidateUpdateSchema).optional(),
+  bulkActions: z.array(bulkActionSchema).optional(),
+  clarifyingQuestions: z.array(z.string()).optional(),
+  taxTips: z.array(taxTipSchema).optional(),
+  status: z.enum(["ok", "failed"]).optional(),
+  error: z.string().optional(),
+})
+export type WizardMessage = z.infer<typeof wizardMessageSchema>
+
+export const businessFactValueSchema = z.object({
+  text: z.string(),
+  confidence: z.number().optional(),
+  examples: z.array(z.string()).optional(),
+})
+export type BusinessFactValue = z.infer<typeof businessFactValueSchema>
+
+export const businessFactSchema = z.object({
+  id: z.string(),
+  userId: z.string(),
+  key: z.string(),
+  value: businessFactValueSchema,
+  source: z.enum(["wizard", "user", "inferred"]),
+  learnedFromSessionId: z.string().nullable(),
+  createdAt: z.date(),
+  updatedAt: z.date(),
+})
+export type BusinessFact = z.infer<typeof businessFactSchema>
+
+export const wizardAssistantReplySchema = z.object({
+  assistantMessage: z.string(),
+  candidateUpdates: z.array(candidateUpdateSchema).default([]),
+  bulkActions: z.array(bulkActionSchema).default([]),
+  clarifyingQuestions: z.array(z.string()).max(3).default([]),
+  taxTips: z.array(taxTipSchema).default([]),
+  businessFactsToSave: z
+    .array(
+      z.object({
+        key: z.string(),
+        value: businessFactValueSchema,
+        confidence: z.number().optional(),
+      }),
+    )
+    .default([]),
+})
+export type WizardAssistantReply = z.infer<typeof wizardAssistantReplySchema>
+
+export const importSessionEntryModeSchema = z.enum(["csv", "pdf", "manual"])
+export type ImportSessionEntryMode = z.infer<typeof importSessionEntryModeSchema>
+
+export const importSessionStatusSchema = z.enum(["pending", "committed", "abandoned"])
+export type ImportSessionStatus = z.infer<typeof importSessionStatusSchema>
+
 export const importSessionSchema = z.object({
   id: z.string(),
   userId: z.string(),
   accountId: z.string().nullable(),
-  fileName: z.string(),
-  fileType: z.string(),
+  fileName: z.string().nullable(),
+  fileType: z.string().nullable(),
   rowCount: z.number(),
   data: jsonValueSchema,
   columnMapping: jsonValueSchema.nullable(),
   status: z.string(),
   suggestedCategories: jsonValueSchema,
+  entryMode: z.string(),
+  messages: z.array(wizardMessageSchema),
+  businessContextSnapshot: jsonValueSchema.nullable(),
+  promptVersion: z.string().nullable(),
+  title: z.string().nullable(),
+  lastActivityAt: z.date(),
+  pendingTurnAt: z.date().nullable(),
   createdAt: z.date(),
 })
 
 export type ImportSession = z.infer<typeof importSessionSchema>
+
+export const knowledgePackReviewStatusSchema = z.enum(["verified", "needs_review", "seed"])
+
+export const knowledgePackSchema = z.object({
+  id: z.string(),
+  userId: z.string(),
+  slug: z.string(),
+  title: z.string(),
+  content: z.string(),
+  sourcePrompt: z.string().nullable(),
+  lastRefreshedAt: z.date().nullable(),
+  refreshIntervalDays: z.number(),
+  provider: z.string().nullable(),
+  model: z.string().nullable(),
+  reviewStatus: z.string(),
+  createdAt: z.date(),
+  updatedAt: z.date(),
+})
+export type KnowledgePack = z.infer<typeof knowledgePackSchema>
+
+export const aiAnalysisResultSchema = z.object({
+  id: z.string(),
+  userId: z.string(),
+  sessionId: z.string().nullable(),
+  transactionId: z.string().nullable(),
+  rowIndex: z.number().nullable(),
+  provider: z.string(),
+  model: z.string().nullable(),
+  promptVersion: z.string(),
+  reasoning: z.string().nullable(),
+  categoryCode: z.string().nullable(),
+  projectCode: z.string().nullable(),
+  suggestedStatus: z.string().nullable(),
+  confidence: candidateConfidenceSchema,
+  clarifyingQuestion: z.string().nullable(),
+  tokensUsed: z.number().nullable(),
+  createdAt: z.date(),
+})
+export type AiAnalysisResult = z.infer<typeof aiAnalysisResultSchema>
 
 export const categorizationRuleSchema = z.object({
   id: z.string(),
@@ -207,6 +426,7 @@ export const categorizationRuleSchema = z.object({
   categoryCode: z.string().nullable(),
   projectCode: z.string().nullable(),
   type: z.string().nullable(),
+  status: z.string().nullable(),
   note: z.string().nullable(),
   priority: z.number(),
   source: z.string(),
@@ -436,6 +656,7 @@ export interface TransactionCreateInput {
   issuedAt?: Date | null
   text?: string | null
   deductible?: boolean | null
+  status?: string | null
 }
 
 export interface TransactionUpdateInput {
@@ -456,6 +677,7 @@ export interface TransactionUpdateInput {
   issuedAt?: Date | null
   text?: string | null
   deductible?: boolean | null
+  status?: string | null
 }
 
 export interface InvoiceItemInput {

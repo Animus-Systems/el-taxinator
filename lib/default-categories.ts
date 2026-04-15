@@ -129,4 +129,70 @@ export const DEFAULT_CATEGORIES: DefaultCategory[] = [
     taxFormRef: "Base imponible IRPF",
     llmPrompt: "Interest, refunds, grants, subsidies",
   },
+
+  // -------------------------------------------------------------------------
+  // Crypto categories
+  //
+  // Crypto disposals are ganancia/pérdida patrimonial on the savings base
+  // (Modelo 100) for autónomos, and ordinary corporate income (Modelo 200)
+  // for SL companies. Treat them separately from trade income so the tax
+  // engine can pipe them to the right form.
+  // -------------------------------------------------------------------------
+  {
+    code: "crypto_disposal",
+    name: {
+      en: "Crypto Disposal",
+      es: "Disposición de criptomoneda",
+    },
+    taxFormRef: "Ganancia patrimonial — base del ahorro (Modelo 100) / Modelo 200 SL",
+    llmPrompt:
+      "Sale, withdrawal, or exchange of crypto into fiat or another asset. " +
+      "Triggered by merchants like Swissborg, Coinbase, Binance, Kraken, " +
+      "Bitstamp, Bit2Me, Bitpanda, Crypto.com, Revolut crypto, or any " +
+      "account with account_type crypto_exchange/crypto_wallet.",
+  },
+  {
+    code: "crypto_purchase",
+    name: {
+      en: "Crypto Purchase",
+      es: "Compra de criptomoneda",
+    },
+    taxFormRef: "Coste de adquisición (FIFO, no deducible directo)",
+    llmPrompt:
+      "Buying crypto with fiat — not a taxable event, but builds cost basis " +
+      "for FIFO tracking. Transfers to Swissborg/Coinbase/Binance/Kraken/etc.",
+  },
+  {
+    code: "crypto_fee",
+    name: {
+      en: "Crypto Network Fee",
+      es: "Comisión de red/exchange",
+    },
+    taxFormRef: "Coste asociado al activo",
+    llmPrompt:
+      "Network gas fees, exchange trading fees, withdrawal fees on crypto " +
+      "platforms. Added to cost basis or deducted from proceeds.",
+  },
+  {
+    code: "crypto_staking_reward",
+    name: {
+      en: "Staking Reward",
+      es: "Recompensa de staking",
+    },
+    taxFormRef: "Rendimiento del capital mobiliario (Modelo 100)",
+    llmPrompt:
+      "Staking rewards, lending interest, yield farming, liquidity provision " +
+      "payouts. Taxed as capital yield when received.",
+  },
+  {
+    code: "crypto_airdrop",
+    name: {
+      en: "Airdrop",
+      es: "Airdrop",
+    },
+    taxFormRef: "Ganancia patrimonial sin valor de adquisición",
+    llmPrompt:
+      "Free token airdrops, hard-fork distributions, free NFTs. Taxed at " +
+      "fair market value on receipt.",
+  },
 ]

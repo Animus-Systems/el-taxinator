@@ -32,6 +32,10 @@ i18n.use(initReactI18next).init({
   fallbackLng: "en",
   interpolation: {
     escapeValue: false,
+    // Messages were authored under next-intl's ICU-style single braces ({count})
+    // rather than i18next's default {{count}}. Match that so existing keys work.
+    prefix: "{",
+    suffix: "}",
   },
   // Allow nested key access with dot notation within namespaces
   keySeparator: ".",

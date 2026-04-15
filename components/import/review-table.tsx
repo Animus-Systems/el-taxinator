@@ -1,9 +1,14 @@
 
-import { useState, useCallback, useEffect } from "react"
+import { useState, useCallback, useEffect, useRef } from "react"
 import { useTranslations, useLocale } from "next-intl"
 import type { TransactionCandidate, SuggestedCategory } from "@/ai/import-csv"
-import { commitImportAction, cancelImportAction } from "@/actions/ai-import"
+import {
+  commitImportAction,
+  cancelImportAction,
+  saveReviewSessionAction,
+} from "@/actions/ai-import"
 import { addRuleAction } from "@/actions/rules"
+import { summarizeImportCandidates, validateImportCommit } from "@/lib/import-review"
 import { formatCurrency } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -46,7 +51,7 @@ type Props = {
   categories: Array<{ code: string; name: string }>
   projects: Array<{ code: string; name: string }>
   suggestedCategories: SuggestedCategory[]
-  onRecategorize: (feedback: string) => Promise<void>
+  onRecategorize: (feedback: string, reviewedCandidates: TransactionCandidate[]) => Promise<void>
   onComplete: () => void
   onCancel: () => void
 }
@@ -65,18 +70,38 @@ export function ReviewTable({
 }: Props) {
   const t = useTranslations("settings")
   const locale = useLocale()
-  const [candidates, setCandidates] = useState(initialCandidates)
+  const [candidates, setCandidates] = useState(() =>
+    initialCandidates.map((candidate) => ({
+      ...candidate,
+      status: candidate.status ?? "needs_review",
+      suggestedStatus: candidate.suggestedStatus ?? null,
+      confidence: {
+        category: candidate.confidence?.category ?? 0,
+        type: candidate.confidence?.type ?? 0,
+        status: candidate.confidence?.status ?? 0,
+        overall: candidate.confidence?.overall ?? 0,
+      },
+      selected: candidate.selected ?? true,
+    })),
+  )
   const [selected, setSelected] = useState<Set<number>>(
     () => new Set(initialCandidates.filter((c) => c.selected).map((c) => c.rowIndex))
   )
   const [page, setPage] = useState(0)
-  const [filterLowConfidence, setFilterLowConfidence] = useState(false)
+  const [showNeedsReviewOnly, setShowNeedsReviewOnly] = useState(false)
   const [editingCell, setEditingCell] = useState<{
     rowIndex: number
     field: string
   } | null>(null)
   const [importing, setImporting] = useState(false)
   const [cancelling, setCancelling] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
+  const [importErrors, setImportErrors] = useState<Array<{
+    rowIndex: number
+    code: string
+    message: string
+  }>>([])
 
   // Suggested categories state
   const [acceptedCategories, setAcceptedCategories] = useState<Set<string>>(new Set())
@@ -88,21 +113,73 @@ export function ReviewTable({
   const [categoryChangedRows, setCategoryChangedRows] = useState<Set<number>>(new Set())
   const [ruleCreatingRows, setRuleCreatingRows] = useState<Set<number>>(new Set())
   const [ruleCreatedRows, setRuleCreatedRows] = useState<Set<number>>(new Set())
+  const skipAutosaveRef = useRef(true)
+
+  const normalizeCandidate = useCallback(
+    (candidate: TransactionCandidate): TransactionCandidate => ({
+      ...candidate,
+      status: candidate.status ?? "needs_review",
+      suggestedStatus: candidate.suggestedStatus ?? null,
+      confidence: {
+        category: candidate.confidence?.category ?? 0,
+        type: candidate.confidence?.type ?? 0,
+        status: candidate.confidence?.status ?? 0,
+        overall: candidate.confidence?.overall ?? 0,
+      },
+      selected: candidate.selected ?? true,
+    }),
+    [],
+  )
+
+  const buildReviewedCandidates = useCallback(
+    (baseCandidates: TransactionCandidate[], baseSelected: Set<number>) =>
+      baseCandidates.map((candidate) => ({
+        ...normalizeCandidate(candidate),
+        selected: baseSelected.has(candidate.rowIndex),
+      })),
+    [normalizeCandidate],
+  )
 
   // Sync candidates when parent passes updated data (e.g. after recategorization)
   useEffect(() => {
-    setCandidates(initialCandidates)
-    setSelected(new Set(initialCandidates.filter((c) => c.selected).map((c) => c.rowIndex)))
-  }, [initialCandidates])
+    skipAutosaveRef.current = true
+    const normalizedCandidates = initialCandidates.map(normalizeCandidate)
+    setCandidates(normalizedCandidates)
+    setSelected(new Set(normalizedCandidates.filter((c) => c.selected).map((c) => c.rowIndex)))
+    setImportErrors([])
+  }, [initialCandidates, normalizeCandidate])
 
-  const displayed = filterLowConfidence
-    ? candidates.filter((c) => c.confidence.overall < 0.8)
+  useEffect(() => {
+    if (skipAutosaveRef.current) {
+      skipAutosaveRef.current = false
+      return
+    }
+
+    const reviewedCandidates = buildReviewedCandidates(candidates, selected)
+    const timeoutId = window.setTimeout(async () => {
+      setSaving(true)
+      setSaveError(null)
+      const result = await saveReviewSessionAction(sessionId, reviewedCandidates)
+      if (!result.success) {
+        setSaveError(result.error ?? "Failed to save review")
+      }
+      setSaving(false)
+    }, 500)
+
+    return () => window.clearTimeout(timeoutId)
+  }, [buildReviewedCandidates, candidates, selected, sessionId])
+
+  const reviewedCandidates = buildReviewedCandidates(candidates, selected)
+  const summary = summarizeImportCandidates(reviewedCandidates)
+
+  const displayed = showNeedsReviewOnly
+    ? candidates.filter((c) => c.status === "needs_review")
     : candidates
   const totalPages = Math.max(1, Math.ceil(displayed.length / PAGE_SIZE))
   const pageRows = displayed.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
 
-  const selectedTotal = candidates
-    .filter((c) => selected.has(c.rowIndex))
+  const selectedTotal = reviewedCandidates
+    .filter((c) => c.selected)
     .reduce((sum, c) => sum + (c.total ?? 0), 0)
 
   const defaultCurrency =
@@ -110,6 +187,7 @@ export function ReviewTable({
 
   const updateCandidate = useCallback(
     (rowIndex: number, field: string, value: unknown) => {
+      setImportErrors([])
       setCandidates((prev) =>
         prev.map((c) =>
           c.rowIndex === rowIndex ? { ...c, [field]: value } : c
@@ -120,6 +198,7 @@ export function ReviewTable({
   )
 
   const toggleSelect = (rowIndex: number) => {
+    setImportErrors([])
     setSelected((prev) => {
       const next = new Set(prev)
       if (next.has(rowIndex)) next.delete(rowIndex)
@@ -129,15 +208,24 @@ export function ReviewTable({
   }
 
   const selectAll = () => {
+    setImportErrors([])
     setSelected(new Set(candidates.map((c) => c.rowIndex)))
   }
 
   const deselectAll = () => {
+    setImportErrors([])
     setSelected(new Set())
   }
 
   const handleImport = async () => {
+    const validation = validateImportCommit(reviewedCandidates)
+    if (!validation.ok) {
+      setImportErrors(validation.errors)
+      return
+    }
+
     setImporting(true)
+    setSaveError(null)
     // Collect accepted suggested categories to create
     const acceptedCats = suggestedCategories
       .filter((sc) => acceptedCategories.has(sc.code))
@@ -147,21 +235,28 @@ export function ReviewTable({
         taxFormRef: sc.taxFormRef,
         reason: sc.reason,
       }))
+    await saveReviewSessionAction(sessionId, reviewedCandidates)
     const result = await commitImportAction(
       sessionId,
       Array.from(selected),
+      reviewedCandidates,
       acceptedCats.length > 0 ? acceptedCats : undefined,
     )
     setImporting(false)
     if (result.success) {
       onComplete()
+      return
     }
+
+    setImportErrors(result.validationErrors ?? [])
+    setSaveError(result.error ?? "Import failed")
   }
 
   const handleRecategorize = async () => {
     if (!feedback.trim()) return
     setIsRecategorizing(true)
-    await onRecategorize(feedback)
+    await saveReviewSessionAction(sessionId, reviewedCandidates)
+    await onRecategorize(feedback, reviewedCandidates)
     setFeedback("")
     setIsRecategorizing(false)
     // Reset accepted/rejected since suggestions may have changed
@@ -225,19 +320,32 @@ export function ReviewTable({
   }
 
   const handleCreateRule = async (row: TransactionCandidate) => {
-    if (!row.categoryCode || !row.name) return
+    if (!row.categoryCode) return
     setRuleCreatingRows((prev) => {
       const next = new Set(prev)
       next.add(row.rowIndex)
       return next
     })
     const categoryName = categories.find((c) => c.code === row.categoryCode)?.name ?? row.categoryCode
+    const matchField = row.merchant ? "merchant" : "name"
+    const matchValue = row.merchant || row.name
+    if (!matchValue) {
+      setRuleCreatingRows((prev) => {
+        const next = new Set(prev)
+        next.delete(row.rowIndex)
+        return next
+      })
+      return
+    }
     await addRuleAction({
-      name: `${categoryName} for "${row.name}"`,
+      name: `${categoryName} for "${matchValue}"`,
       matchType: "contains",
-      matchField: "name",
-      matchValue: row.name,
+      matchField,
+      matchValue,
       categoryCode: row.categoryCode,
+      projectCode: row.projectCode,
+      type: row.type,
+      status: row.status === "needs_review" ? null : row.status,
     })
     setRuleCreatingRows((prev) => {
       const next = new Set(prev)
@@ -395,6 +503,14 @@ export function ReviewTable({
     )
   }
 
+  const formatStatusTotals = (totals: Record<string, number>) => {
+    const entries = Object.entries(totals)
+    if (entries.length === 0) return "-"
+    return entries
+      .map(([currencyCode, total]) => formatCurrency(total, currencyCode))
+      .join(", ")
+  }
+
   return (
     <div className="space-y-4">
       {/* Top bar */}
@@ -411,6 +527,9 @@ export function ReviewTable({
           <span className="font-medium">
             {formatCurrency(selectedTotal, defaultCurrency)}
           </span>
+          {saving && <span className="text-xs text-muted-foreground">Saving review...</span>}
+          {!saving && !saveError && <span className="text-xs text-muted-foreground">Review saved</span>}
+          {saveError && <span className="text-xs text-destructive">{saveError}</span>}
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={selectAll}>
@@ -420,15 +539,15 @@ export function ReviewTable({
             {t("deselectAll")}
           </Button>
           <Button
-            variant={filterLowConfidence ? "secondary" : "outline"}
+            variant={showNeedsReviewOnly ? "secondary" : "outline"}
             size="sm"
             onClick={() => {
-              setFilterLowConfidence(!filterLowConfidence)
+              setShowNeedsReviewOnly(!showNeedsReviewOnly)
               setPage(0)
             }}
           >
             <AlertTriangle className="h-3 w-3 mr-1" />
-            {filterLowConfidence ? t("showAll") : t("needsAttention")}
+            {showNeedsReviewOnly ? t("showAll") : "Needs review"}
           </Button>
           <Button
             variant="destructive"
@@ -449,6 +568,54 @@ export function ReviewTable({
           </Button>
         </div>
       </div>
+
+      <div className="grid gap-3 md:grid-cols-4">
+        <Card>
+          <CardContent className="p-3">
+            <p className="text-xs text-muted-foreground">Needs review</p>
+            <p className="text-lg font-semibold">{summary.counts.needs_review}</p>
+            <p className="text-xs text-muted-foreground">{formatStatusTotals(summary.totals.needs_review)}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-3">
+            <p className="text-xs text-muted-foreground">Business</p>
+            <p className="text-lg font-semibold">{summary.counts.business}</p>
+            <p className="text-xs text-muted-foreground">{formatStatusTotals(summary.totals.business)}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-3">
+            <p className="text-xs text-muted-foreground">Non-deductible</p>
+            <p className="text-lg font-semibold">{summary.counts.business_non_deductible}</p>
+            <p className="text-xs text-muted-foreground">
+              {formatStatusTotals(summary.totals.business_non_deductible)}
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-3">
+            <p className="text-xs text-muted-foreground">Personal / ignored</p>
+            <p className="text-lg font-semibold">{summary.counts.personal_ignored}</p>
+            <p className="text-xs text-muted-foreground">{formatStatusTotals(summary.totals.personal_ignored)}</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {importErrors.length > 0 && (
+        <Card className="border-destructive/50">
+          <CardContent className="p-3 space-y-2">
+            <p className="text-sm font-medium text-destructive">Review incomplete</p>
+            <div className="space-y-1">
+              {importErrors.slice(0, 5).map((error) => (
+                <p key={`${error.rowIndex}-${error.code}`} className="text-xs text-muted-foreground">
+                  Row {error.rowIndex + 1}: {error.message}
+                </p>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Suggested Categories Panel */}
       {suggestedCategories.length > 0 && (
@@ -557,13 +724,17 @@ export function ReviewTable({
               <TableHead className="text-right">Total</TableHead>
               <TableHead>Date</TableHead>
               <TableHead>{t("type")}</TableHead>
+              <TableHead>Status</TableHead>
               <TableHead>Category</TableHead>
               <TableHead>Project</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {pageRows.map((row) => (
-              <TableRow key={row.rowIndex}>
+              <TableRow
+                key={row.rowIndex}
+                className={row.status === "needs_review" ? "bg-amber-50/50" : undefined}
+              >
                 <TableCell>
                   <Checkbox
                     checked={selected.has(row.rowIndex)}
@@ -598,6 +769,31 @@ export function ReviewTable({
                       <SelectItem value="income">Income</SelectItem>
                     </SelectContent>
                   </Select>
+                </TableCell>
+                <TableCell>
+                  <div className="space-y-1">
+                    <Select
+                      value={row.status}
+                      onValueChange={(value) => updateCandidate(row.rowIndex, "status", value)}
+                    >
+                      <SelectTrigger className="h-7 text-xs w-40">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="needs_review">Needs review</SelectItem>
+                        <SelectItem value="business">Business</SelectItem>
+                        <SelectItem value="business_non_deductible">
+                          Business, non-deductible
+                        </SelectItem>
+                        <SelectItem value="personal_ignored">Personal / ignored</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {row.suggestedStatus && row.status === "needs_review" && (
+                      <span className="text-[10px] text-muted-foreground">
+                        Suggested: {row.suggestedStatus}
+                      </span>
+                    )}
+                  </div>
                 </TableCell>
                 <TableCell>
                   <div className="space-y-1">

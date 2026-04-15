@@ -91,6 +91,10 @@ export type Modelo200Result = {
 
   totalRevenue: number
   totalExpenses: number
+  // Crypto P&L enters the corporate tax base as ingreso financiero. FIFO
+  // authoritative; sign can be negative when net losses exceed gains.
+  cryptoGainCents: number
+  stakingIncomeCents: number
   baseImponible: number
   tipoGravamen: number
   cuotaIntegra: number
@@ -111,14 +115,34 @@ export const calcModelo200 = cache(
     const yearStart = new Date(year, 0, 1)
     const yearEnd = new Date(year, 11, 31, 23, 59, 59, 999)
 
-    const [revenue, expenses] = await Promise.all([
+    const [revenue, expenses, fifoRes, stakingRes] = await Promise.all([
       queryInvoiceRevenue(pool, userId, yearStart, yearEnd),
       queryExpenses(pool, userId, yearStart, yearEnd),
+      pool.query(
+        `SELECT COALESCE(SUM(realized_gain_cents), 0)::text AS total
+         FROM crypto_disposal_matches
+         WHERE user_id = $1
+           AND EXTRACT(YEAR FROM matched_at) = $2`,
+        [userId, year],
+      ),
+      pool.query(
+        `SELECT COALESCE(SUM(COALESCE(converted_total, total, 0)), 0)::text AS total
+         FROM transactions
+         WHERE user_id = $1
+           AND category_code = 'crypto_staking_reward'
+           AND EXTRACT(YEAR FROM issued_at) = $2`,
+        [userId, year],
+      ),
     ])
 
     const { totalRevenue } = revenue
     const { totalExpenses } = expenses
-    const baseImponible = Math.max(0, totalRevenue - totalExpenses)
+    const cryptoGainCents = Number(fifoRes.rows[0]?.total ?? 0)
+    const stakingIncomeCents = Number(stakingRes.rows[0]?.total ?? 0)
+    const baseImponible = Math.max(
+      0,
+      totalRevenue - totalExpenses + cryptoGainCents + stakingIncomeCents,
+    )
     const cuotaIntegra = Math.round(baseImponible * (taxRate / 100))
     const totalPagosACuenta = quarters.reduce((s, q) => s + q.casilla05_aIngresar, 0)
     const cuotaDiferencial = cuotaIntegra - totalPagosACuenta
@@ -128,6 +152,8 @@ export const calcModelo200 = cache(
       quarters,
       totalRevenue,
       totalExpenses,
+      cryptoGainCents,
+      stakingIncomeCents,
       baseImponible,
       tipoGravamen: taxRate,
       cuotaIntegra,

@@ -2,6 +2,7 @@ import { z } from "zod"
 import { router, authedProcedure } from "../init"
 import { getSettings, updateSettings, getLLMSettings } from "@/models/settings"
 import { settingSchema, type Setting } from "@/lib/db-types"
+import { PROVIDERS } from "@/lib/llm-providers"
 
 const llmProviderSchema = z.object({
   provider: z.string(),
@@ -12,6 +13,18 @@ const llmProviderSchema = z.object({
 
 const llmSettingsSchema = z.object({
   providers: z.array(llmProviderSchema),
+})
+
+const llmHintItemSchema = z.object({
+  provider: z.string(),
+  model: z.string(),
+  thinking: z.string().nullable(),
+  modelIsDefault: z.boolean(),
+  isSubscription: z.boolean(),
+})
+
+const llmHintSchema = z.object({
+  eligible: z.array(llmHintItemSchema),
 })
 
 export const settingsRouter = router({
@@ -42,5 +55,26 @@ export const settingsRouter = router({
     .query(async ({ ctx }) => {
       const settings = await getSettings(ctx.user.id)
       return getLLMSettings(settings)
+    }),
+
+  getActiveLLMHint: authedProcedure
+    .input(z.object({}))
+    .output(llmHintSchema)
+    .query(async ({ ctx }) => {
+      const settings = await getSettings(ctx.user.id)
+      const llm = getLLMSettings(settings)
+      const subscriptionKeys = new Set(
+        PROVIDERS.filter((p) => p.isSubscription).map((p) => p.key),
+      )
+      const eligible = llm.providers
+        .filter((p) => p.model && (subscriptionKeys.has(p.provider) || p.apiKey))
+        .map((p) => ({
+          provider: p.provider,
+          model: p.model,
+          thinking: p.thinking ?? null,
+          modelIsDefault: p.modelIsDefault,
+          isSubscription: subscriptionKeys.has(p.provider),
+        }))
+      return { eligible }
     }),
 })

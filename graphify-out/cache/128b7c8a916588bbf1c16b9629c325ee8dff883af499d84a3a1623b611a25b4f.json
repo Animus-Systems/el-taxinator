@@ -1,1 +1,0 @@
-{"nodes": [{"id": "main", "label": "__main__.py", "file_type": "code", "source_file": "scripts/canary_news/__main__.py", "source_location": "L1"}], "edges": [{"source": "main", "target": "runner", "relation": "imports_from", "confidence": "EXTRACTED", "source_file": "scripts/canary_news/__main__.py", "source_location": "L12", "weight": 1.0}]}

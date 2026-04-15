@@ -15,8 +15,16 @@ import {
   getImportSessionById,
   updateImportSession,
   deleteImportSession,
+  appendMessage,
 } from "@/models/import-sessions"
+import type { WizardMessage } from "@/lib/db-types"
+import { randomUUID } from "node:crypto"
+import { renderToStream } from "@react-pdf/renderer"
+import { createElement } from "react"
+import { buildSessionReport } from "@/ai/session-report"
+import { WizardSessionReportPDF } from "@/components/wizard/wizard-report-pdf"
 import { createTransaction } from "@/models/transactions"
+import { syncCryptoLedger } from "@/lib/crypto-hooks"
 import { createCategory } from "@/models/categories"
 import { getSettings } from "@/models/settings"
 import {
@@ -30,7 +38,10 @@ import { suggestNewCategories } from "@/ai/suggest-categories"
 import { detectPDFType, extractPDFTransactions } from "@/ai/import-pdf"
 import { applyRulesToCandidates } from "@/models/rules"
 import { getActiveRules } from "@/models/rules"
+import { getActiveAccounts } from "@/models/accounts"
+import type { BankAccount } from "@/lib/db-types"
 import type { AnalyzeAttachment } from "@/ai/attachments"
+import { validateImportCommit } from "@/lib/import-review"
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -70,6 +81,96 @@ function parseCSVText(text: string): Promise<string[][]> {
     parser.write(text)
     parser.end()
   })
+}
+
+function applySelectionToCandidates(
+  candidates: TransactionCandidate[],
+  selectedIndexes: Set<number>,
+): TransactionCandidate[] {
+  return candidates.map((candidate) => ({
+    ...candidate,
+    selected: selectedIndexes.has(candidate.rowIndex),
+  }))
+}
+
+export type AccountMatchResult =
+  | { kind: "single"; account: BankAccount }
+  | { kind: "none"; accounts: BankAccount[] }
+  | { kind: "ambiguous"; candidates: BankAccount[] }
+
+/**
+ * Map a bank name detected from the uploaded file to one of the user's bank
+ * accounts. Match against `bankName` first (most specific), then fall back to
+ * account `name`. Case-insensitive substring matching handles "N26" vs
+ * "N26 Bank" and "BBVA" vs "BBVA Main".
+ */
+export function matchAccountByBank(bank: string | null, accounts: BankAccount[]): AccountMatchResult {
+  if (!bank || accounts.length === 0) return { kind: "none", accounts }
+  const needle = bank.toLowerCase()
+  const byBankName = accounts.filter((a) => a.bankName && a.bankName.toLowerCase().includes(needle))
+  if (byBankName.length === 1) return { kind: "single", account: byBankName[0] }
+  if (byBankName.length > 1) return { kind: "ambiguous", candidates: byBankName }
+
+  const byName = accounts.filter((a) => a.name.toLowerCase().includes(needle))
+  if (byName.length === 1) return { kind: "single", account: byName[0] }
+  if (byName.length > 1) return { kind: "ambiguous", candidates: byName }
+
+  return { kind: "none", accounts }
+}
+
+/**
+ * Seed the first assistant message for a freshly uploaded file so the wizard
+ * chat opens with a natural-language summary instead of a blank panel.
+ */
+async function seedUploadOpeningMessage(
+  sessionId: string,
+  userId: string,
+  opts: {
+    kind: "csv" | "pdf"
+    fileName: string
+    bank: string | null
+    candidates: TransactionCandidate[]
+    accountMatch: AccountMatchResult
+  },
+): Promise<void> {
+  const total = opts.candidates.length
+  const needsReview = opts.candidates.filter(
+    (c) => !c.status || c.status === "needs_review",
+  ).length
+  const resolved = total - needsReview
+  const kindLabel = opts.kind === "csv" ? "CSV" : "PDF"
+  const bankPart = opts.bank ? ` from ${opts.bank}` : ""
+
+  const openingSummary =
+    total === 0
+      ? `I read "${opts.fileName}" but didn't find any transactions. You can drop a different file or describe a transaction manually.`
+      : resolved > 0
+        ? `I read ${total} transactions${bankPart} in that ${kindLabel}. ${resolved} look clear from your existing rules; ${needsReview} need your eye.`
+        : `I read ${total} transactions${bankPart} in that ${kindLabel}. None matched an existing rule yet.`
+
+  let accountNote = ""
+  if (opts.accountMatch.kind === "single") {
+    accountNote = ` I've assigned them to your **${opts.accountMatch.account.name}** account — let me know if that's wrong.`
+  } else if (opts.accountMatch.kind === "ambiguous") {
+    const names = opts.accountMatch.candidates.map((a) => a.name).join(", ")
+    accountNote = ` I see multiple accounts that could match${opts.bank ? ` "${opts.bank}"` : ""} (${names}) — which one should I use?`
+  } else if (opts.bank && opts.accountMatch.accounts.length > 0) {
+    const names = opts.accountMatch.accounts.map((a) => a.name).join(", ")
+    accountNote = ` I didn't find a bank account matching "${opts.bank}". Should I use one of your existing accounts (${names}) or create a new one?`
+  }
+
+  const question =
+    total > 0
+      ? " Want me to walk through the ambiguous rows, or should I run categorization on all of them first?"
+      : ""
+
+  const message: WizardMessage = {
+    id: randomUUID(),
+    role: "assistant",
+    content: `${openingSummary}${accountNote}${question}`,
+    createdAt: new Date().toISOString(),
+  }
+  await appendMessage(sessionId, userId, message)
 }
 
 // ---------------------------------------------------------------------------
@@ -115,20 +216,45 @@ export async function importRoutes(app: FastifyInstance) {
         applyRulesToCandidates(candidates, rules)
       }
 
+      // 4b. Match uploaded bank to an existing account. If exactly one matches
+      //     and the user didn't pre-select, pre-assign it to the whole file.
+      const userAccounts = await getActiveAccounts(user.id)
+      const accountMatch = matchAccountByBank(mapping.bank ?? null, userAccounts)
+      let resolvedAccountId: string | null = accountId
+      if (!resolvedAccountId && accountMatch.kind === "single") {
+        resolvedAccountId = accountMatch.account.id
+      }
+      if (resolvedAccountId) {
+        for (const c of candidates) {
+          if (c.accountId == null) c.accountId = resolvedAccountId
+        }
+      }
+
       // 5. Create import session
       const session = await createImportSession(user.id, {
-        accountId,
+        accountId: resolvedAccountId,
         fileName,
         fileType: "csv",
         rowCount: candidates.length,
         data: candidates,
         columnMapping: mapping,
         status: "pending",
+        entryMode: "csv",
+        title: fileName,
       })
 
       if (!session) {
         return reply.send({ success: false, error: "Failed to create import session" })
       }
+
+      // 6. Seed the wizard's opening assistant message so the chat isn't blank.
+      await seedUploadOpeningMessage(session.id, user.id, {
+        kind: "csv",
+        fileName,
+        bank: mapping.bank ?? null,
+        candidates,
+        accountMatch,
+      })
 
       return reply.send({
         success: true,
@@ -202,23 +328,47 @@ export async function importRoutes(app: FastifyInstance) {
         applyRulesToCandidates(result.candidates, rules)
       }
 
+      // Match detected bank to an existing account.
+      const userAccounts = await getActiveAccounts(user.id)
+      const accountMatch = matchAccountByBank(result.bank ?? null, userAccounts)
+      let resolvedAccountId: string | null = accountId
+      if (!resolvedAccountId && accountMatch.kind === "single") {
+        resolvedAccountId = accountMatch.account.id
+      }
+      if (resolvedAccountId) {
+        for (const c of result.candidates) {
+          if (c.accountId == null) c.accountId = resolvedAccountId
+        }
+      }
+
       // Suggest new categories
       const suggestedCategories = await suggestNewCategories(result.candidates, user.id)
 
       // Create session
       const session = await createImportSession(user.id, {
-        accountId,
+        accountId: resolvedAccountId,
         fileName,
         fileType: "pdf",
         rowCount: result.candidates.length,
         data: result.candidates,
         suggestedCategories,
         status: "pending",
+        entryMode: "pdf",
+        title: fileName,
       })
 
       if (!session) {
         return reply.send({ success: false, error: "Failed to create import session" })
       }
+
+      // Seed the wizard's opening assistant message.
+      await seedUploadOpeningMessage(session.id, user.id, {
+        kind: "pdf",
+        fileName,
+        bank: result.bank ?? null,
+        candidates: result.candidates,
+        accountMatch,
+      })
 
       return reply.send({
         success: true,
@@ -261,8 +411,11 @@ export async function importRoutes(app: FastifyInstance) {
     }
   })
 
-  // ─── Categorize session ──────────────────────────────────────────────
-  app.post<{ Params: { id: string } }>("/api/import/session/:id/categorize", async (request, reply) => {
+  // ─── Persist reviewed session rows ──────────────────────────────────
+  app.post<{
+    Params: { id: string }
+    Body: { reviewedCandidates: TransactionCandidate[] }
+  }>("/api/import/session/:id/review", async (request, reply) => {
     try {
       const user = await getUser()
       if (!user) return reply.code(401).send({ success: false, error: "Not authenticated" })
@@ -272,7 +425,42 @@ export async function importRoutes(app: FastifyInstance) {
         return reply.send({ success: false, error: "Session not found" })
       }
 
-      const candidates = session.data as TransactionCandidate[]
+      const body = request.body as { reviewedCandidates?: TransactionCandidate[] } | undefined
+      const reviewedCandidates = body?.reviewedCandidates
+      if (!Array.isArray(reviewedCandidates)) {
+        return reply.code(400).send({ success: false, error: "Missing reviewed candidates" })
+      }
+
+      await updateImportSession(request.params.id, user.id, {
+        data: reviewedCandidates,
+      })
+
+      return reply.send({ success: true })
+    } catch (error) {
+      console.error("[import/review] Error:", error)
+      return reply.send({
+        success: false,
+        error: error instanceof Error ? error.message : "Failed to save review",
+      })
+    }
+  })
+
+  // ─── Categorize session ──────────────────────────────────────────────
+  app.post<{
+    Params: { id: string }
+    Body: { reviewedCandidates?: TransactionCandidate[] }
+  }>("/api/import/session/:id/categorize", async (request, reply) => {
+    try {
+      const user = await getUser()
+      if (!user) return reply.code(401).send({ success: false, error: "Not authenticated" })
+
+      const session = await getImportSessionById(request.params.id, user.id)
+      if (!session) {
+        return reply.send({ success: false, error: "Session not found" })
+      }
+
+      const body = request.body as { reviewedCandidates?: TransactionCandidate[] } | undefined
+      const candidates = body?.reviewedCandidates ?? (session.data as TransactionCandidate[])
 
       // Run AI categorization
       await categorizeTransactions(candidates, user.id)
@@ -297,7 +485,7 @@ export async function importRoutes(app: FastifyInstance) {
   })
 
   // ─── Recategorize with feedback ──────────────────────────────────────
-  app.post<{ Params: { id: string }; Body: { feedback: string } }>(
+  app.post<{ Params: { id: string }; Body: { feedback: string; reviewedCandidates?: TransactionCandidate[] } }>(
     "/api/import/session/:id/recategorize",
     async (request, reply) => {
       try {
@@ -309,8 +497,9 @@ export async function importRoutes(app: FastifyInstance) {
           return reply.send({ success: false, error: "Session not found" })
         }
 
-        const candidates = session.data as TransactionCandidate[]
-        const feedback = (request.body as { feedback?: string })?.feedback ?? ""
+        const body = request.body as { feedback?: string; reviewedCandidates?: TransactionCandidate[] } | undefined
+        const candidates = body?.reviewedCandidates ?? (session.data as TransactionCandidate[])
+        const feedback = body?.feedback ?? ""
 
         await categorizeTransactionsWithFeedback(candidates, user.id, feedback)
         const suggestedCategories = await suggestNewCategories(candidates, user.id)
@@ -336,6 +525,7 @@ export async function importRoutes(app: FastifyInstance) {
     Params: { id: string }
     Body: {
       selectedRowIndexes: number[]
+      reviewedCandidates?: TransactionCandidate[]
       acceptedCategories?: Array<{
         code: string
         name: { en: string; es: string }
@@ -355,6 +545,7 @@ export async function importRoutes(app: FastifyInstance) {
 
       const body = request.body as {
         selectedRowIndexes?: number[]
+        reviewedCandidates?: TransactionCandidate[]
         acceptedCategories?: Array<{
           code: string
           name: { en: string; es: string }
@@ -363,9 +554,24 @@ export async function importRoutes(app: FastifyInstance) {
       }
 
       const selectedIndexes = new Set(body.selectedRowIndexes ?? [])
-      const candidates = (session.data as TransactionCandidate[]).filter(
-        (c) => selectedIndexes.has(c.rowIndex),
+      const reviewedCandidates = applySelectionToCandidates(
+        body.reviewedCandidates ?? (session.data as TransactionCandidate[]),
+        selectedIndexes,
       )
+      const validation = validateImportCommit(reviewedCandidates)
+      if (!validation.ok) {
+        return reply.code(400).send({
+          success: false,
+          error: "Review incomplete",
+          validationErrors: validation.errors,
+        })
+      }
+
+      await updateImportSession(request.params.id, user.id, {
+        data: reviewedCandidates,
+      })
+
+      const candidates = reviewedCandidates.filter((candidate) => candidate.selected)
 
       // Create accepted categories first
       if (body.acceptedCategories && body.acceptedCategories.length > 0) {
@@ -388,7 +594,7 @@ export async function importRoutes(app: FastifyInstance) {
       let created = 0
       for (const c of candidates) {
         try {
-          await createTransaction(user.id, {
+          const tx = await createTransaction(user.id, {
             name: c.name,
             merchant: c.merchant,
             description: c.description,
@@ -398,8 +604,17 @@ export async function importRoutes(app: FastifyInstance) {
             categoryCode: c.categoryCode,
             projectCode: c.projectCode,
             issuedAt: c.issuedAt ? new Date(c.issuedAt).toISOString() : null,
-            accountId: session.accountId || null,
+            accountId: c.accountId || session.accountId || null,
+            status: c.status,
+            // Carry the wizard's extra payload (crypto meta, etc.) through to
+            // transactions.extra so /crypto-page queries can find it.
+            extra: c.extra as Record<string, unknown> | undefined,
           })
+
+          // Hook crypto-tagged transactions into the FIFO ledger so holdings
+          // and realised gains stay in sync with committed transactions.
+          await syncCryptoLedger(user.id, tx, c)
+
           created++
         } catch (err) {
           console.error(`[import/commit] Failed to create transaction row ${c.rowIndex}:`, err)
@@ -415,6 +630,32 @@ export async function importRoutes(app: FastifyInstance) {
       return reply.send({
         success: false,
         error: error instanceof Error ? error.message : "Commit failed",
+      })
+    }
+  })
+
+  // ─── Session PDF report (post-commit downloadable) ───────────────────
+  app.get<{ Params: { id: string } }>("/api/wizard/session/:id/report.pdf", async (request, reply) => {
+    try {
+      const user = await getUser()
+      if (!user) return reply.code(401).send({ success: false, error: "Not authenticated" })
+
+      const report = await buildSessionReport(request.params.id, user.id)
+      const element = createElement(WizardSessionReportPDF, { report })
+      // @ts-expect-error react-pdf types are loose about JSX element typing
+      const stream = await renderToStream(element)
+
+      reply.header("Content-Type", "application/pdf")
+      reply.header(
+        "Content-Disposition",
+        `attachment; filename="taxinator-session-${request.params.id}.pdf"`,
+      )
+      return reply.send(stream)
+    } catch (error) {
+      console.error("[wizard/report] Error:", error)
+      return reply.code(500).send({
+        success: false,
+        error: error instanceof Error ? error.message : "Failed to generate report",
       })
     }
   })

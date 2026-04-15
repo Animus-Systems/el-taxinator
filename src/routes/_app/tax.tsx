@@ -7,6 +7,7 @@
 import { useTranslation } from "react-i18next"
 import { trpc } from "~/trpc"
 import { TaxDashboard } from "@/components/tax/tax-dashboard"
+import { CryptoTaxCards } from "@/components/tax/crypto-tax-cards"
 import type { EntityType } from "@/lib/entities"
 
 type TaxSummaryItem = {
@@ -63,11 +64,15 @@ export function TaxPage() {
           <span className="text-3xl tracking-tight opacity-20">{year}</span>
         </h2>
       </header>
-      <main>
+      <main className="space-y-8">
         <TaxDashboard
           year={year}
           summary={(Array.isArray(summary) ? summary : []) as TaxSummaryItem[]}
           deadlines={deadlines ?? []}
+          entityType={(((entityType as Record<string, unknown>)?.type as string) ?? "autonomo") as EntityType}
+        />
+        <CryptoTaxCards
+          year={year}
           entityType={(((entityType as Record<string, unknown>)?.type as string) ?? "autonomo") as EntityType}
         />
       </main>

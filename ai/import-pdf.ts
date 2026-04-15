@@ -54,6 +54,7 @@ export async function extractPDFTransactions(
 - type: "expense" or "income"
 - suggested categoryCode from the list below (or null)
 - suggested projectCode from the list below (or null)
+- suggested status: "business", "business_non_deductible", "personal_ignored", or null if unsure
 
 Also identify the bank name from the document header/branding.
 
@@ -74,6 +75,7 @@ Return ONLY valid JSON:
       "type": "expense",
       "categoryCode": "code_or_null",
       "projectCode": "code_or_null",
+      "status": "business_or_null",
       "confidence": 0.0-1.0
     }
   ]
@@ -97,6 +99,10 @@ Return ONLY valid JSON:
             type: { type: "string" },
             categoryCode: { type: ["string", "null"] },
             projectCode: { type: ["string", "null"] },
+            status: {
+              type: ["string", "null"],
+              enum: ["business", "business_non_deductible", "personal_ignored", null],
+            },
             confidence: { type: "number" },
           },
           required: ["date", "name", "amount", "type"],
@@ -123,10 +129,19 @@ Return ONLY valid JSON:
     type: (t.type as string) || "expense",
     categoryCode: (t.categoryCode as string) || null,
     projectCode: (t.projectCode as string) || null,
+    accountId: null,
     issuedAt: (t.date as string) || null,
+    status: "needs_review",
+    suggestedStatus:
+      t.status === "business" ||
+      t.status === "business_non_deductible" ||
+      t.status === "personal_ignored"
+        ? t.status
+        : null,
     confidence: {
       category: (t.confidence as number) || 0.5,
       type: 0.8,
+      status: (t.confidence as number) || 0.5,
       overall: (t.confidence as number) || 0.5,
     },
     selected: true,

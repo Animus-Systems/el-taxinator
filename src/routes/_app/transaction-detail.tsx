@@ -1,6 +1,10 @@
 import { useParams } from "@tanstack/react-router"
 import { trpc } from "~/trpc"
 import TransactionEditForm from "@/components/transactions/edit"
+import {
+  CryptoMetaSection,
+  shouldShowCryptoMeta,
+} from "@/components/transactions/crypto-meta-section"
 
 export function TransactionDetailPage() {
   const { transactionId } = useParams({ strict: false }) as { transactionId: string }
@@ -32,7 +36,10 @@ export function TransactionDetailPage() {
   }
 
   return (
-    <div className="max-w-4xl">
+    <div className="max-w-4xl space-y-4">
+      {shouldShowCryptoMeta(transaction) ? (
+        <CryptoMetaSection transaction={transaction} />
+      ) : null}
       <TransactionEditForm
         transaction={transaction}
         categories={categories ?? []}

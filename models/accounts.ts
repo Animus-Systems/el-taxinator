@@ -1,5 +1,5 @@
 import { sql, queryMany, queryOne, buildInsert, buildUpdate } from "@/lib/sql"
-import type { BankAccount } from "@/lib/db-types"
+import type { AccountTypeValue, BankAccount } from "@/lib/db-types"
 import { cache } from "react"
 
 export type AccountData = {
@@ -8,6 +8,7 @@ export type AccountData = {
   currencyCode: string
   accountNumber?: string | null
   notes?: string | null
+  accountType?: AccountTypeValue
   isActive?: boolean
 }
 

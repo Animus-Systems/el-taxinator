@@ -15,7 +15,7 @@ import path from "path"
 // 2. Add a migration entry here with the next version number
 // 3. The migration SQL should be idempotent (use IF NOT EXISTS, etc.)
 
-const SCHEMA_VERSION = 4 // bump this when adding a migration
+const SCHEMA_VERSION = 9 // bump this when adding a migration
 
 const migrations: { version: number; description: string; sql: string }[] = [
   {
@@ -101,6 +101,175 @@ const migrations: { version: number; description: string; sql: string }[] = [
       CREATE INDEX IF NOT EXISTS past_searches_user_id_idx ON past_searches (user_id);
       CREATE INDEX IF NOT EXISTS past_searches_user_id_topic_idx ON past_searches (user_id, topic);
       CREATE INDEX IF NOT EXISTS past_searches_user_id_created_at_idx ON past_searches (user_id, created_at);
+    `,
+  },
+  {
+    version: 5,
+    description: "Add transaction status and rule status suggestion fields",
+    sql: `
+      ALTER TABLE transactions
+      ADD COLUMN IF NOT EXISTS status text NOT NULL DEFAULT 'business';
+
+      ALTER TABLE categorization_rules
+      ADD COLUMN IF NOT EXISTS status text;
+    `,
+  },
+  {
+    version: 6,
+    description: "Wizard: conversational sessions, business facts, AI audit trail, entity_type",
+    sql: `
+      ALTER TABLE users
+      ADD COLUMN IF NOT EXISTS entity_type text;
+
+      ALTER TABLE import_sessions
+      ADD COLUMN IF NOT EXISTS entry_mode text NOT NULL DEFAULT 'csv';
+
+      ALTER TABLE import_sessions
+      ADD COLUMN IF NOT EXISTS messages jsonb NOT NULL DEFAULT '[]';
+
+      ALTER TABLE import_sessions
+      ADD COLUMN IF NOT EXISTS business_context_snapshot jsonb;
+
+      ALTER TABLE import_sessions
+      ADD COLUMN IF NOT EXISTS prompt_version text;
+
+      ALTER TABLE import_sessions
+      ADD COLUMN IF NOT EXISTS title text;
+
+      ALTER TABLE import_sessions
+      ADD COLUMN IF NOT EXISTS last_activity_at timestamp(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
+
+      ALTER TABLE import_sessions
+      ADD COLUMN IF NOT EXISTS pending_turn_at timestamp(3);
+
+      ALTER TABLE import_sessions
+      ALTER COLUMN file_name DROP NOT NULL;
+
+      ALTER TABLE import_sessions
+      ALTER COLUMN file_type DROP NOT NULL;
+
+      CREATE INDEX IF NOT EXISTS import_sessions_entry_mode_idx
+        ON import_sessions (entry_mode, status);
+
+      CREATE INDEX IF NOT EXISTS import_sessions_resumable_idx
+        ON import_sessions (user_id, status, last_activity_at DESC)
+        WHERE status = 'pending';
+
+      CREATE TABLE IF NOT EXISTS business_facts (
+        id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
+        user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        key text NOT NULL,
+        value jsonb NOT NULL,
+        source text NOT NULL DEFAULT 'wizard',
+        learned_from_session_id uuid REFERENCES import_sessions(id) ON DELETE SET NULL,
+        created_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL,
+        updated_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL
+      );
+      CREATE UNIQUE INDEX IF NOT EXISTS business_facts_user_id_key_key ON business_facts (user_id, key);
+      CREATE INDEX IF NOT EXISTS business_facts_user_id_idx ON business_facts (user_id);
+
+      CREATE TABLE IF NOT EXISTS ai_analysis_results (
+        id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
+        user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        session_id uuid REFERENCES import_sessions(id) ON DELETE CASCADE,
+        transaction_id uuid REFERENCES transactions(id) ON DELETE CASCADE,
+        row_index integer,
+        provider text NOT NULL,
+        model text,
+        prompt_version text NOT NULL,
+        reasoning text,
+        category_code text,
+        project_code text,
+        suggested_status text,
+        confidence jsonb NOT NULL,
+        clarifying_question text,
+        tokens_used integer,
+        created_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS ai_analysis_results_session_idx ON ai_analysis_results (session_id);
+      CREATE INDEX IF NOT EXISTS ai_analysis_results_transaction_idx ON ai_analysis_results (transaction_id);
+      CREATE INDEX IF NOT EXISTS ai_analysis_results_user_idx ON ai_analysis_results (user_id);
+    `,
+  },
+  {
+    version: 7,
+    description: "Wizard: knowledge packs (curated tax domain content, LLM-refreshable)",
+    sql: `
+      CREATE TABLE IF NOT EXISTS knowledge_packs (
+        id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
+        user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        slug text NOT NULL,
+        title text NOT NULL,
+        content text NOT NULL,
+        source_prompt text,
+        last_refreshed_at timestamp(3),
+        refresh_interval_days integer NOT NULL DEFAULT 30,
+        provider text,
+        model text,
+        review_status text NOT NULL DEFAULT 'verified',
+        created_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL,
+        updated_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL
+      );
+      CREATE UNIQUE INDEX IF NOT EXISTS knowledge_packs_user_slug_key ON knowledge_packs (user_id, slug);
+      CREATE INDEX IF NOT EXISTS knowledge_packs_user_idx ON knowledge_packs (user_id);
+    `,
+  },
+  {
+    version: 8,
+    description: "Crypto: account_type column + crypto transactions partial index",
+    sql: `
+      ALTER TABLE accounts
+      ADD COLUMN IF NOT EXISTS account_type text NOT NULL DEFAULT 'bank';
+
+      CREATE INDEX IF NOT EXISTS accounts_user_type_idx
+        ON accounts (user_id, account_type)
+        WHERE is_active;
+
+      CREATE INDEX IF NOT EXISTS transactions_crypto_idx
+        ON transactions (user_id)
+        WHERE (extra ? 'crypto');
+    `,
+  },
+  {
+    version: 9,
+    description: "Crypto FIFO ledger: crypto_lots + crypto_disposal_matches",
+    sql: `
+      CREATE TABLE IF NOT EXISTS crypto_lots (
+        id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
+        user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        asset text NOT NULL,
+        acquired_at timestamp(3) NOT NULL,
+        quantity_total numeric(28,12) NOT NULL,
+        quantity_remaining numeric(28,12) NOT NULL,
+        cost_per_unit_cents bigint NOT NULL,
+        fees_cents bigint NOT NULL DEFAULT 0,
+        source_transaction_id uuid REFERENCES transactions(id) ON DELETE SET NULL,
+        created_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL,
+        updated_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS crypto_lots_user_asset_idx
+        ON crypto_lots (user_id, asset, acquired_at)
+        WHERE quantity_remaining > 0;
+      CREATE INDEX IF NOT EXISTS crypto_lots_user_idx ON crypto_lots (user_id);
+
+      CREATE TABLE IF NOT EXISTS crypto_disposal_matches (
+        id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
+        user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        disposal_transaction_id uuid NOT NULL REFERENCES transactions(id) ON DELETE CASCADE,
+        lot_id uuid NOT NULL REFERENCES crypto_lots(id) ON DELETE RESTRICT,
+        asset text NOT NULL,
+        quantity_consumed numeric(28,12) NOT NULL,
+        cost_basis_cents bigint NOT NULL,
+        proceeds_cents bigint NOT NULL,
+        realized_gain_cents bigint NOT NULL,
+        matched_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS crypto_disposal_matches_user_idx
+        ON crypto_disposal_matches (user_id);
+      CREATE INDEX IF NOT EXISTS crypto_disposal_matches_disposal_idx
+        ON crypto_disposal_matches (disposal_transaction_id);
+      CREATE INDEX IF NOT EXISTS crypto_disposal_matches_user_year_idx
+        ON crypto_disposal_matches (user_id, (EXTRACT(YEAR FROM matched_at)));
     `,
   },
 ]
@@ -261,6 +430,35 @@ export async function ensureSchema(pool: Pool, userId?: string): Promise<SchemaR
     result = { status: "fresh" }
   }
 
+  await syncEntityTypeFromEntitiesJson(pool)
   schemaChecked.add(connId)
   return result
+}
+
+/**
+ * Mirror the active entity's `type` from entities.json onto users.entity_type
+ * for any user whose column is currently NULL. The wizard prompts read this
+ * column so they can address the user as autónomo or SL without re-reading
+ * the JSON file on every request.
+ *
+ * Per CLAUDE.md "one database per entity" — every user in this database
+ * belongs to the same entity, so a single bulk UPDATE is safe.
+ */
+async function syncEntityTypeFromEntitiesJson(pool: Pool): Promise<void> {
+  try {
+    // Lazy import to avoid pulling embedded-pg into modules that only need schema.
+    const { getRunningClusterEntityId } = await import("./embedded-pg")
+    const { getEntityById } = await import("./entities")
+    const entityId = getRunningClusterEntityId()
+    if (!entityId) return
+    const entity = getEntityById(entityId)
+    if (!entity) return
+    await pool.query(
+      `UPDATE users SET entity_type = $1 WHERE entity_type IS NULL`,
+      [entity.type],
+    )
+  } catch (err) {
+    // Non-fatal: prompts will fall back to "(entity type not yet known)".
+    console.warn("[schema] entity_type sync skipped:", err instanceof Error ? err.message : err)
+  }
 }

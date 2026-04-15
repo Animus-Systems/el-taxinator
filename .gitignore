@@ -60,3 +60,7 @@ pgdata
 *.sqlite3
 *.sqlite-journal
 *.db-journal
+
+# graphify knowledge-graph artifacts (generated via /graphify skill)
+/graphify-out/
+.graphify_*

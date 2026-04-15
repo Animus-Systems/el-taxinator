@@ -11,6 +11,12 @@ export const queryClient = new QueryClient({
     queries: {
       staleTime: 5000,
       refetchOnWindowFocus: false,
+      // Cover the ~1–3s window where Fastify is still booting embedded Postgres
+      // after `yarn dev`. React Query's default is 3 retries with 1s/2s/4s
+      // backoff; tighten the initial waits so the UI recovers faster without
+      // masking genuine errors.
+      retry: 4,
+      retryDelay: (attempt) => Math.min(400 * 2 ** attempt, 3000),
     },
   },
 })

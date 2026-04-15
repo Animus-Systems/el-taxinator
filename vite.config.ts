@@ -94,10 +94,27 @@ export default defineConfig({
       "/api": {
         target: "http://localhost:7331",
         changeOrigin: true,
+        // During `yarn dev`, Vite (fast) and Fastify+embedded Postgres (slow)
+        // boot in parallel. The client's initial tRPC batch hits Vite before
+        // Postgres is ready, producing ECONNREFUSED spam. React Query retries
+        // transparently, so suppress that one error code while still
+        // surfacing anything else.
+        configure: (proxy) => {
+          proxy.on("error", (err) => {
+            if ((err as NodeJS.ErrnoException).code === "ECONNREFUSED") return
+            console.error("[vite proxy]", err)
+          })
+        },
       },
       "/files": {
         target: "http://localhost:7331",
         changeOrigin: true,
+        configure: (proxy) => {
+          proxy.on("error", (err) => {
+            if ((err as NodeJS.ErrnoException).code === "ECONNREFUSED") return
+            console.error("[vite proxy]", err)
+          })
+        },
       },
     },
   },
