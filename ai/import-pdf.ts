@@ -27,7 +27,7 @@ Return ONLY: {"type": "bank_statement"} or {"type": "receipt"}`
 
   const response = await requestLLM(llmSettings, { prompt, schema, attachments })
   if (response.error) return "receipt" // default to receipt on error
-  return (response.output as Record<string, string>).type === "bank_statement" ? "bank_statement" : "receipt"
+  return (response.output as Record<string, string>)["type"] === "bank_statement" ? "bank_statement" : "receipt"
 }
 
 /**
@@ -116,40 +116,40 @@ Return ONLY valid JSON:
   if (response.error) throw new Error(response.error)
 
   const output = response.output as Record<string, unknown>
-  const transactions = output.transactions as Array<Record<string, unknown>>
-  const currency = (output.currency as string) || defaultCurrency
+  const transactions = output["transactions"] as Array<Record<string, unknown>>
+  const currency = (output["currency"] as string) || defaultCurrency
 
   const candidates: TransactionCandidate[] = transactions.map((t, idx) => ({
     rowIndex: idx,
-    name: (t.name as string) || null,
-    merchant: (t.merchant as string) || null,
+    name: (t["name"] as string) || null,
+    merchant: (t["merchant"] as string) || null,
     description: null,
-    total: typeof t.amount === "number" ? Math.round(t.amount) : null,
+    total: typeof t["amount"] === "number" ? Math.round(t["amount"] as number) : null,
     currencyCode: currency,
-    type: (t.type as string) || "expense",
-    categoryCode: (t.categoryCode as string) || null,
-    projectCode: (t.projectCode as string) || null,
+    type: (t["type"] as string) || "expense",
+    categoryCode: (t["categoryCode"] as string) || null,
+    projectCode: (t["projectCode"] as string) || null,
     accountId: null,
-    issuedAt: (t.date as string) || null,
+    issuedAt: (t["date"] as string) || null,
     status: "needs_review",
     suggestedStatus:
-      t.status === "business" ||
-      t.status === "business_non_deductible" ||
-      t.status === "personal_ignored"
-        ? t.status
+      t["status"] === "business" ||
+      t["status"] === "business_non_deductible" ||
+      t["status"] === "personal_ignored"
+        ? (t["status"] as "business" | "business_non_deductible" | "personal_ignored")
         : null,
     confidence: {
-      category: (t.confidence as number) || 0.5,
+      category: (t["confidence"] as number) || 0.5,
       type: 0.8,
-      status: (t.confidence as number) || 0.5,
-      overall: (t.confidence as number) || 0.5,
+      status: (t["confidence"] as number) || 0.5,
+      overall: (t["confidence"] as number) || 0.5,
     },
     selected: true,
   }))
 
   return {
-    bank: (output.bank as string) || "Unknown",
-    bankConfidence: (output.bankConfidence as number) || 0.5,
+    bank: (output["bank"] as string) || "Unknown",
+    bankConfidence: (output["bankConfidence"] as number) || 0.5,
     candidates,
   }
 }

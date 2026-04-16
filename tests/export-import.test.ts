@@ -7,6 +7,12 @@ vi.mock("@/lib/db", () => ({
 
 import { EXPORT_AND_IMPORT_FIELD_MAP } from "@/models/export_and_import"
 
+function requireField(key: string) {
+  const field = EXPORT_AND_IMPORT_FIELD_MAP[key]
+  if (!field) throw new Error(`missing field ${key}`)
+  return field
+}
+
 describe("EXPORT_AND_IMPORT_FIELD_MAP structure", () => {
   it("contains expected fields", () => {
     const expectedFields = [
@@ -29,7 +35,7 @@ describe("EXPORT_AND_IMPORT_FIELD_MAP structure", () => {
   })
 
   it("each field has a code and type", () => {
-    for (const [key, field] of Object.entries(EXPORT_AND_IMPORT_FIELD_MAP)) {
+    for (const [, field] of Object.entries(EXPORT_AND_IMPORT_FIELD_MAP)) {
       expect(field.code).toBeDefined()
       expect(field.type).toBeDefined()
       expect(typeof field.code).toBe("string")
@@ -45,7 +51,7 @@ describe("EXPORT_AND_IMPORT_FIELD_MAP structure", () => {
 })
 
 describe("total field export/import transforms", () => {
-  const totalField = EXPORT_AND_IMPORT_FIELD_MAP.total
+  const totalField = requireField("total")
 
   it("export converts cents to decimal", async () => {
     const result = await totalField.export!("user-1", 12345)
@@ -79,7 +85,7 @@ describe("total field export/import transforms", () => {
 })
 
 describe("convertedTotal field export/import transforms", () => {
-  const field = EXPORT_AND_IMPORT_FIELD_MAP.convertedTotal
+  const field = requireField("convertedTotal")
 
   it("export converts cents to decimal", async () => {
     const result = await field.export!("user-1", 5000)
@@ -108,7 +114,7 @@ describe("convertedTotal field export/import transforms", () => {
 })
 
 describe("type field export/import transforms", () => {
-  const field = EXPORT_AND_IMPORT_FIELD_MAP.type
+  const field = requireField("type")
 
   it("export lowercases type", async () => {
     const result = await field.export!("user-1", "EXPENSE")
@@ -127,7 +133,7 @@ describe("type field export/import transforms", () => {
 })
 
 describe("issuedAt field export/import transforms", () => {
-  const field = EXPORT_AND_IMPORT_FIELD_MAP.issuedAt
+  const field = requireField("issuedAt")
 
   it("export formats date as yyyy-MM-dd", async () => {
     const date = new Date(2026, 2, 15) // March 15, 2026
@@ -154,34 +160,34 @@ describe("issuedAt field export/import transforms", () => {
 
 describe("simple string fields", () => {
   it("name field has type string", () => {
-    expect(EXPORT_AND_IMPORT_FIELD_MAP.name.type).toBe("string")
+    expect(requireField("name").type).toBe("string")
   })
 
   it("description field has type string", () => {
-    expect(EXPORT_AND_IMPORT_FIELD_MAP.description.type).toBe("string")
+    expect(requireField("description").type).toBe("string")
   })
 
   it("merchant field has type string", () => {
-    expect(EXPORT_AND_IMPORT_FIELD_MAP.merchant.type).toBe("string")
+    expect(requireField("merchant").type).toBe("string")
   })
 
   it("currencyCode field has type string", () => {
-    expect(EXPORT_AND_IMPORT_FIELD_MAP.currencyCode.type).toBe("string")
+    expect(requireField("currencyCode").type).toBe("string")
   })
 
   it("convertedCurrencyCode field has type string", () => {
-    expect(EXPORT_AND_IMPORT_FIELD_MAP.convertedCurrencyCode.type).toBe("string")
+    expect(requireField("convertedCurrencyCode").type).toBe("string")
   })
 
   it("note field has type string", () => {
-    expect(EXPORT_AND_IMPORT_FIELD_MAP.note.type).toBe("string")
+    expect(requireField("note").type).toBe("string")
   })
 
   it("simple string fields have no export/import transforms", () => {
-    expect(EXPORT_AND_IMPORT_FIELD_MAP.name.export).toBeUndefined()
-    expect(EXPORT_AND_IMPORT_FIELD_MAP.name.import).toBeUndefined()
-    expect(EXPORT_AND_IMPORT_FIELD_MAP.description.export).toBeUndefined()
-    expect(EXPORT_AND_IMPORT_FIELD_MAP.merchant.export).toBeUndefined()
-    expect(EXPORT_AND_IMPORT_FIELD_MAP.note.export).toBeUndefined()
+    expect(requireField("name").export).toBeUndefined()
+    expect(requireField("name").import).toBeUndefined()
+    expect(requireField("description").export).toBeUndefined()
+    expect(requireField("merchant").export).toBeUndefined()
+    expect(requireField("note").export).toBeUndefined()
   })
 })

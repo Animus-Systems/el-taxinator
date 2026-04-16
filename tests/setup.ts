@@ -1,1 +1,1 @@
-process.env.BASE_URL = "http://localhost:7331"
+process.env["BASE_URL"] = "http://localhost:7331"

@@ -219,16 +219,16 @@ For columnMapping, map CSV column names to our field names. Only include columns
   const output = response.output as Record<string, unknown>
 
   return {
-    bank: (output.bank as string) || "Unknown",
+    bank: (output["bank"] as string) || "Unknown",
     bankConfidence:
-      typeof output.bankConfidence === "number" ? output.bankConfidence : 0,
-    columnMapping: (output.columnMapping as Record<string, string>) || {},
-    dateFormat: (output.dateFormat as string) || "yyyy-MM-dd",
+      typeof output["bankConfidence"] === "number" ? output["bankConfidence"] : 0,
+    columnMapping: (output["columnMapping"] as Record<string, string>) || {},
+    dateFormat: (output["dateFormat"] as string) || "yyyy-MM-dd",
     amountFormat:
-      (output.amountFormat as CSVColumnMapping["amountFormat"]) ||
+      (output["amountFormat"] as CSVColumnMapping["amountFormat"]) ||
       "negative_expense",
-    skipRows: Array.isArray(output.skipRows)
-      ? (output.skipRows as number[])
+    skipRows: Array.isArray(output["skipRows"])
+      ? (output["skipRows"] as number[])
       : [],
   }
 }
@@ -277,7 +277,8 @@ export function applyCSVMapping(
       const idx = fieldToIndex[field]
       if (idx === undefined || idx < 0 || idx >= row.length) return null
       const val = row[idx]?.trim()
-      return val === "" ? null : val
+      if (val === undefined || val === "") return null
+      return val
     }
 
     // Parse amount and determine type
@@ -507,6 +508,7 @@ For each transaction, return:
           continue
 
         const candidate = batch[result.index]
+        if (!candidate) continue
 
         candidate.categoryCode =
           result.categoryCode && categoryCodes.includes(result.categoryCode)

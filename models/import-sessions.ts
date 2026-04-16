@@ -4,6 +4,7 @@ import { cache } from "react"
 
 export type ImportSessionData = {
   accountId?: string | null
+  fileId?: string | null
   fileName?: string | null
   fileType?: string | null
   rowCount?: number
@@ -87,6 +88,10 @@ export async function listResumableSessions(userId: string): Promise<ResumableSe
 
 export async function listArchivedSessions(userId: string): Promise<ResumableSessionSummary[]> {
   return listSessionsByStatus(userId, "abandoned")
+}
+
+export async function listCommittedSessions(userId: string): Promise<ResumableSessionSummary[]> {
+  return listSessionsByStatus(userId, "committed")
 }
 
 async function listSessionsByStatus(

@@ -21,6 +21,36 @@ yarn build                # Production build
 
 No Docker, no external Postgres install. The first launch runs `initdb` and stores the cluster in `./data/pgdata/`. The TCP port and superuser password are persisted in `./data/runtime.json`.
 
+## Code Quality Standards
+
+Every change should aim for:
+
+- clarity
+- low cognitive overhead
+- easy reviewability
+- maintainability
+- minimal surprise
+- strong typing
+- Do not weaken typing just because the computer complained.
+
+Prefer:
+
+- descriptive names
+- predictable component boundaries
+- simple control flow
+- explicit props
+- lightweight reuse
+- typed utility functions where needed
+
+Avoid:
+
+- massive files
+- duplicated JSX blocks
+- hidden side effects
+- clever but opaque abstractions
+- unnecessary dependencies
+- type safety shortcuts
+
 ## Core Engineering Rules
 
 ### 1. Types are the contract
@@ -29,6 +59,8 @@ No Docker, no external Postgres install. The first launch runs `initdb` and stor
 - DB row types live in `lib/db-types.ts` with Zod schemas. They are the single source of truth.
 - tRPC router outputs must use proper Zod schemas, never `z.any()`.
 - `tsc --noEmit` and `yarn build` are release gates.
+- **Strictest-possible TS config.** [tsconfig.json](tsconfig.json) enables: `strict`, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`, `noImplicitOverride`, `noImplicitReturns`, `noFallthroughCasesInSwitch`, `noPropertyAccessFromIndexSignature`, `noUnusedLocals`, `noUnusedParameters`, `allowUnreachableCode: false`, `allowUnusedLabels: false`, `forceConsistentCasingInFileNames`, `useUnknownInCatchVariables`. Do NOT relax a flag to make an error disappear — fix the type at the source. Prefix intentionally-unused identifiers with `_`.
+- Do not weaken typing just because the compiler complained. No `@ts-ignore`, no `@ts-expect-error` without a linked issue, no `as any`, no `// eslint-disable` on type rules. If a third-party library ships bad types, narrow with a typed wrapper, don't paper over at the call site.
 
 ### 2. Database discipline
 - Raw SQL via `lib/sql.ts` helpers: `sql` tagged template, `queryMany`, `queryOne`, `execute`, `withTransaction`.

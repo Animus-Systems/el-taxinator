@@ -173,8 +173,12 @@ export const entitiesRouter = router({
     .output(z.object({ success: z.boolean(), error: z.string().optional() }))
     .mutation(({ input }) => {
       try {
-        const { entityId, ...updates } = input
-        updateEntity(entityId, updates)
+        const { entityId, name, type, db } = input
+        updateEntity(entityId, {
+          ...(name !== undefined && { name }),
+          ...(type !== undefined && { type }),
+          ...(db !== undefined && { db }),
+        })
         return { success: true }
       } catch (error) {
         return {

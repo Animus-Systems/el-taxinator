@@ -34,12 +34,12 @@ export async function saveProfileAction(
   try {
     const values = formDataToObject(formData)
     const payload = {
-      name: typeof values.name === "string" ? values.name : undefined,
-      businessName: typeof values.businessName === "string" ? values.businessName : null,
-      businessAddress: typeof values.businessAddress === "string" ? values.businessAddress : null,
+      name: typeof values["name"] === "string" ? values["name"] : undefined,
+      businessName: typeof values["businessName"] === "string" ? values["businessName"] : null,
+      businessAddress: typeof values["businessAddress"] === "string" ? values["businessAddress"] : null,
       businessBankDetails:
-        typeof values.businessBankDetails === "string" ? values.businessBankDetails : null,
-      businessTaxId: typeof values.businessTaxId === "string" ? values.businessTaxId : null,
+        typeof values["businessBankDetails"] === "string" ? values["businessBankDetails"] : null,
+      businessTaxId: typeof values["businessTaxId"] === "string" ? values["businessTaxId"] : null,
     }
 
     const user = await trpcMutate("users.update", payload)

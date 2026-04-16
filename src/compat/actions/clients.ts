@@ -7,12 +7,12 @@ import { formDataToObject, nullableStringValue, trpcMutate, type CompatActionRes
 function clientPayload(formData: FormData): Record<string, unknown> {
   const values = formDataToObject(formData)
   return {
-    name: values.name,
-    email: nullableStringValue(values.email),
-    phone: nullableStringValue(values.phone),
-    address: nullableStringValue(values.address),
-    taxId: nullableStringValue(values.taxId),
-    notes: nullableStringValue(values.notes),
+    name: values["name"],
+    email: nullableStringValue(values["email"]),
+    phone: nullableStringValue(values["phone"]),
+    address: nullableStringValue(values["address"]),
+    taxId: nullableStringValue(values["taxId"]),
+    notes: nullableStringValue(values["notes"]),
   }
 }
 
@@ -43,7 +43,7 @@ export async function updateClientAction(
   arg1: string | CompatActionResult<Client | null> | null,
   arg2: Record<string, unknown> | FormData,
 ): Promise<CompatActionResult<Client | null>> {
-  const payload = arg2 instanceof FormData ? { id: formDataToObject(arg2).id, ...clientPayload(arg2) } : { id: arg1, ...arg2 }
+  const payload = arg2 instanceof FormData ? { id: formDataToObject(arg2)["id"], ...clientPayload(arg2) } : { id: arg1, ...arg2 }
   try {
     const data = await trpcMutate<Client | null>("clients.update", payload)
     return { success: true, data }

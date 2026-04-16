@@ -9,6 +9,18 @@
     "allowJs": true,
     "skipLibCheck": true,
     "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "noImplicitOverride": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "noPropertyAccessFromIndexSignature": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "allowUnreachableCode": false,
+    "allowUnusedLabels": false,
+    "forceConsistentCasingInFileNames": true,
+    "useUnknownInCatchVariables": true,
     "noEmit": true,
     "esModuleInterop": true,
     "module": "esnext",
@@ -100,9 +112,6 @@
       ],
       "@/actions/settings": [
         "./src/compat/actions/settings.ts"
-      ],
-      "@/actions/time": [
-        "./src/compat/actions/time.ts"
       ],
       "@/actions/transactions": [
         "./src/compat/actions/transactions.ts"

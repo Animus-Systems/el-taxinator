@@ -11,7 +11,6 @@ import { fieldsRouter } from "./routers/fields"
 import { settingsRouter } from "./routers/settings"
 import { usersRouter } from "./routers/users"
 import { filesRouter } from "./routers/files"
-import { timeEntriesRouter } from "./routers/time-entries"
 import { taxRouter } from "./routers/tax"
 import { statsRouter } from "./routers/stats"
 import { accountantsRouter } from "./routers/accountants"
@@ -37,7 +36,6 @@ export const appRouter = router({
   settings: settingsRouter,
   users: usersRouter,
   files: filesRouter,
-  timeEntries: timeEntriesRouter,
   tax: taxRouter,
   stats: statsRouter,
   accountants: accountantsRouter,

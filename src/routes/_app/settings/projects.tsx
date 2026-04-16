@@ -50,25 +50,25 @@ export function ProjectsSettingsPage() {
         columns={[
           { key: "name", label: t("name"), editable: true },
           { key: "llmPrompt", label: t("llmPrompt"), editable: true },
-          { key: "color", label: t("color"), type: "color", defaultValue: randomHexColor(), editable: true },
+          { key: "color", label: t("color"), type: "color", defaultValue: randomHexColor() ?? "#888888", editable: true },
         ]}
         onDelete={async (code) => {
           try {
             await deleteMutation.mutateAsync({ code })
             return { success: true }
-          } catch (error) {
+          } catch {
             return { success: false, error: "Failed to delete project" }
           }
         }}
         onAdd={async (data) => {
           try {
             await createMutation.mutateAsync({
-              name: (data as Record<string, unknown>).name as string,
-              llmPrompt: ((data as Record<string, unknown>).llmPrompt as string) || null,
-              color: ((data as Record<string, unknown>).color as string) || randomHexColor(),
+              name: (data as Record<string, unknown>)["name"] as string,
+              llmPrompt: ((data as Record<string, unknown>)["llmPrompt"] as string) || null,
+              color: ((data as Record<string, unknown>)["color"] as string) || randomHexColor() || "#888888",
             })
             return { success: true }
-          } catch (error) {
+          } catch {
             return { success: false, error: "Failed to create project" }
           }
         }}
@@ -76,12 +76,12 @@ export function ProjectsSettingsPage() {
           try {
             await updateMutation.mutateAsync({
               code,
-              name: (data as Record<string, unknown>).name as string,
-              llmPrompt: ((data as Record<string, unknown>).llmPrompt as string) || null,
-              color: ((data as Record<string, unknown>).color as string) || "",
+              name: (data as Record<string, unknown>)["name"] as string,
+              llmPrompt: ((data as Record<string, unknown>)["llmPrompt"] as string) || null,
+              color: ((data as Record<string, unknown>)["color"] as string) || "",
             })
             return { success: true }
-          } catch (error) {
+          } catch {
             return { success: false, error: "Failed to update project" }
           }
         }}

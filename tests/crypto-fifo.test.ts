@@ -12,7 +12,10 @@ describe("planFifoDisposal", () => {
     const plan = planFifoDisposal(lots, 1, 5000000)
 
     expect(plan.matches).toHaveLength(1)
-    expect(plan.matches[0]).toEqual({
+    const [m0] = plan.matches
+    expect(m0).toBeDefined()
+    if (!m0) throw new Error("expected match")
+    expect(m0).toEqual({
       lotId: "a",
       quantityConsumed: 1,
       costBasisCents: 3000000,
@@ -31,16 +34,20 @@ describe("planFifoDisposal", () => {
     const plan = planFifoDisposal(lots, 1.2, 5000000)
 
     expect(plan.matches).toHaveLength(2)
-    expect(plan.matches[0]).toMatchObject({
+    const [m0, m1] = plan.matches
+    expect(m0).toBeDefined()
+    expect(m1).toBeDefined()
+    if (!m0 || !m1) throw new Error("expected two matches")
+    expect(m0).toMatchObject({
       lotId: "jan",
       quantityConsumed: 1,
       realizedGainCents: 2000000,
     })
     // JS float math leaves 0.19999...6 rather than exactly 0.2, but cents
     // arithmetic is rounded so the realised gain stays integer-exact.
-    expect(plan.matches[1].lotId).toBe("mar")
-    expect(plan.matches[1].quantityConsumed).toBeCloseTo(0.2, 6)
-    expect(plan.matches[1].realizedGainCents).toBe(200000) // (50K-40K)*0.2
+    expect(m1.lotId).toBe("mar")
+    expect(m1.quantityConsumed).toBeCloseTo(0.2, 6)
+    expect(m1.realizedGainCents).toBe(200000) // (50K-40K)*0.2
     expect(plan.totalRealizedGainCents).toBe(2200000)
     expect(plan.totalQuantityMatched).toBeCloseTo(1.2)
     expect(plan.unmatchedQuantity).toBeCloseTo(0)
@@ -52,7 +59,10 @@ describe("planFifoDisposal", () => {
     const plan = planFifoDisposal(lots, 1, 5000000)
 
     expect(plan.matches).toHaveLength(1)
-    expect(plan.matches[0].quantityConsumed).toBe(0.5)
+    const [only] = plan.matches
+    expect(only).toBeDefined()
+    if (!only) throw new Error("expected match")
+    expect(only.quantityConsumed).toBe(0.5)
     expect(plan.unmatchedQuantity).toBe(0.5)
     expect(plan.totalRealizedGainCents).toBe(1000000) // (50K-30K)*0.5
   })
@@ -62,7 +72,10 @@ describe("planFifoDisposal", () => {
     const lots = [lot("a", "1", 6000000)]
     const plan = planFifoDisposal(lots, 1, 4000000)
 
-    expect(plan.matches[0].realizedGainCents).toBe(-2000000)
+    const [lossMatch] = plan.matches
+    expect(lossMatch).toBeDefined()
+    if (!lossMatch) throw new Error("expected match")
+    expect(lossMatch.realizedGainCents).toBe(-2000000)
     expect(plan.totalRealizedGainCents).toBe(-2000000)
   })
 
@@ -72,8 +85,11 @@ describe("planFifoDisposal", () => {
     const plan = planFifoDisposal(lots, 100, 100)
 
     expect(plan.totalRealizedGainCents).toBe(10000)
-    expect(plan.matches[0].costBasisCents).toBe(0)
-    expect(plan.matches[0].proceedsCents).toBe(10000)
+    const [airMatch] = plan.matches
+    expect(airMatch).toBeDefined()
+    if (!airMatch) throw new Error("expected match")
+    expect(airMatch.costBasisCents).toBe(0)
+    expect(airMatch.proceedsCents).toBe(10000)
   })
 
   it("skips lots with zero or negative remaining quantity", () => {
@@ -84,7 +100,10 @@ describe("planFifoDisposal", () => {
     const plan = planFifoDisposal(lots, 1, 5000000)
 
     expect(plan.matches).toHaveLength(1)
-    expect(plan.matches[0].lotId).toBe("next")
+    const [nextMatch] = plan.matches
+    expect(nextMatch).toBeDefined()
+    if (!nextMatch) throw new Error("expected match")
+    expect(nextMatch.lotId).toBe("next")
   })
 
   it("returns empty plan when disposal quantity is zero", () => {
@@ -110,9 +129,13 @@ describe("planFifoDisposal", () => {
     const lots = [lot("first", "1", 3000000), lot("second", "1", 3000000)]
     const plan = planFifoDisposal(lots, 1.5, 5000000)
 
-    expect(plan.matches[0].lotId).toBe("first")
-    expect(plan.matches[1].lotId).toBe("second")
-    expect(plan.matches[0].quantityConsumed).toBe(1)
-    expect(plan.matches[1].quantityConsumed).toBe(0.5)
+    const [firstMatch, secondMatch] = plan.matches
+    expect(firstMatch).toBeDefined()
+    expect(secondMatch).toBeDefined()
+    if (!firstMatch || !secondMatch) throw new Error("expected two matches")
+    expect(firstMatch.lotId).toBe("first")
+    expect(secondMatch.lotId).toBe("second")
+    expect(firstMatch.quantityConsumed).toBe(1)
+    expect(secondMatch.quantityConsumed).toBe(0.5)
   })
 })

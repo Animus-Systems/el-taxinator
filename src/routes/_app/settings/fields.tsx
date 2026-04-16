@@ -34,7 +34,7 @@ export function FieldsSettingsPage() {
   const fieldsWithActions = (fields ?? []).map((field) => ({
     ...field,
     isEditable: true,
-    isDeletable: (field as Record<string, unknown>).isExtra === true,
+    isDeletable: (field as Record<string, unknown>)["isExtra"] === true,
   }))
 
   return (
@@ -91,15 +91,15 @@ export function FieldsSettingsPage() {
           try {
             const d = data as Record<string, unknown>
             await createMutation.mutateAsync({
-              name: d.name as string,
-              type: (d.type as string) || "string",
-              llmPrompt: (d.llmPrompt as string) || null,
-              isVisibleInList: d.isVisibleInList as boolean ?? false,
-              isVisibleInAnalysis: d.isVisibleInAnalysis as boolean ?? false,
-              isRequired: d.isRequired as boolean ?? false,
+              name: d["name"] as string,
+              type: (d["type"] as string) || "string",
+              llmPrompt: (d["llmPrompt"] as string) || null,
+              isVisibleInList: d["isVisibleInList"] as boolean ?? false,
+              isVisibleInAnalysis: d["isVisibleInAnalysis"] as boolean ?? false,
+              isRequired: d["isRequired"] as boolean ?? false,
             })
             return { success: true }
-          } catch (error) {
+          } catch {
             return { success: false, error: "Failed to create field" }
           }
         }}
@@ -108,15 +108,15 @@ export function FieldsSettingsPage() {
             const d = data as Record<string, unknown>
             await updateMutation.mutateAsync({
               code,
-              name: d.name as string,
-              type: (d.type as string) || "string",
-              llmPrompt: (d.llmPrompt as string) || null,
-              isVisibleInList: d.isVisibleInList as boolean ?? false,
-              isVisibleInAnalysis: d.isVisibleInAnalysis as boolean ?? false,
-              isRequired: d.isRequired as boolean ?? false,
+              name: d["name"] as string,
+              type: (d["type"] as string) || "string",
+              llmPrompt: (d["llmPrompt"] as string) || null,
+              isVisibleInList: d["isVisibleInList"] as boolean ?? false,
+              isVisibleInAnalysis: d["isVisibleInAnalysis"] as boolean ?? false,
+              isRequired: d["isRequired"] as boolean ?? false,
             })
             return { success: true }
-          } catch (error) {
+          } catch {
             return { success: false, error: "Failed to update field" }
           }
         }}

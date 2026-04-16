@@ -189,3 +189,25 @@ export const PROVIDERS: ProviderConfig[] = [
     logo: "/logo/logo.webp",
   },
 ]
+
+/**
+ * True when the user has at least one usable LLM provider.
+ *
+ * A provider counts as "configured" when:
+ *   - its API key is set in settings, OR
+ *   - it's a subscription provider (Claude CLI, codex CLI) and the user has
+ *     picked it as `llm_primary_provider` or `llm_backup_provider` — those
+ *     auth via a locally-installed CLI, not via an API key.
+ */
+export function hasAnyProviderConfigured(settings: Record<string, string>): boolean {
+  const primary = settings["llm_primary_provider"]?.trim() ?? ""
+  const backup = settings["llm_backup_provider"]?.trim() ?? ""
+  return PROVIDERS.some((provider) => {
+    const apiKey = settings[provider.apiKeyName]
+    if (typeof apiKey === "string" && apiKey.trim().length > 0) return true
+    if (provider.isSubscription && (provider.key === primary || provider.key === backup)) {
+      return true
+    }
+    return false
+  })
+}

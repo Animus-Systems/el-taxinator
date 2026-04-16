@@ -1,7 +1,6 @@
 import { getPool } from "@/lib/pg"
 import {
   sql,
-  queryMany,
   queryOne,
   buildInsert,
   buildUpdate,
@@ -204,6 +203,13 @@ async function fetchClient(clientId: string | null | undefined): Promise<Client 
   return queryOne<Client>(sql`SELECT * FROM clients WHERE id = ${clientId}`)
 }
 
+/** Take the first row of a pg result and map it, throwing if absent. */
+function firstRowOrThrow<T>(rows: Record<string, unknown>[], context: string): T {
+  const row = rows[0]
+  if (!row) throw new Error(`Expected row from ${context}`)
+  return mapRow<T>(row)
+}
+
 /** Insert items within a transaction. */
 async function insertItems<TItem>(
   txClient: PoolClient,
@@ -218,7 +224,7 @@ async function insertItems<TItem>(
       [config.itemFk]: docId,
     })
     const result = await txClient.query(itemInsert.text, itemInsert.values)
-    inserted.push(mapRow<TItem>(result.rows[0]))
+    inserted.push(firstRowOrThrow<TItem>(result.rows, `insert ${config.itemsTable}`))
   }
   return inserted
 }
@@ -230,7 +236,8 @@ async function fetchClientInTx(
 ): Promise<Client | null> {
   if (!clientId) return null
   const result = await txClient.query(`SELECT * FROM clients WHERE id = $1`, [clientId])
-  return result.rows.length > 0 ? mapRow<Client>(result.rows[0]) : null
+  const row = result.rows[0]
+  return row ? mapRow<Client>(row) : null
 }
 
 // ---------------------------------------------------------------------------
@@ -269,7 +276,7 @@ export async function createInvoice(
 
     const invQuery = buildInsert("invoices", { ...invoiceData, userId })
     const invResult = await txClient.query(invQuery.text, invQuery.values)
-    const invoice = mapRow<Invoice>(invResult.rows[0])
+    const invoice = firstRowOrThrow<Invoice>(invResult.rows, "insert invoices")
 
     const insertedItems = await insertItems<InvoiceItem>(txClient, items, INVOICE_CONFIG, invoice.id)
     const client = await fetchClientInTx(txClient, invoice.clientId)
@@ -286,7 +293,7 @@ export async function updateInvoice(id: string, userId: string, data: InvoiceDat
 
     const updateQuery = buildUpdate("invoices", invoiceData, "id = $1 AND user_id = $2", [id, userId])
     const invResult = await txClient.query(updateQuery.text, updateQuery.values)
-    const invoice = mapRow<Invoice>(invResult.rows[0])
+    const invoice = firstRowOrThrow<Invoice>(invResult.rows, "update invoices")
 
     const insertedItems = await insertItems<InvoiceItem>(txClient, items, INVOICE_CONFIG, invoice.id)
 
@@ -300,8 +307,8 @@ export async function updateInvoice(id: string, userId: string, data: InvoiceDat
 
 export async function updateInvoiceStatus(id: string, userId: string, status: string) {
   const data: Record<string, unknown> = { status }
-  if (status === "paid") data.paidAt = new Date()
-  if (status !== "paid") data.paidAt = null
+  if (status === "paid") data["paidAt"] = new Date()
+  if (status !== "paid") data["paidAt"] = null
 
   return queryOne<Invoice>(
     buildUpdate("invoices", data, "id = $1 AND user_id = $2", [id, userId]),
@@ -349,7 +356,7 @@ export async function createQuote(
 
     const qQuery = buildInsert("quotes", { ...quoteData, userId })
     const qResult = await txClient.query(qQuery.text, qQuery.values)
-    const quote = mapRow<Quote>(qResult.rows[0])
+    const quote = firstRowOrThrow<Quote>(qResult.rows, "insert quotes")
 
     const insertedItems = await insertItems<QuoteItem>(txClient, items, QUOTE_CONFIG, quote.id)
     const client = await fetchClientInTx(txClient, quote.clientId)
@@ -366,7 +373,7 @@ export async function updateQuote(id: string, userId: string, data: QuoteData) {
 
     const updateQuery = buildUpdate("quotes", quoteData, "id = $1 AND user_id = $2", [id, userId])
     const qResult = await txClient.query(updateQuery.text, updateQuery.values)
-    const quote = mapRow<Quote>(qResult.rows[0])
+    const quote = firstRowOrThrow<Quote>(qResult.rows, "update quotes")
 
     const insertedItems = await insertItems<QuoteItem>(txClient, items, QUOTE_CONFIG, quote.id)
 
@@ -399,8 +406,9 @@ export async function convertQuoteToInvoice(
       `SELECT * FROM quotes WHERE id = $1 AND user_id = $2`,
       [quoteId, userId],
     )
-    if (qResult.rows.length === 0) throw new Error("Quote not found")
-    const quote = mapRow<Quote>(qResult.rows[0])
+    const quoteRow = qResult.rows[0]
+    if (!quoteRow) throw new Error("Quote not found")
+    const quote = mapRow<Quote>(quoteRow)
 
     const qItemsResult = await txClient.query(
       `SELECT * FROM quote_items WHERE quote_id = $1`,
@@ -417,7 +425,7 @@ export async function convertQuoteToInvoice(
       issueDate: new Date(),
     })
     const invResult = await txClient.query(invoiceInsert.text, invoiceInsert.values)
-    const invoice = mapRow<Invoice>(invResult.rows[0])
+    const invoice = firstRowOrThrow<Invoice>(invResult.rows, "convertQuoteToInvoice: invoices")
 
     const itemData = quoteItems.map((qi) => ({
       productId: qi.productId,

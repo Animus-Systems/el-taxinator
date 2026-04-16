@@ -20,8 +20,8 @@ export const getProjectByCode = cache(async (userId: string, code: string) => {
 })
 
 export const createProject = async (userId: string, project: ProjectData) => {
-  if (!project.code) {
-    project.code = codeFromName(project.name as string)
+  if (!project["code"]) {
+    project["code"] = codeFromName(project["name"] as string)
   }
   return queryOne<Project>(
     buildInsert("projects", { ...project, userId })

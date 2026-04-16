@@ -61,11 +61,11 @@ export function CurrenciesSettingsPage() {
         onAdd={async (data) => {
           try {
             await createMutation.mutateAsync({
-              code: (data as Record<string, unknown>).code as string,
-              name: (data as Record<string, unknown>).name as string,
+              code: (data as Record<string, unknown>)["code"] as string,
+              name: (data as Record<string, unknown>)["name"] as string,
             })
             return { success: true }
-          } catch (error) {
+          } catch {
             return { success: false, error: "Failed to create currency" }
           }
         }}
@@ -73,10 +73,10 @@ export function CurrenciesSettingsPage() {
           try {
             await updateMutation.mutateAsync({
               code,
-              name: (data as Record<string, unknown>).name as string,
+              name: (data as Record<string, unknown>)["name"] as string,
             })
             return { success: true }
-          } catch (error) {
+          } catch {
             return { success: false, error: "Failed to update currency" }
           }
         }}

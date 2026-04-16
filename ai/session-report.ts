@@ -1,6 +1,5 @@
 import type {
   BusinessFact,
-  ImportSession,
   TaxTip,
   User,
   WizardMessage,

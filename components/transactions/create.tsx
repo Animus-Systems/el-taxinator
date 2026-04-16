@@ -35,11 +35,11 @@ export default function TransactionCreateForm({
     description: "",
     total: 0.0,
     convertedTotal: 0.0,
-    currencyCode: settings.default_currency,
-    convertedCurrencyCode: settings.default_currency,
-    type: settings.default_type,
-    categoryCode: settings.default_category,
-    projectCode: settings.default_project,
+    currencyCode: settings["default_currency"] ?? "",
+    convertedCurrencyCode: settings["default_currency"] ?? "",
+    type: settings["default_type"] ?? "",
+    categoryCode: settings["default_category"] ?? "",
+    projectCode: settings["default_project"] ?? "",
     issuedAt: format(new Date(), "yyyy-MM-dd"),
     note: "",
   })
@@ -75,10 +75,10 @@ export default function TransactionCreateForm({
         <FormSelectType title={t("type")} name="type" defaultValue={formData.type} />
       </div>
 
-      {formData.currencyCode !== settings.default_currency ? (
+      {formData.currencyCode !== settings["default_currency"] ? (
         <div className="flex flex-row gap-4">
           <FormInput
-            title={`Converted to ${settings.default_currency}`}
+            title={`Converted to ${settings["default_currency"] ?? ""}`}
             type="number"
             step="0.01"
             name="convertedTotal"

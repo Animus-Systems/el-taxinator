@@ -63,20 +63,12 @@ export function saveAppConfig(config: AppConfig): void {
 
 export function getDataRoot(): string {
   const fromConfig = loadAppConfig().dataDir
-  const resolved = fromConfig ?? process.env.TAXINATOR_DATA_DIR ?? path.join(process.cwd(), "data")
+  const resolved = fromConfig ?? process.env["TAXINATOR_DATA_DIR"] ?? path.join(process.cwd(), "data")
   return path.resolve(resolved)
 }
 
 export function getEntityDataDir(entityId: string): string {
   return path.join(getDataRoot(), entityId)
-}
-
-function getPgDataDir(entityId: string): string {
-  return path.join(getEntityDataDir(entityId), "pgdata")
-}
-
-function getRuntimeFilePath(entityId: string): string {
-  return path.join(getEntityDataDir(entityId), RUNTIME_FILE)
 }
 
 /**
@@ -241,7 +233,7 @@ export async function startCluster(entityId: string, entityDataDir?: string): Pr
 
     // Make the cluster URL discoverable to legacy code that reads
     // `process.env.DATABASE_URL` (e.g. the CI guard in models/users.ts).
-    process.env.DATABASE_URL = buildConnectionString(info, DB_NAME)
+    process.env["DATABASE_URL"] = buildConnectionString(info, DB_NAME)
 
     const state: ClusterState = {
       pg: instance,

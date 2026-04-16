@@ -104,7 +104,7 @@ export function EntityManager({ entities: initialEntities }: Props) {
   )
 }
 
-function AddEntityForm({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
+function AddEntityForm({ onClose, onSuccess: _onSuccess }: { onClose: () => void; onSuccess: () => void }) {
   const t = useTranslations("settings")
   const [name, setName] = useState("")
   const [type, setType] = useState<EntityType>("autonomo")

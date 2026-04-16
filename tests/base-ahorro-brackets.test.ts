@@ -11,17 +11,25 @@ describe("applyBaseAhorroBrackets (2026 brackets)", () => {
   it("taxes €5,000 entirely at 19% (first bracket)", () => {
     const { totalCuotaCents, breakdown } = applyBaseAhorroBrackets(500000)
     expect(totalCuotaCents).toBe(Math.round(500000 * 0.19))
-    expect(breakdown[0].amountInBracketCents).toBe(500000)
-    expect(breakdown[1].amountInBracketCents).toBe(0)
+    const [first, second] = breakdown
+    expect(first).toBeDefined()
+    expect(second).toBeDefined()
+    if (!first || !second) throw new Error("expected two brackets")
+    expect(first.amountInBracketCents).toBe(500000)
+    expect(second.amountInBracketCents).toBe(0)
   })
 
   it("taxes €8,000 across the 19% and 21% bands", () => {
     // €6,000 at 19% = 1,140 ; €2,000 at 21% = 420 ; total 1,560
     const { totalCuotaCents, breakdown } = applyBaseAhorroBrackets(800000)
-    expect(breakdown[0].amountInBracketCents).toBe(600000)
-    expect(breakdown[0].taxInBracketCents).toBe(114000)
-    expect(breakdown[1].amountInBracketCents).toBe(200000)
-    expect(breakdown[1].taxInBracketCents).toBe(42000)
+    const [first, second] = breakdown
+    expect(first).toBeDefined()
+    expect(second).toBeDefined()
+    if (!first || !second) throw new Error("expected two brackets")
+    expect(first.amountInBracketCents).toBe(600000)
+    expect(first.taxInBracketCents).toBe(114000)
+    expect(second.amountInBracketCents).toBe(200000)
+    expect(second.taxInBracketCents).toBe(42000)
     expect(totalCuotaCents).toBe(156000)
   })
 

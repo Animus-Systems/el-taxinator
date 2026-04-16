@@ -84,7 +84,7 @@ describe("transactionFormSchema", () => {
       name: "Test",
       customField: "custom-value",
     })
-    expect((result as Record<string, unknown>).customField).toBe("custom-value")
+    expect((result as Record<string, unknown>)["customField"]).toBe("custom-value")
   })
 })
 

@@ -156,6 +156,8 @@ describe("getUpcomingDeadlines", () => {
   it("Q4 additionally includes form 425 (annual IGIC summary)", () => {
     const deadlines = getUpcomingDeadlines(2026)
     const q4 = deadlines[3]
+    expect(q4).toBeDefined()
+    if (!q4) throw new Error("expected Q4 deadline")
     expect(q4.forms).toEqual(["420", "130", "425"])
   })
 

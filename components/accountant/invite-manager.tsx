@@ -110,7 +110,6 @@ function InviteCard({ invite }: { invite: InviteWithUrl }) {
         <PermissionBadge label={t("transactions")} enabled={invite.permissions.transactions} />
         <PermissionBadge label={t("invoices")} enabled={invite.permissions.invoices} />
         <PermissionBadge label={t("taxReports")} enabled={invite.permissions.tax} />
-        <PermissionBadge label={t("timeTracking")} enabled={invite.permissions.time} />
       </div>
 
       {invite.isActive && (
@@ -175,7 +174,6 @@ export function AccountantInviteManager({ invites }: { invites: InviteWithUrl[] 
                   { key: "perm_transactions", label: t("transactions"), default: true },
                   { key: "perm_invoices", label: t("invoices"), default: true },
                   { key: "perm_tax", label: t("taxReports"), default: true },
-                  { key: "perm_time", label: t("timeTracking"), default: false },
                 ].map(({ key, label, default: def }) => (
                   <div key={key} className="flex items-center gap-2">
                     <Switch id={key} name={key} defaultChecked={def} value="on" />

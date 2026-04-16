@@ -31,10 +31,10 @@ export const FormSelectCategory = ({
     <FormSelect
       title={title}
       items={items}
-      emptyValue={emptyValue}
-      placeholder={placeholder}
       hideIfEmpty={hideIfEmpty}
       isRequired={isRequired}
+      {...(emptyValue !== undefined ? { emptyValue } : {})}
+      {...(placeholder !== undefined ? { placeholder } : {})}
       {...props}
     />
   )

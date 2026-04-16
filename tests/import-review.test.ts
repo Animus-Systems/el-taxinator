@@ -81,8 +81,8 @@ describe("summarizeImportCandidates", () => {
 
     expect(summary.counts.business).toBe(1)
     expect(summary.counts.personal_ignored).toBe(1)
-    expect(summary.totals.business.EUR).toBe(1000)
-    expect(summary.totals.personal_ignored.EUR).toBe(500)
+    expect(summary.totals.business["EUR"]).toBe(1000)
+    expect(summary.totals.personal_ignored["EUR"]).toBe(500)
   })
 
   it("tracks unresolved rows in the summary", () => {
@@ -97,6 +97,6 @@ describe("summarizeImportCandidates", () => {
     ])
 
     expect(summary.counts.needs_review).toBe(1)
-    expect(summary.totals.needs_review.EUR).toBe(1000)
+    expect(summary.totals.needs_review["EUR"]).toBe(1000)
   })
 })

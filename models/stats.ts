@@ -52,11 +52,6 @@ export type DetailedTimeSeriesData = {
 // Helpers
 // ---------------------------------------------------------------------------
 
-type CurrencyAggregate = {
-  currency: string
-  total: number
-}
-
 /** Convenience wrapper: builds WHERE for stats queries (no table alias, no search). */
 function buildStatsWhere(
   userId: string,
@@ -65,7 +60,7 @@ function buildStatsWhere(
 ): { clause: string; values: unknown[] } {
   const { clause, values } = buildTransactionWhere(userId, filters, {
     alias: "",
-    extraConditions,
+    ...(extraConditions !== undefined ? { extraConditions } : {}),
   })
   return { clause, values }
 }
@@ -101,8 +96,9 @@ async function aggregatePerCurrency(
 
   const map: Record<string, number> = {}
   for (const row of result.rows) {
-    if (row.currency) {
-      map[row.currency] = row.total ?? 0
+    const currency = row["currency"] as string | null | undefined
+    if (currency) {
+      map[currency] = (row["total"] as number | null | undefined) ?? 0
     }
   }
   return map
@@ -138,7 +134,7 @@ export const getDashboardStats = cache(
       totalIncomePerCurrency,
       totalExpensesPerCurrency,
       profitPerCurrency,
-      invoicesProcessed: countResult.rows[0]?.count ?? 0,
+      invoicesProcessed: (countResult.rows[0]?.["count"] as number | undefined) ?? 0,
     }
   },
 )
@@ -177,7 +173,7 @@ export const getProjectStats = cache(
       totalIncomePerCurrency,
       totalExpensesPerCurrency,
       profitPerCurrency,
-      invoicesProcessed: countResult.rows[0]?.count ?? 0,
+      invoicesProcessed: (countResult.rows[0]?.["count"] as number | undefined) ?? 0,
     }
   },
 )
@@ -202,14 +198,15 @@ export const getTimeSeriesStats = cache(
       values,
     )
 
-    if (!rangeResult.rows[0]?.min_date) return []
+    const rangeRow = rangeResult.rows[0]
+    if (!rangeRow?.["min_date"]) return []
 
     const dateFrom = filters.dateFrom
       ? new Date(filters.dateFrom)
-      : new Date(rangeResult.rows[0].min_date)
+      : new Date(rangeRow["min_date"] as string | Date)
     const dateTo = filters.dateTo
       ? new Date(filters.dateTo)
-      : new Date(rangeResult.rows[0].max_date)
+      : new Date(rangeRow["max_date"] as string | Date)
     const daysDiff = Math.ceil((dateTo.getTime() - dateFrom.getTime()) / (1000 * 60 * 60 * 24))
     const groupByDay = daysDiff <= 50
 
@@ -245,10 +242,10 @@ export const getTimeSeriesStats = cache(
     )
 
     return result.rows.map((row) => ({
-      period: row.period,
-      income: row.income ?? 0,
-      expenses: row.expenses ?? 0,
-      date: new Date(row.period_date),
+      period: row["period"] as string,
+      income: (row["income"] as number | null | undefined) ?? 0,
+      expenses: (row["expenses"] as number | null | undefined) ?? 0,
+      date: new Date(row["period_date"] as string | Date),
     }))
   },
 )
@@ -273,14 +270,15 @@ export const getDetailedTimeSeriesStats = cache(
       values,
     )
 
-    if (!rangeResult.rows[0]?.min_date) return []
+    const rangeRow = rangeResult.rows[0]
+    if (!rangeRow?.["min_date"]) return []
 
     const dateFrom = filters.dateFrom
       ? new Date(filters.dateFrom)
-      : new Date(rangeResult.rows[0].min_date)
+      : new Date(rangeRow["min_date"] as string | Date)
     const dateTo = filters.dateTo
       ? new Date(filters.dateTo)
-      : new Date(rangeResult.rows[0].max_date)
+      : new Date(rangeRow["max_date"] as string | Date)
     const daysDiff = Math.ceil((dateTo.getTime() - dateFrom.getTime()) / (1000 * 60 * 60 * 24))
     const groupByDay = daysDiff <= 50
 
@@ -350,23 +348,23 @@ export const getDetailedTimeSeriesStats = cache(
     >()
 
     for (const row of detailResult.rows) {
-      const period = row.period as string
+      const period = row["period"] as string
       if (!periodMap.has(period)) {
         periodMap.set(period, {
           period,
           income: 0,
           expenses: 0,
-          date: new Date(row.period_date),
+          date: new Date(row["period_date"] as string | Date),
           categories: new Map(),
           totalTransactions: 0,
         })
       }
 
       const entry = periodMap.get(period)!
-      const catCode = row.cat_code as string
-      const income = row.income ?? 0
-      const expenses = row.expenses ?? 0
-      const txCount = row.transaction_count ?? 0
+      const catCode = row["cat_code"] as string
+      const income = (row["income"] as number | null | undefined) ?? 0
+      const expenses = (row["expenses"] as number | null | undefined) ?? 0
+      const txCount = (row["transaction_count"] as number | null | undefined) ?? 0
 
       entry.income += income
       entry.expenses += expenses

@@ -10,7 +10,6 @@
  * For now we render the client components and a placeholder stats section
  * using the stats tRPC endpoint that already exists.
  */
-import { useTranslation } from "react-i18next"
 import { trpc } from "~/trpc"
 import DashboardDropZoneWidget from "@/components/dashboard/drop-zone-widget"
 import DashboardUnsortedWidget from "@/components/dashboard/unsorted-widget"
@@ -18,10 +17,8 @@ import { Separator } from "@/components/ui/separator"
 import { formatCurrency } from "@/lib/utils"
 
 export function DashboardPage() {
-  const { t } = useTranslation("dashboard")
-
   const { data: unsortedFiles, isLoading: filesLoading } = trpc.files.listUnsorted.useQuery({})
-  const { data: settings, isLoading: settingsLoading } = trpc.settings.get.useQuery({})
+  const { isLoading: settingsLoading } = trpc.settings.get.useQuery({})
 
   if (filesLoading || settingsLoading) {
     return (

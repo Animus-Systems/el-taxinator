@@ -50,7 +50,7 @@ export function EntitySwitcher({
     })
   }
 
-  if (entities.length <= 1) return null
+  if (entities.length <= 1 || !active) return null
 
   return (
     <DropdownMenu>

@@ -117,8 +117,9 @@ export async function queryMany<T>(query: SqlQuery): Promise<T[]> {
 export async function queryOne<T>(query: SqlQuery): Promise<T | null> {
   const pool = await getPool()
   const result = await pool.query(query.text, query.values)
-  if (result.rows.length === 0) return null
-  return mapRow<T>(result.rows[0])
+  const first = result.rows[0]
+  if (!first) return null
+  return mapRow<T>(first)
 }
 
 /**
@@ -191,7 +192,7 @@ export function buildInsert(
   assertSafeIdentifier(table, "table name")
 
   // Auto-generate UUID id if not provided
-  if (!data.id) {
+  if (!data["id"]) {
     data = { id: randomUUID(), ...data }
   }
 
@@ -260,11 +261,11 @@ export function buildUpdate(
   // and auto-generate "column = $N".
   let whereClause: string
   if (!where.includes("$")) {
-    whereClause = `${camelToSnake(where)} = ${whereClauseParams[0]}`
+    whereClause = `${camelToSnake(where)} = ${whereClauseParams[0] ?? ""}`
   } else {
     // Re-number existing $N placeholders in the where string
     let idx = 0
-    whereClause = where.replace(/\$\d+/g, () => whereClauseParams[idx++])
+    whereClause = where.replace(/\$\d+/g, () => whereClauseParams[idx++] ?? "")
   }
 
   const text = `UPDATE ${table} SET ${setClauses.join(", ")} WHERE ${whereClause} RETURNING *`

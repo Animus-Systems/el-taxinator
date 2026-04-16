@@ -4,11 +4,25 @@
  * Fetches quotes list via tRPC and renders QuoteList.
  */
 import { useTranslation } from "react-i18next"
+import type { ComponentProps } from "react"
 import { trpc } from "~/trpc"
 import { QuoteList } from "@/components/invoicing/quote-list"
 import { Button } from "@/components/ui/button"
 import { Plus } from "lucide-react"
 import { Link } from "@/lib/navigation"
+
+type QuoteItem = ComponentProps<typeof QuoteList>["quotes"][number]
+
+function normalizeQuote(q: {
+  invoice?: unknown
+  [x: string]: unknown
+}): QuoteItem {
+  const { invoice, ...rest } = q
+  const base = rest as Omit<QuoteItem, "invoice">
+  return invoice !== undefined
+    ? ({ ...base, invoice } as QuoteItem)
+    : (base as QuoteItem)
+}
 
 export function QuotesPage() {
   const { t } = useTranslation("quotes")
@@ -24,7 +38,7 @@ export function QuotesPage() {
     )
   }
 
-  const quoteList = quotes ?? []
+  const quoteList = (quotes ?? []).map(normalizeQuote)
 
   return (
     <>

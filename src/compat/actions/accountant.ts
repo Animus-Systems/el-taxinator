@@ -6,14 +6,13 @@ import { formDataToObject, trpcMutate, type CompatActionResult } from "./shared"
 function invitePayloadFromFormData(formData: FormData) {
   const data = formDataToObject(formData)
   return {
-    name: data.name,
-    email: data.email || null,
-    expiresAt: data.expires_at || null,
+    name: data["name"],
+    email: data["email"] || null,
+    expiresAt: data["expires_at"] || null,
     permissions: {
-      transactions: data.perm_transactions === "on",
-      invoices: data.perm_invoices === "on",
-      tax: data.perm_tax === "on",
-      time: data.perm_time === "on",
+      transactions: data["perm_transactions"] === "on",
+      invoices: data["perm_invoices"] === "on",
+      tax: data["perm_tax"] === "on",
     },
   }
 }

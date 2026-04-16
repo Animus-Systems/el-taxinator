@@ -1,13 +1,12 @@
 /**
- * Unsorted files page — SPA equivalent of app/[locale]/(app)/unsorted/page.tsx
+ * Inbox page — /unsorted
  *
- * Fetches unsorted files plus all supporting data (categories, projects, currencies,
- * fields, settings, invoices) and renders an AnalyzeForm per file.
+ * Actionable queue: files awaiting AI analysis + wizard sessions in progress.
  */
 import { useTranslation } from "react-i18next"
+import type { ComponentProps } from "react"
 import { trpc } from "~/trpc"
 import { FilePreview } from "@/components/files/preview"
-import { UploadButton } from "@/components/files/upload-button"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
@@ -15,15 +14,29 @@ import { AnalyzeAllButton } from "@/components/unsorted/analyze-all-button"
 import AnalyzeForm from "@/components/unsorted/analyze-form"
 import { WizardSessionsInline } from "@/components/wizard/wizard-sessions-inline"
 import config from "@/lib/config"
-import { FileText, PartyPopper, Settings, Upload } from "lucide-react"
+import { hasAnyProviderConfigured } from "@/lib/llm-providers"
+import { Loader2, PartyPopper, Settings } from "lucide-react"
 import { Link } from "@/lib/navigation"
 import type { File } from "@/lib/db-types"
 
+type AnalyzeFormInvoice = NonNullable<ComponentProps<typeof AnalyzeForm>["invoices"]>[number]
+
+function normalizeInvoice(inv: {
+  quote?: unknown
+  [x: string]: unknown
+}): AnalyzeFormInvoice {
+  const { quote, ...rest } = inv
+  const base = rest as Omit<AnalyzeFormInvoice, "quote">
+  return quote !== undefined
+    ? ({ ...base, quote } as AnalyzeFormInvoice)
+    : (base as AnalyzeFormInvoice)
+}
+
 export function UnsortedPage() {
   const { t } = useTranslation("unsorted")
-  const { t: tNav } = useTranslation("nav")
 
   const { data: files, isLoading: filesLoading } = trpc.files.listUnsorted.useQuery({})
+  const { data: sessions = [] } = trpc.wizard.listResumable.useQuery()
   const { data: categories } = trpc.categories.list.useQuery({})
   const { data: projects } = trpc.projects.list.useQuery({})
   const { data: currencies } = trpc.currencies.list.useQuery({})
@@ -34,92 +47,86 @@ export function UnsortedPage() {
   if (filesLoading) {
     return (
       <div className="flex items-center justify-center min-h-[200px]">
-        <div className="text-muted-foreground">Loading...</div>
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
       </div>
     )
   }
 
   const fileList = files ?? []
-  const s = (settings ?? {}) as Record<string, unknown>
+  const settingsMap = (settings ?? {}) as Record<string, string>
+  const hasActivity = fileList.length > 0 || sessions.length > 0
+  const showLlmWarning =
+    config.selfHosted.isEnabled && hasActivity && !hasAnyProviderConfigured(settingsMap)
 
   return (
-    <>
-      <header className="flex items-center justify-between">
-        <h2 className="text-3xl font-bold tracking-tight">{t("unsortedFiles", { count: fileList.length })}</h2>
+    <div className="mx-auto w-full max-w-5xl space-y-6 py-4">
+      <header className="flex items-start justify-between gap-4">
+        <div className="flex flex-col gap-1">
+          <h1 className="text-3xl font-semibold tracking-tight">{t("title")}</h1>
+          <p className="text-sm text-muted-foreground">{t("subtitle")}</p>
+        </div>
         {fileList.length > 1 && <AnalyzeAllButton />}
       </header>
 
+      {showLlmWarning && (
+        <Alert>
+          <Settings className="h-4 w-4" />
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="flex-1 min-w-0">
+              <AlertTitle>{t("llmKeyRequired")}</AlertTitle>
+              <AlertDescription>{t("llmKeyRequiredDesc")}</AlertDescription>
+            </div>
+            <Link href="/settings/llm">
+              <Button size="sm">{t("goToSettings")}</Button>
+            </Link>
+          </div>
+        </Alert>
+      )}
+
       <WizardSessionsInline />
 
-      {config.selfHosted.isEnabled &&
-        !s.openai_api_key &&
-        !s.google_api_key &&
-        !s.mistral_api_key && (
-          <Alert>
-            <Settings className="h-4 w-4 mt-2" />
-            <div className="flex flex-row justify-between pt-2">
-              <div className="flex flex-col">
-                <AlertTitle>{t("llmKeyRequired")}</AlertTitle>
-                <AlertDescription>
-                  {t("llmKeyRequiredDesc")}
-                </AlertDescription>
-              </div>
-              <Link href="/settings/llm">
-                <Button>{t("goToSettings")}</Button>
-              </Link>
-            </div>
-          </Alert>
-        )}
+      {fileList.length > 0 && (
+        <section className="space-y-3">
+          <h2 className="text-sm font-medium text-muted-foreground">
+            {t("unreviewedFilesHeading", { count: fileList.length })}
+          </h2>
+          <div className="flex flex-col gap-5">
+            {fileList.map((file) => (
+              <Card
+                key={file.id}
+                id={file.id}
+                className="flex flex-row flex-wrap md:flex-nowrap justify-center items-start gap-5 p-5 bg-gradient-to-br from-violet-50/80 via-indigo-50/80 to-white border-violet-200/60 rounded-2xl"
+              >
+                <div className="w-full max-w-[500px]">
+                  <Card>
+                    <FilePreview file={file} />
+                  </Card>
+                </div>
 
-      <main className="flex flex-col gap-5">
-        {fileList.map((file) => (
-          <Card
-            key={file.id}
-            id={file.id}
-            className="flex flex-row flex-wrap md:flex-nowrap justify-center items-start gap-5 p-5 bg-gradient-to-br from-violet-50/80 via-indigo-50/80 to-white border-violet-200/60 rounded-2xl"
-          >
-            <div className="w-full max-w-[500px]">
-              <Card>
-                <FilePreview file={file} />
+                <div className="w-full">
+                  <AnalyzeForm
+                    file={file as File}
+                    categories={categories ?? []}
+                    projects={projects ?? []}
+                    currencies={currencies ?? []}
+                    fields={fields ?? []}
+                    settings={settings ?? {}}
+                    invoices={(invoices ?? []).map(normalizeInvoice)}
+                  />
+                </div>
               </Card>
-            </div>
-
-            <div className="w-full">
-              <AnalyzeForm
-                file={file as File}
-                categories={categories ?? []}
-                projects={projects ?? []}
-                currencies={currencies ?? []}
-                fields={fields ?? []}
-                settings={settings ?? {}}
-                invoices={invoices ?? []}
-              />
-            </div>
-          </Card>
-        ))}
-        {fileList.length === 0 && (
-          <div className="flex flex-col items-center justify-center gap-2 h-full min-h-[600px]">
-            <PartyPopper className="w-12 h-12 text-muted-foreground" />
-            <p className="pt-4 text-muted-foreground">{t("noFiles")}</p>
-            <p className="flex flex-row gap-2 text-muted-foreground">
-              <span>{t("dragDropFiles")}</span>
-              <Upload />
-            </p>
-
-            <div className="flex flex-row gap-5 mt-8">
-              <UploadButton>
-                <Upload /> {t("uploadNewFile")}
-              </UploadButton>
-              <Button variant="outline" asChild>
-                <Link href="/transactions">
-                  <FileText />
-                  {t("goToTransactions")}
-                </Link>
-              </Button>
-            </div>
+            ))}
           </div>
-        )}
-      </main>
-    </>
+        </section>
+      )}
+
+      {!hasActivity && (
+        <div className="flex flex-col items-center justify-center gap-2 py-20 text-center">
+          <PartyPopper className="h-10 w-10 text-muted-foreground" />
+          <p className="mt-2 text-lg font-medium">{t("inboxZero")}</p>
+          <p className="text-sm text-muted-foreground">{t("inboxZeroDesc")}</p>
+        </div>
+      )}
+    </div>
   )
 }

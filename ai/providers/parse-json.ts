@@ -146,7 +146,9 @@ function findObjectWithKeys(
     // Fallback: balanced-brace extraction for strings with trailing prose.
     const raws = extractAllJsonObjects(trimmed)
     for (let i = raws.length - 1; i >= 0; i--) {
-      const parsed = tryParseObject(raws[i])
+      const raw = raws[i]
+      if (raw === undefined) continue
+      const parsed = tryParseObject(raw)
       if (!parsed) continue
       const match = findObjectWithKeys(parsed, requiredKeys, depth + 1)
       if (match) return match
@@ -156,7 +158,9 @@ function findObjectWithKeys(
 
   if (Array.isArray(obj)) {
     for (let i = obj.length - 1; i >= 0; i--) {
-      const match = findObjectWithKeys(obj[i], requiredKeys, depth + 1)
+      const item = obj[i]
+      if (item === undefined) continue
+      const match = findObjectWithKeys(item, requiredKeys, depth + 1)
       if (match) return match
     }
     return null
@@ -192,7 +196,8 @@ export function parseLLMJson(
 
   // Fast path: single object, no filter.
   if (raws.length === 1 && requiredKeys.length === 0) {
-    return tryParseObject(raws[0])
+    const only = raws[0]
+    return only !== undefined ? tryParseObject(only) : null
   }
 
   let fallback: Record<string, unknown> | null = null
@@ -202,7 +207,9 @@ export function parseLLMJson(
   // is the last emitted object. A first-match-wins with required keys also
   // means the most recent matching object wins when multiple exist.
   for (let i = raws.length - 1; i >= 0; i--) {
-    const parsed = tryParseObject(raws[i])
+    const raw = raws[i]
+    if (raw === undefined) continue
+    const parsed = tryParseObject(raw)
     if (!parsed) continue
 
     if (requiredKeys.length === 0) {
@@ -218,7 +225,7 @@ export function parseLLMJson(
     const nested = findObjectWithKeys(parsed, requiredKeys)
     if (nested) return nested
 
-    const size = raws[i].length
+    const size = raw.length
     if (size > fallbackSize) {
       fallback = parsed
       fallbackSize = size

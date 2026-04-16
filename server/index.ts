@@ -28,6 +28,8 @@ import { getOrCreateSelfHostedUser } from "@/models/users"
 import type { User } from "@/lib/db-types"
 import type { TRPCContext } from "@/lib/trpc/context"
 import { importRoutes } from "./routes/import"
+import { filesRoutes } from "./routes/files"
+import { exportRoutes } from "./routes/export"
 
 // ---------------------------------------------------------------------------
 // State — resolved during boot, used by context factory
@@ -54,6 +56,10 @@ async function bootDatabase(): Promise<void> {
 
   activeEntityId = getActiveEntityIdFromFile()
   const entity = entities.find((e) => e.id === activeEntityId) ?? entities[0]
+  if (!entity) {
+    console.log("[server] No entity available — skipping cluster startup")
+    return
+  }
   activeEntityId = entity.id
 
   if (entity.db) {
@@ -129,7 +135,7 @@ async function createFastifyContext(
 // Server
 // ---------------------------------------------------------------------------
 
-const PORT = parseInt(process.env.PORT ?? "7331", 10)
+const PORT = parseInt(process.env["PORT"] ?? "7331", 10)
 const DIST_DIR = path.join(process.cwd(), "dist")
 const INDEX_FILE = path.join(DIST_DIR, "index.html")
 
@@ -183,6 +189,8 @@ async function main() {
 
   // 6. Mount import routes (file upload + AI import pipeline)
   await app.register(importRoutes)
+  await app.register(filesRoutes)
+  await app.register(exportRoutes)
 
   // 7. Health check endpoint
   app.get("/health", async () => {

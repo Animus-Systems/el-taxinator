@@ -17,7 +17,7 @@ export function useDownload(options: UseDownloadOptions = {}) {
 
       // Get the filename from the Content-Disposition header
       const contentDisposition = response.headers.get("Content-Disposition")
-      const filename = contentDisposition ? contentDisposition.split("filename=")[1].replace(/"/g, "") : defaultName
+      const filename = contentDisposition ? (contentDisposition.split("filename=")[1] ?? "").replace(/"/g, "") || defaultName : defaultName
 
       // Create a blob from the response
       const blob = await response.blob()

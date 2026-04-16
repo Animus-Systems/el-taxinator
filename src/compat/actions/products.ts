@@ -7,12 +7,12 @@ import { formDataToObject, nullableStringValue, numberValue, trpcMutate, type Co
 function productPayload(formData: FormData): Record<string, unknown> {
   const values = formDataToObject(formData)
   return {
-    name: values.name,
-    description: nullableStringValue(values.description),
-    price: numberValue(values.price) ?? 0,
-    currencyCode: values.currencyCode,
-    vatRate: numberValue(values.vatRate) ?? 0,
-    unit: nullableStringValue(values.unit),
+    name: values["name"],
+    description: nullableStringValue(values["description"]),
+    price: numberValue(values["price"]) ?? 0,
+    currencyCode: values["currencyCode"],
+    vatRate: numberValue(values["vatRate"]) ?? 0,
+    unit: nullableStringValue(values["unit"]),
   }
 }
 
@@ -43,7 +43,7 @@ export async function updateProductAction(
   arg1: string | CompatActionResult<Product | null> | null,
   arg2: Record<string, unknown> | FormData,
 ): Promise<CompatActionResult<Product | null>> {
-  const payload = arg2 instanceof FormData ? { id: formDataToObject(arg2).id, ...productPayload(arg2) } : { id: arg1, ...arg2 }
+  const payload = arg2 instanceof FormData ? { id: formDataToObject(arg2)["id"], ...productPayload(arg2) } : { id: arg1, ...arg2 }
   try {
     const data = await trpcMutate<Product | null>("products.update", payload)
     return { success: true, data }

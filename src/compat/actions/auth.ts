@@ -84,7 +84,7 @@ export async function addAndConnectAction(data: {
       return { success: false, error: createResult.error ?? "Failed to create entity" }
     }
 
-    return { success: true, entityId: createResult.entityId }
+    return { success: true, ...(createResult.entityId !== undefined ? { entityId: createResult.entityId } : {}) }
   } catch (e) {
     return { success: false, error: e instanceof Error ? e.message : "Failed to create and connect" }
   }

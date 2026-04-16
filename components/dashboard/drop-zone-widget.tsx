@@ -21,7 +21,8 @@ export default function DashboardDropZoneWidget() {
 
       // Append all selected files to the FormData
       for (let i = 0; i < e.target.files.length; i++) {
-        formData.append("files", e.target.files[i])
+        const file = e.target.files[i]
+        if (file) formData.append("files", file)
       }
 
       // Submit the files using the server action

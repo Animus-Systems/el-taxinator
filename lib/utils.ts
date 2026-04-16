@@ -86,7 +86,7 @@ export function randomHexColor() {
     sky.sky9,
     tomato.tomato9,
   ]
-  return palette[Math.floor(Math.random() * palette.length)]
+  return palette[Math.floor(Math.random() * palette.length)] ?? "#888888"
 }
 
 export async function fetchAsBase64(url: string): Promise<string | null> {
@@ -132,8 +132,8 @@ export function generateUUID(): string {
       crypto.getRandomValues(bytes)
 
       // Set version (4) and variant bits according to RFC 4122
-      bytes[6] = (bytes[6] & 0x0f) | 0x40 // Version 4
-      bytes[8] = (bytes[8] & 0x3f) | 0x80 // Variant 10
+      bytes[6] = ((bytes[6] ?? 0) & 0x0f) | 0x40 // Version 4
+      bytes[8] = ((bytes[8] ?? 0) & 0x3f) | 0x80 // Variant 10
 
       // Convert to UUID string format
       const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("")

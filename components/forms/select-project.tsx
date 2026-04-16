@@ -26,10 +26,10 @@ export const FormSelectProject = ({
     <FormSelect
       title={title}
       items={projects.map((project) => ({ code: project.code, name: getLocalizedValue(project.name, locale), color: project.color }))}
-      emptyValue={emptyValue}
-      placeholder={placeholder}
       hideIfEmpty={hideIfEmpty}
       isRequired={isRequired}
+      {...(emptyValue !== undefined ? { emptyValue } : {})}
+      {...(placeholder !== undefined ? { placeholder } : {})}
       {...props}
     />
   )

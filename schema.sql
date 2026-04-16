@@ -259,31 +259,6 @@ CREATE TABLE invoice_items (
     "position" integer DEFAULT 0 NOT NULL
 );
 
--- ─── Time Tracking ───────────────────────────────────────────────────────────
-
-CREATE TABLE time_entries (
-    id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
-    user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    description text,
-    project_code text,
-    client_id uuid REFERENCES clients(id) ON DELETE SET NULL,
-    started_at timestamp(3) NOT NULL,
-    ended_at timestamp(3),
-    duration_minutes integer,
-    hourly_rate integer,
-    currency_code text,
-    is_billable boolean DEFAULT true NOT NULL,
-    is_invoiced boolean DEFAULT false NOT NULL,
-    notes text,
-    created_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    updated_at timestamp(3) NOT NULL,
-    FOREIGN KEY (project_code, user_id) REFERENCES projects(code, user_id) ON UPDATE CASCADE ON DELETE SET NULL
-);
-CREATE INDEX time_entries_user_id_idx ON time_entries (user_id);
-CREATE INDEX time_entries_user_id_started_at_idx ON time_entries (user_id, started_at);
-CREATE INDEX time_entries_user_id_project_code_idx ON time_entries (user_id, project_code);
-CREATE INDEX time_entries_user_id_client_id_idx ON time_entries (user_id, client_id);
-
 -- ─── Accountant Access ───────────────────────────────────────────────────────
 
 CREATE TABLE accountant_invites (
@@ -365,6 +340,7 @@ CREATE TABLE import_sessions (
     title text,
     last_activity_at timestamp(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     pending_turn_at timestamp(3),
+    file_id uuid REFERENCES files(id) ON DELETE SET NULL,
     created_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
 CREATE INDEX import_sessions_user_id_idx ON import_sessions (user_id);
@@ -372,6 +348,9 @@ CREATE INDEX import_sessions_entry_mode_idx ON import_sessions (entry_mode, stat
 CREATE INDEX import_sessions_resumable_idx
     ON import_sessions (user_id, status, last_activity_at DESC)
     WHERE status = 'pending';
+CREATE INDEX import_sessions_file_id_idx
+    ON import_sessions (file_id)
+    WHERE file_id IS NOT NULL;
 
 -- ─── Misc ────────────────────────────────────────────────────────────────────
 

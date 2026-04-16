@@ -30,12 +30,12 @@ export const FormSelectCurrency = ({
   )
   return (
     <FormSelect
-      title={title}
       items={items}
-      emptyValue={emptyValue}
-      placeholder={placeholder}
       hideIfEmpty={hideIfEmpty}
       isRequired={isRequired}
+      {...(title !== undefined ? { title } : {})}
+      {...(emptyValue !== undefined ? { emptyValue } : {})}
+      {...(placeholder !== undefined ? { placeholder } : {})}
       {...props}
     />
   )

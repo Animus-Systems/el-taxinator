@@ -19,5 +19,12 @@ export function EntityPickerPage() {
     )
   }
 
-  return <EntityPicker entities={entities ?? []} />
+  const normalizedEntities = (entities ?? []).map((e) => ({
+    id: e.id,
+    name: e.name,
+    type: e.type,
+    ...(e.db !== undefined ? { db: e.db } : {}),
+    ...(e.dataDir !== undefined ? { dataDir: e.dataDir } : {}),
+  }))
+  return <EntityPicker entities={normalizedEntities} />
 }

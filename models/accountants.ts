@@ -5,7 +5,6 @@ import {
   queryOne,
   buildInsert,
   buildUpdate,
-  execute,
   mapRow,
 } from "@/lib/sql"
 import type {
@@ -76,9 +75,11 @@ export const getAccountantInvites = cache(
     )
     return result.rows.map((row) => {
       const invite = mapRow<AccountantInviteWithCounts>(row)
+      const accessLogCount = row["access_log_count"]
+      const commentCount = row["comment_count"]
       invite._count = {
-        accessLogs: row.access_log_count ?? 0,
-        comments: row.comment_count ?? 0,
+        accessLogs: typeof accessLogCount === "number" ? accessLogCount : 0,
+        comments: typeof commentCount === "number" ? commentCount : 0,
       }
       return invite
     })
@@ -107,36 +108,77 @@ export const getAccountantInviteByToken = cache(
       [token],
     )
 
-    if (result.rows.length === 0) return null
-
     const row = result.rows[0]
+    if (!row) return null
     const invite = mapRow<AccountantInviteWithUser>(row)
 
     if (!invite.isActive) return null
     if (invite.expiresAt && invite.expiresAt < new Date()) return null
 
+    const uId = row["u_id"]
+    const uEmail = row["u_email"]
+    const uName = row["u_name"]
+    const uAvatar = row["u_avatar"]
+    const uCreatedAt = row["u_created_at"]
+    const uUpdatedAt = row["u_updated_at"]
+    const uStripeCustomerId = row["u_stripe_customer_id"]
+    const uMembershipPlan = row["u_membership_plan"]
+    const uMembershipExpiresAt = row["u_membership_expires_at"]
+    const uEmailVerified = row["u_email_verified"]
+    const uStorageUsed = row["u_storage_used"]
+    const uStorageLimit = row["u_storage_limit"]
+    const uAiBalance = row["u_ai_balance"]
+    const uBusinessName = row["u_business_name"]
+    const uBusinessAddress = row["u_business_address"]
+    const uBusinessBankDetails = row["u_business_bank_details"]
+    const uBusinessLogo = row["u_business_logo"]
+    const uBusinessTaxId = row["u_business_tax_id"]
+
+    const toNumber = (v: unknown): number => {
+      if (typeof v === "number") return v
+      if (typeof v === "string") {
+        const n = Number(v)
+        return Number.isFinite(n) ? n : 0
+      }
+      return 0
+    }
+    const toDate = (v: unknown): Date => {
+      if (v instanceof Date) return v
+      if (typeof v === "string" || typeof v === "number") return new Date(v)
+      return new Date()
+    }
+    const toDateOrNull = (v: unknown): Date | null => {
+      if (v == null) return null
+      if (v instanceof Date) return v
+      if (typeof v === "string" || typeof v === "number") return new Date(v)
+      return null
+    }
+    const toStringOrNull = (v: unknown): string | null => {
+      if (v == null) return null
+      return typeof v === "string" ? v : String(v)
+    }
+
     invite.user = {
-      id: row.u_id,
-      email: row.u_email,
-      name: row.u_name,
-      avatar: row.u_avatar ?? null,
-      createdAt: row.u_created_at ? new Date(row.u_created_at) : new Date(),
-      updatedAt: row.u_updated_at ? new Date(row.u_updated_at) : new Date(),
-      stripeCustomerId: row.u_stripe_customer_id ?? null,
-      membershipPlan: row.u_membership_plan ?? null,
-      membershipExpiresAt: row.u_membership_expires_at
-        ? new Date(row.u_membership_expires_at)
-        : null,
-      emailVerified: row.u_email_verified ?? false,
-      storageUsed: typeof row.u_storage_used === "string" ? Number(row.u_storage_used) : (row.u_storage_used ?? 0),
-      storageLimit: typeof row.u_storage_limit === "string" ? Number(row.u_storage_limit) : (row.u_storage_limit ?? 0),
-      aiBalance: typeof row.u_ai_balance === "string" ? Number(row.u_ai_balance) : (row.u_ai_balance ?? 0),
-      businessName: row.u_business_name ?? null,
-      businessAddress: row.u_business_address ?? null,
-      businessBankDetails: row.u_business_bank_details ?? null,
-      businessLogo: row.u_business_logo ?? null,
-      businessTaxId: row.u_business_tax_id ?? null,
-    } as User
+      id: typeof uId === "string" ? uId : String(uId ?? ""),
+      email: typeof uEmail === "string" ? uEmail : String(uEmail ?? ""),
+      name: typeof uName === "string" ? uName : String(uName ?? ""),
+      avatar: toStringOrNull(uAvatar),
+      createdAt: toDate(uCreatedAt),
+      updatedAt: toDate(uUpdatedAt),
+      stripeCustomerId: toStringOrNull(uStripeCustomerId),
+      membershipPlan: toStringOrNull(uMembershipPlan),
+      membershipExpiresAt: toDateOrNull(uMembershipExpiresAt),
+      emailVerified: typeof uEmailVerified === "boolean" ? uEmailVerified : false,
+      storageUsed: toNumber(uStorageUsed),
+      storageLimit: toNumber(uStorageLimit),
+      aiBalance: toNumber(uAiBalance),
+      businessName: toStringOrNull(uBusinessName),
+      businessAddress: toStringOrNull(uBusinessAddress),
+      businessBankDetails: toStringOrNull(uBusinessBankDetails),
+      businessLogo: toStringOrNull(uBusinessLogo),
+      businessTaxId: toStringOrNull(uBusinessTaxId),
+      entityType: null,
+    }
 
     return invite
   },
@@ -162,11 +204,11 @@ export async function updateAccountantInvite(
   data: Partial<AccountantInviteData> & { isActive?: boolean },
 ) {
   const updateData: Record<string, unknown> = {}
-  if (data.name !== undefined) updateData.name = data.name
-  if (data.email !== undefined) updateData.email = data.email
-  if (data.permissions !== undefined) updateData.permissions = data.permissions
-  if (data.expiresAt !== undefined) updateData.expiresAt = data.expiresAt
-  if (data.isActive !== undefined) updateData.isActive = data.isActive
+  if (data.name !== undefined) updateData["name"] = data.name
+  if (data.email !== undefined) updateData["email"] = data.email
+  if (data.permissions !== undefined) updateData["permissions"] = data.permissions
+  if (data.expiresAt !== undefined) updateData["expiresAt"] = data.expiresAt
+  if (data.isActive !== undefined) updateData["isActive"] = data.isActive
 
   return queryOne<AccountantInvite>(
     buildUpdate("accountant_invites", updateData, "id = $1 AND user_id = $2", [id, userId]),

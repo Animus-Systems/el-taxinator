@@ -372,6 +372,7 @@ export const importSessionSchema = z.object({
   title: z.string().nullable(),
   lastActivityAt: z.date(),
   pendingTurnAt: z.date().nullable(),
+  fileId: z.string().nullable(),
   createdAt: z.date(),
 })
 
@@ -555,24 +556,6 @@ export const invoiceItemSchema = z.object({
   position: z.number(),
 })
 
-export const timeEntrySchema = z.object({
-  id: z.string(),
-  userId: z.string(),
-  description: z.string().nullable(),
-  projectCode: z.string().nullable(),
-  clientId: z.string().nullable(),
-  startedAt: z.date(),
-  endedAt: z.date().nullable(),
-  durationMinutes: z.number().nullable(),
-  hourlyRate: z.number().nullable(),
-  currencyCode: z.string().nullable(),
-  isBillable: z.boolean(),
-  isInvoiced: z.boolean(),
-  notes: z.string().nullable(),
-  createdAt: z.date(),
-  updatedAt: z.date(),
-})
-
 export const accountantInviteSchema = z.object({
   id: z.string(),
   userId: z.string(),
@@ -628,7 +611,6 @@ export type Quote = z.infer<typeof quoteSchema>
 export type QuoteItem = z.infer<typeof quoteItemSchema>
 export type Invoice = z.infer<typeof invoiceSchema>
 export type InvoiceItem = z.infer<typeof invoiceItemSchema>
-export type TimeEntry = z.infer<typeof timeEntrySchema>
 export type AccountantInvite = z.infer<typeof accountantInviteSchema>
 export type AccountantAccessLog = z.infer<typeof accountantAccessLogSchema>
 export type AccountantComment = z.infer<typeof accountantCommentSchema>
@@ -742,34 +724,6 @@ export interface ProductCreateInput {
   unit?: string | null
 }
 
-export interface TimeEntryCreateInput {
-  userId: string
-  description?: string | null
-  projectCode?: string | null
-  clientId?: string | null
-  startedAt: Date
-  endedAt?: Date | null
-  durationMinutes?: number | null
-  hourlyRate?: number | null
-  currencyCode?: string | null
-  isBillable?: boolean
-  isInvoiced?: boolean
-  notes?: string | null
-}
-
-export interface TimeEntryUpdateInput {
-  description?: string | null
-  projectCode?: string | null
-  clientId?: string | null
-  startedAt?: Date
-  endedAt?: Date | null
-  durationMinutes?: number | null
-  hourlyRate?: number | null
-  currencyCode?: string | null
-  isBillable?: boolean
-  isInvoiced?: boolean
-  notes?: string | null
-}
 
 export interface CategoryCreateInput {
   userId?: string

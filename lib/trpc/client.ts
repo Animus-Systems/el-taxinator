@@ -26,7 +26,7 @@ async function request<T>(
   const init: RequestInit = {
     method,
     headers,
-    signal: opts?.signal,
+    ...(opts?.signal !== undefined && { signal: opts.signal }),
   }
 
   if (body !== undefined && method !== "GET") {

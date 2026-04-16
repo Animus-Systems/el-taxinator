@@ -147,9 +147,9 @@ export function ReanalyzeDialog({ children, transactionIds, onComplete }: Reanal
       .filter((c) => approvedIds.has(c.transactionId))
       .map((c) => ({
         transactionId: c.transactionId,
-        categoryCode: c.suggestedCategoryCode,
-        projectCode: c.suggestedProjectCode,
-        type: c.suggestedType,
+        ...(c.suggestedCategoryCode !== undefined ? { categoryCode: c.suggestedCategoryCode } : {}),
+        ...(c.suggestedProjectCode !== undefined ? { projectCode: c.suggestedProjectCode } : {}),
+        ...(c.suggestedType !== undefined ? { type: c.suggestedType } : {}),
       }))
 
     if (toApply.length === 0) return

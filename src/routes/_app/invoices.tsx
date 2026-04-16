@@ -4,11 +4,25 @@
  * Fetches invoices via tRPC and renders InvoiceList.
  */
 import { useTranslation } from "react-i18next"
+import type { ComponentProps } from "react"
 import { trpc } from "~/trpc"
 import { InvoiceList } from "@/components/invoicing/invoice-list"
 import { Button } from "@/components/ui/button"
 import { Plus } from "lucide-react"
 import { Link } from "@/lib/navigation"
+
+type InvoiceItem = ComponentProps<typeof InvoiceList>["invoices"][number]
+
+function normalizeInvoice(inv: {
+  quote?: unknown
+  [x: string]: unknown
+}): InvoiceItem {
+  const { quote, ...rest } = inv
+  const base = rest as Omit<InvoiceItem, "quote">
+  return quote !== undefined
+    ? ({ ...base, quote } as InvoiceItem)
+    : (base as InvoiceItem)
+}
 
 export function InvoicesPage() {
   const { t } = useTranslation("invoices")
@@ -24,7 +38,7 @@ export function InvoicesPage() {
     )
   }
 
-  const invoiceList = invoices ?? []
+  const invoiceList = (invoices ?? []).map(normalizeInvoice)
 
   return (
     <>

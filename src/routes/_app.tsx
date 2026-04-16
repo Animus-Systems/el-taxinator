@@ -32,7 +32,7 @@ export function AppLayout() {
           <AppSidebar
             unsortedFilesCount={inboxCount}
             untrackedCryptoCount={untrackedCryptoCount}
-            entityName={entityName}
+            {...(entityName !== undefined ? { entityName } : {})}
           />
           <SidebarInset>
             <div className="flex flex-1 flex-col p-4 md:p-6 overflow-x-hidden">

@@ -8,7 +8,6 @@ import type { FastifyInstance } from "fastify"
 import multipart from "@fastify/multipart"
 import { parse } from "@fast-csv/parse"
 
-import { getActiveEntityId } from "@/lib/entities"
 import { getOrCreateSelfHostedUser } from "@/models/users"
 import {
   createImportSession,
@@ -19,10 +18,8 @@ import {
 } from "@/models/import-sessions"
 import type { WizardMessage } from "@/lib/db-types"
 import { randomUUID } from "node:crypto"
-import { renderToStream } from "@react-pdf/renderer"
-import { createElement } from "react"
 import { buildSessionReport } from "@/ai/session-report"
-import { WizardSessionReportPDF } from "@/components/wizard/wizard-report-pdf"
+import { renderWizardSessionReportPdf } from "@/components/wizard/wizard-report-pdf"
 import { createTransaction } from "@/models/transactions"
 import { syncCryptoLedger } from "@/lib/crypto-hooks"
 import { createCategory } from "@/models/categories"
@@ -39,6 +36,8 @@ import { detectPDFType, extractPDFTransactions } from "@/ai/import-pdf"
 import { applyRulesToCandidates } from "@/models/rules"
 import { getActiveRules } from "@/models/rules"
 import { getActiveAccounts } from "@/models/accounts"
+import { persistUploadedFile } from "@/models/files"
+import { getActiveEntityId } from "@/lib/entities"
 import type { BankAccount } from "@/lib/db-types"
 import type { AnalyzeAttachment } from "@/ai/attachments"
 import { validateImportCommit } from "@/lib/import-review"
@@ -108,11 +107,11 @@ export function matchAccountByBank(bank: string | null, accounts: BankAccount[])
   if (!bank || accounts.length === 0) return { kind: "none", accounts }
   const needle = bank.toLowerCase()
   const byBankName = accounts.filter((a) => a.bankName && a.bankName.toLowerCase().includes(needle))
-  if (byBankName.length === 1) return { kind: "single", account: byBankName[0] }
+  if (byBankName.length === 1 && byBankName[0]) return { kind: "single", account: byBankName[0] }
   if (byBankName.length > 1) return { kind: "ambiguous", candidates: byBankName }
 
   const byName = accounts.filter((a) => a.name.toLowerCase().includes(needle))
-  if (byName.length === 1) return { kind: "single", account: byName[0] }
+  if (byName.length === 1 && byName[0]) return { kind: "single", account: byName[0] }
   if (byName.length > 1) return { kind: "ambiguous", candidates: byName }
 
   return { kind: "none", accounts }
@@ -186,20 +185,30 @@ export async function importRoutes(app: FastifyInstance) {
       const user = await getUser()
       if (!user) return reply.code(401).send({ success: false, error: "Not authenticated" })
 
-      const { fields, fileBuffer, fileName } = await parseMultipart(request as never)
+      const { fields, fileBuffer, fileName, mimeType } = await parseMultipart(request as never)
       if (!fileBuffer) return reply.code(400).send({ success: false, error: "No file uploaded" })
 
-      const accountId = fields.accountId || null
+      const accountId = fields["accountId"] || null
+
+      // 0. Persist the raw CSV to disk so it shows up in /files and survives
+      //    beyond this request. Reviewed=true — the wizard owns the review.
+      const entityId = await getActiveEntityId()
+      const persistedFile = await persistUploadedFile(user.id, entityId, {
+        fileName,
+        mimetype: mimeType || "text/csv",
+        buffer: fileBuffer,
+        isReviewed: true,
+      })
 
       // 1. Parse CSV
       const text = fileBuffer.toString("utf-8")
       const rows = await parseCSVText(text)
 
-      if (rows.length < 2) {
+      const headers = rows[0]
+      if (!headers || rows.length < 2) {
         return reply.send({ success: false, error: "CSV file is empty or has no data rows" })
       }
 
-      const headers = rows[0]
       const dataRows = rows.slice(1)
 
       // 2. Detect mapping via AI
@@ -207,7 +216,7 @@ export async function importRoutes(app: FastifyInstance) {
 
       // 3. Apply mapping to produce candidates
       const settings = await getSettings(user.id)
-      const defaultCurrency = settings?.defaultCurrency || "EUR"
+      const defaultCurrency = settings?.["defaultCurrency"] || "EUR"
       const candidates = applyCSVMapping(headers, dataRows, mapping, defaultCurrency)
 
       // 4. Apply rules
@@ -233,6 +242,7 @@ export async function importRoutes(app: FastifyInstance) {
       // 5. Create import session
       const session = await createImportSession(user.id, {
         accountId: resolvedAccountId,
+        fileId: persistedFile.id,
         fileName,
         fileType: "csv",
         rowCount: candidates.length,
@@ -308,7 +318,17 @@ export async function importRoutes(app: FastifyInstance) {
       const { fields, fileBuffer, fileName, mimeType } = await parseMultipart(request as never)
       if (!fileBuffer) return reply.code(400).send({ success: false, error: "No file uploaded" })
 
-      const accountId = fields.accountId || null
+      const accountId = fields["accountId"] || null
+
+      // Persist the raw PDF to disk so it lives in /files and doesn't vanish
+      // when the request ends. Reviewed=true — the wizard owns the review.
+      const entityId = await getActiveEntityId()
+      const persistedFile = await persistUploadedFile(user.id, entityId, {
+        fileName,
+        mimetype: mimeType || "application/pdf",
+        buffer: fileBuffer,
+        isReviewed: true,
+      })
 
       const base64 = fileBuffer.toString("base64")
       const attachments: AnalyzeAttachment[] = [{
@@ -318,7 +338,7 @@ export async function importRoutes(app: FastifyInstance) {
       }]
 
       const settings = await getSettings(user.id)
-      const defaultCurrency = settings?.defaultCurrency || "EUR"
+      const defaultCurrency = settings?.["defaultCurrency"] || "EUR"
 
       const result = await extractPDFTransactions(attachments, user.id, defaultCurrency)
 
@@ -347,6 +367,7 @@ export async function importRoutes(app: FastifyInstance) {
       // Create session
       const session = await createImportSession(user.id, {
         accountId: resolvedAccountId,
+        fileId: persistedFile.id,
         fileName,
         fileType: "pdf",
         rowCount: result.candidates.length,
@@ -594,6 +615,7 @@ export async function importRoutes(app: FastifyInstance) {
       let created = 0
       for (const c of candidates) {
         try {
+          const extraPayload = c.extra as Record<string, unknown> | undefined
           const tx = await createTransaction(user.id, {
             name: c.name,
             merchant: c.merchant,
@@ -608,7 +630,7 @@ export async function importRoutes(app: FastifyInstance) {
             status: c.status,
             // Carry the wizard's extra payload (crypto meta, etc.) through to
             // transactions.extra so /crypto-page queries can find it.
-            extra: c.extra as Record<string, unknown> | undefined,
+            ...(extraPayload ? { extra: extraPayload } : {}),
           })
 
           // Hook crypto-tagged transactions into the FIFO ledger so holdings
@@ -641,16 +663,15 @@ export async function importRoutes(app: FastifyInstance) {
       if (!user) return reply.code(401).send({ success: false, error: "Not authenticated" })
 
       const report = await buildSessionReport(request.params.id, user.id)
-      const element = createElement(WizardSessionReportPDF, { report })
-      // @ts-expect-error react-pdf types are loose about JSX element typing
-      const stream = await renderToStream(element)
+      const buffer = await renderWizardSessionReportPdf(report)
 
       reply.header("Content-Type", "application/pdf")
+      reply.header("Content-Length", String(buffer.length))
       reply.header(
         "Content-Disposition",
         `attachment; filename="taxinator-session-${request.params.id}.pdf"`,
       )
-      return reply.send(stream)
+      return reply.send(buffer)
     } catch (error) {
       console.error("[wizard/report] Error:", error)
       return reply.code(500).send({

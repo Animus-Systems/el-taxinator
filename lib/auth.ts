@@ -1,4 +1,4 @@
-import { getSelfHostedUser, SELF_HOSTED_USER } from "@/models/users"
+import { getSelfHostedUser } from "@/models/users"
 import { hasAnyEntities, getEntityById, getActiveEntityIdFromFile } from "@/lib/entities"
 import type { User } from "@/lib/db-types"
 

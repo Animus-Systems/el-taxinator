@@ -67,15 +67,15 @@ export const transactionsRouter = router({
     }))
     .query(async ({ ctx, input }) => {
       const filters: TransactionFilters = {
-        search: input.search,
-        dateFrom: input.dateFrom,
-        dateTo: input.dateTo,
-        ordering: input.ordering,
-        accountId: input.accountId,
-        categoryCode: input.categoryCode,
-        projectCode: input.projectCode,
-        type: input.type,
-        page: input.page,
+        ...(input.search !== undefined && { search: input.search }),
+        ...(input.dateFrom !== undefined && { dateFrom: input.dateFrom }),
+        ...(input.dateTo !== undefined && { dateTo: input.dateTo }),
+        ...(input.ordering !== undefined && { ordering: input.ordering }),
+        ...(input.accountId !== undefined && { accountId: input.accountId }),
+        ...(input.categoryCode !== undefined && { categoryCode: input.categoryCode }),
+        ...(input.projectCode !== undefined && { projectCode: input.projectCode }),
+        ...(input.type !== undefined && { type: input.type }),
+        ...(input.page !== undefined && { page: input.page }),
       }
       const limit = input.limit ?? 50
       const page = input.page ?? 1

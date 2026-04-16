@@ -43,6 +43,18 @@ export default function AnalyzeForm({
   const t = useTranslations("unsorted")
   const locale = useLocale()
 
+  const {
+    default_type: defaultType = "",
+    default_currency: defaultCurrency = "",
+    default_category: defaultCategory = "",
+    default_project: defaultProject = "",
+  } = settings as {
+    default_type?: string
+    default_currency?: string
+    default_category?: string
+    default_project?: string
+  }
+
   const isCsvFile = file.mimetype === "text/csv" || file.filename.toLowerCase().endsWith(".csv")
 
   const [isAnalyzing, setIsAnalyzing] = useState(false)
@@ -63,18 +75,35 @@ export default function AnalyzeForm({
   }, [fields])
 
   const extraFields = useMemo(() => fields.filter((field) => field.isExtra), [fields])
+
+  const getField = (code: string): { name: unknown; isVisibleInAnalysis: boolean; isRequired: boolean } => {
+    const field = fieldMap[code]
+    if (field) return field
+    return { name: code, isVisibleInAnalysis: true, isRequired: false }
+  }
+  const nameField = getField("name")
+  const merchantField = getField("merchant")
+  const descriptionField = getField("description")
+  const totalField = getField("total")
+  const currencyCodeField = getField("currencyCode")
+  const typeField = getField("type")
+  const issuedAtField = getField("issuedAt")
+  const categoryCodeField = getField("categoryCode")
+  const projectCodeField = getField("projectCode")
+  const noteField = getField("note")
+  const textField = getField("text")
   const initialFormState = useMemo(() => {
     const baseState = {
       name: file.filename,
       merchant: "",
       description: "",
-      type: settings.default_type,
+      type: defaultType,
       total: 0.0,
-      currencyCode: settings.default_currency,
+      currencyCode: defaultCurrency,
       convertedTotal: 0.0,
-      convertedCurrencyCode: settings.default_currency,
-      categoryCode: settings.default_category,
-      projectCode: settings.default_project,
+      convertedCurrencyCode: defaultCurrency,
+      categoryCode: defaultCategory,
+      projectCode: defaultProject,
       issuedAt: "",
       note: "",
       text: "",
@@ -216,34 +245,34 @@ export default function AnalyzeForm({
       <form className="space-y-4" action={saveAsTransaction}>
         <input type="hidden" name="fileId" value={file.id} />
         <FormInput
-          title={getLocalizedValue(fieldMap.name.name, locale)}
+          title={getLocalizedValue(nameField.name, locale)}
           name="name"
           value={formData.name}
           onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
-          required={fieldMap.name.isRequired}
+          required={nameField.isRequired}
         />
 
         <FormInput
-          title={getLocalizedValue(fieldMap.merchant.name, locale)}
+          title={getLocalizedValue(merchantField.name, locale)}
           name="merchant"
           value={formData.merchant}
           onChange={(e) => setFormData((prev) => ({ ...prev, merchant: e.target.value }))}
-          hideIfEmpty={!fieldMap.merchant.isVisibleInAnalysis}
-          required={fieldMap.merchant.isRequired}
+          hideIfEmpty={!merchantField.isVisibleInAnalysis}
+          required={merchantField.isRequired}
         />
 
         <FormInput
-          title={getLocalizedValue(fieldMap.description.name, locale)}
+          title={getLocalizedValue(descriptionField.name, locale)}
           name="description"
           value={formData.description}
           onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value }))}
-          hideIfEmpty={!fieldMap.description.isVisibleInAnalysis}
-          required={fieldMap.description.isRequired}
+          hideIfEmpty={!descriptionField.isVisibleInAnalysis}
+          required={descriptionField.isRequired}
         />
 
         <div className="flex flex-wrap gap-4">
           <FormInput
-            title={getLocalizedValue(fieldMap.total.name, locale)}
+            title={getLocalizedValue(totalField.name, locale)}
             name="total"
             type="number"
             step="0.01"
@@ -255,87 +284,87 @@ export default function AnalyzeForm({
               }
             }}
             className="w-32"
-            required={fieldMap.total.isRequired}
+            required={totalField.isRequired}
           />
 
           <FormSelectCurrency
-            title={getLocalizedValue(fieldMap.currencyCode.name, locale)}
+            title={getLocalizedValue(currencyCodeField.name, locale)}
             currencies={currencies}
             name="currencyCode"
-            value={formData.currencyCode}
+            value={formData.currencyCode ?? ""}
             onValueChange={(value) => setFormData((prev) => ({ ...prev, currencyCode: value }))}
-            hideIfEmpty={!fieldMap.currencyCode.isVisibleInAnalysis}
-            required={fieldMap.currencyCode.isRequired}
+            hideIfEmpty={!currencyCodeField.isVisibleInAnalysis}
+            required={currencyCodeField.isRequired}
           />
 
           <FormSelectType
-            title={getLocalizedValue(fieldMap.type.name, locale)}
+            title={getLocalizedValue(typeField.name, locale)}
             name="type"
-            value={formData.type}
+            value={formData.type ?? ""}
             onValueChange={(value) => setFormData((prev) => ({ ...prev, type: value }))}
-            hideIfEmpty={!fieldMap.type.isVisibleInAnalysis}
-            required={fieldMap.type.isRequired}
+            hideIfEmpty={!typeField.isVisibleInAnalysis}
+            required={typeField.isRequired}
           />
         </div>
 
-        {formData.total != 0 && formData.currencyCode && formData.currencyCode !== settings.default_currency && (
+        {formData.total != 0 && formData.currencyCode && formData.currencyCode !== defaultCurrency && (
           <ToolWindow title={`Exchange rate on ${format(new Date(formData.issuedAt || Date.now()), "LLLL dd, yyyy")}`}>
             <CurrencyConverterTool
               originalTotal={formData.total}
               originalCurrencyCode={formData.currencyCode}
-              targetCurrencyCode={settings.default_currency}
+              targetCurrencyCode={defaultCurrency}
               date={new Date(formData.issuedAt || Date.now())}
               onChange={(value) => setFormData((prev) => ({ ...prev, convertedTotal: value }))}
             />
-            <input type="hidden" name="convertedCurrencyCode" value={settings.default_currency} />
+            <input type="hidden" name="convertedCurrencyCode" value={defaultCurrency} />
           </ToolWindow>
         )}
 
         <div className="flex flex-row gap-4">
           <FormInput
-            title={getLocalizedValue(fieldMap.issuedAt.name, locale)}
+            title={getLocalizedValue(issuedAtField.name, locale)}
             type="date"
             name="issuedAt"
             value={formData.issuedAt}
             onChange={(e) => setFormData((prev) => ({ ...prev, issuedAt: e.target.value }))}
-            hideIfEmpty={!fieldMap.issuedAt.isVisibleInAnalysis}
-            required={fieldMap.issuedAt.isRequired}
+            hideIfEmpty={!issuedAtField.isVisibleInAnalysis}
+            required={issuedAtField.isRequired}
           />
         </div>
 
         <div className="flex flex-row gap-4">
           <FormSelectCategory
-            title={getLocalizedValue(fieldMap.categoryCode.name, locale)}
+            title={getLocalizedValue(categoryCodeField.name, locale)}
             categories={categories}
             name="categoryCode"
-            value={formData.categoryCode}
+            value={formData.categoryCode ?? ""}
             onValueChange={(value) => setFormData((prev) => ({ ...prev, categoryCode: value }))}
             placeholder="Select Category"
-            hideIfEmpty={!fieldMap.categoryCode.isVisibleInAnalysis}
-            required={fieldMap.categoryCode.isRequired}
+            hideIfEmpty={!categoryCodeField.isVisibleInAnalysis}
+            required={categoryCodeField.isRequired}
           />
 
           {projects.length > 0 && (
             <FormSelectProject
-              title={getLocalizedValue(fieldMap.projectCode.name, locale)}
+              title={getLocalizedValue(projectCodeField.name, locale)}
               projects={projects}
               name="projectCode"
-              value={formData.projectCode}
+              value={formData.projectCode ?? ""}
               onValueChange={(value) => setFormData((prev) => ({ ...prev, projectCode: value }))}
               placeholder="Select Project"
-              hideIfEmpty={!fieldMap.projectCode.isVisibleInAnalysis}
-              required={fieldMap.projectCode.isRequired}
+              hideIfEmpty={!projectCodeField.isVisibleInAnalysis}
+              required={projectCodeField.isRequired}
             />
           )}
         </div>
 
         <FormInput
-          title={getLocalizedValue(fieldMap.note.name, locale)}
+          title={getLocalizedValue(noteField.name, locale)}
           name="note"
           value={formData.note}
           onChange={(e) => setFormData((prev) => ({ ...prev, note: e.target.value }))}
-          hideIfEmpty={!fieldMap.note.isVisibleInAnalysis}
-          required={fieldMap.note.isRequired}
+          hideIfEmpty={!noteField.isVisibleInAnalysis}
+          required={noteField.isRequired}
         />
 
         {extraFields.map((field) => (
@@ -356,9 +385,13 @@ export default function AnalyzeForm({
             <ItemsDetectTool
               file={file}
               data={formData}
-              invoiceMatches={invoices ? Object.fromEntries(
-                formData.items.map((item, i) => [i, findInvoiceMatches(item, invoices)])
-              ) : undefined}
+              {...(invoices
+                ? {
+                    invoiceMatches: Object.fromEntries(
+                      formData.items.map((item, i) => [i, findInvoiceMatches(item, invoices)])
+                    ),
+                  }
+                : {})}
             />
           </ToolWindow>
         )}
@@ -366,11 +399,11 @@ export default function AnalyzeForm({
         <div className="hidden">
           <input type="text" name="items" value={JSON.stringify(formData.items)} readOnly />
           <FormTextarea
-            title={getLocalizedValue(fieldMap.text.name, locale)}
+            title={getLocalizedValue(textField.name, locale)}
             name="text"
             value={formData.text}
             onChange={(e) => setFormData((prev) => ({ ...prev, text: e.target.value }))}
-            hideIfEmpty={!fieldMap.text.isVisibleInAnalysis}
+            hideIfEmpty={!textField.isVisibleInAnalysis}
           />
         </div>
 

@@ -1,5 +1,4 @@
 import { invoiceFormSchema } from "@/forms/invoices"
-import { timeEntryFormSchema } from "@/forms/time"
 import { safePathJoin } from "@/lib/files"
 import { describe, expect, it } from "vitest"
 
@@ -51,53 +50,5 @@ describe("invoiceFormSchema", () => {
         items: [],
       })
     ).toThrow()
-  })
-})
-
-describe("timeEntryFormSchema", () => {
-  it("normalizes string form input into typed server values", () => {
-    const parsed = timeEntryFormSchema.parse({
-      description: "Client workshop",
-      projectCode: "freelance",
-      clientId: "client-123",
-      startedAt: "2026-03-30T09:00:00.000Z",
-      endedAt: "2026-03-30T11:30:00.000Z",
-      durationMinutes: "150",
-      hourlyRate: "80.50",
-      currencyCode: "EUR",
-      isBillable: "on",
-      notes: "",
-    })
-
-    expect(parsed.startedAt).toBeInstanceOf(Date)
-    expect(parsed.endedAt).toBeInstanceOf(Date)
-    expect(parsed.durationMinutes).toBe(150)
-    expect(parsed.hourlyRate).toBe(8050)
-    expect(parsed.isBillable).toBe(true)
-    expect(parsed.notes).toBeNull()
-  })
-
-  it("accepts blank optional values as null", () => {
-    const parsed = timeEntryFormSchema.parse({
-      description: "",
-      projectCode: "",
-      clientId: "",
-      startedAt: "2026-03-30T09:00:00.000Z",
-      endedAt: "",
-      durationMinutes: "",
-      hourlyRate: "",
-      currencyCode: "",
-      isBillable: "false",
-      notes: "",
-    })
-
-    expect(parsed.description).toBeNull()
-    expect(parsed.projectCode).toBeNull()
-    expect(parsed.clientId).toBeNull()
-    expect(parsed.endedAt).toBeNull()
-    expect(parsed.durationMinutes).toBeNull()
-    expect(parsed.hourlyRate).toBeNull()
-    expect(parsed.currencyCode).toBeNull()
-    expect(parsed.isBillable).toBe(false)
   })
 })

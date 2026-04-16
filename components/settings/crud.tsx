@@ -71,7 +71,7 @@ export function CrudTable<T extends Record<string, unknown>>({ items, columns, o
     return renderPrimitiveValue(getCellValue(item, column))
   }
 
-  const EditFormCell = (item: T, column: CrudColumn<T>) => {
+  const EditFormCell = (_item: T, column: CrudColumn<T>) => {
     if (column.type === "checkbox") {
       return (
         <input
@@ -272,7 +272,7 @@ export function CrudTable<T extends Record<string, unknown>>({ items, columns, o
   }
 
   const startEditing = (item: T) => {
-    setEditingId(String(item.code ?? item.id ?? ""))
+    setEditingId(String(item["code"] ?? item["id"] ?? ""))
     setEditingItem(item)
   }
 
@@ -303,16 +303,16 @@ export function CrudTable<T extends Record<string, unknown>>({ items, columns, o
             <TableRow key={index}>
               {columns.map((column) => (
                 <TableCell key={String(column.key)} className="first:font-semibold">
-                  {editingId === String(item.code ?? item.id ?? "") && column.editable
+                  {editingId === String(item["code"] ?? item["id"] ?? "") && column.editable
                     ? EditFormCell(item, column)
                     : FormCell(item, column)}
                 </TableCell>
               ))}
               <TableCell>
                 <div className="flex gap-2">
-                  {editingId === String(item.code ?? item.id ?? "") ? (
+                  {editingId === String(item["code"] ?? item["id"] ?? "") ? (
                     <>
-                      <Button size="sm" onClick={() => handleEdit(String(item.code ?? item.id ?? ""))} aria-label={t("saveNewItem")}>
+                      <Button size="sm" onClick={() => handleEdit(String(item["code"] ?? item["id"] ?? ""))} aria-label={t("saveNewItem")}>
                         {t("saveItem")}
                       </Button>
                       <Button size="sm" variant="outline" onClick={() => setEditingId(null)} aria-label={t("cancelNewItem")}>
@@ -329,17 +329,17 @@ export function CrudTable<T extends Record<string, unknown>>({ items, columns, o
                             startEditing(item)
                             setIsAdding(false)
                           }}
-                          aria-label={t("editItem", { name: String(item.name ?? item.code ?? "item") })}
+                          aria-label={t("editItem", { name: String(item["name"] ?? item["code"] ?? "item") })}
                         >
                           <Edit />
                         </Button>
                       )}
-                      {item.isDeletable && (
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
-                          onClick={() => handleDelete(String(item.code ?? item.id ?? ""))}
-                          aria-label={t("deleteItem", { name: String(item.name ?? item.code ?? "item") })}
+                      {Boolean(item["isDeletable"]) && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleDelete(String(item["code"] ?? item["id"] ?? ""))}
+                          aria-label={t("deleteItem", { name: String(item["name"] ?? item["code"] ?? "item") })}
                         >
                           <Trash2 />
                         </Button>

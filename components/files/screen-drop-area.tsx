@@ -76,7 +76,8 @@ export default function ScreenDropArea({ children }: { children: React.ReactNode
             formData.append("transactionId", transactionId as string)
           }
           for (let i = 0; i < files.length; i++) {
-            formData.append("files", files[i])
+            const file = files[i]
+            if (file) formData.append("files", file)
           }
 
           const result = transactionId

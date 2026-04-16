@@ -45,12 +45,12 @@ export default function TransactionEditForm({
     merchant: transaction.merchant || "",
     description: transaction.description || "",
     total: transaction.total ? transaction.total / 100 : 0.0,
-    currencyCode: transaction.currencyCode || settings.default_currency,
+    currencyCode: transaction.currencyCode || settings["default_currency"] || "",
     convertedTotal: transaction.convertedTotal ? transaction.convertedTotal / 100 : 0.0,
     convertedCurrencyCode: transaction.convertedCurrencyCode,
     type: transaction.type || "expense",
-    categoryCode: transaction.categoryCode || settings.default_category,
-    projectCode: transaction.projectCode || settings.default_project,
+    categoryCode: transaction.categoryCode || settings["default_category"] || "",
+    projectCode: transaction.projectCode || settings["default_project"] || "",
     issuedAt: transaction.issuedAt ? format(transaction.issuedAt, "yyyy-MM-dd") : "",
     note: transaction.note || "",
     items: transaction.items || [],
@@ -73,6 +73,14 @@ export default function TransactionEditForm({
     )
   }, [fields])
 
+  const getField = (code: string): Field => {
+    const field = fieldMap[code]
+    if (!field) {
+      throw new Error(`Field definition missing for code: ${code}`)
+    }
+    return field
+  }
+
   const handleDelete = async () => {
     if (confirm(t("confirmDeletePermanent"))) {
       startTransition(async () => {
@@ -93,65 +101,65 @@ export default function TransactionEditForm({
       <input type="hidden" name="transactionId" value={transaction.id} />
 
       <FormInput
-        title={getLocalizedValue(fieldMap.name.name, locale)}
+        title={getLocalizedValue(getField("name").name, locale)}
         name="name"
         defaultValue={formData.name}
-        isRequired={fieldMap.name.isRequired}
+        isRequired={getField("name").isRequired}
       />
 
       <FormInput
-        title={getLocalizedValue(fieldMap.merchant.name, locale)}
+        title={getLocalizedValue(getField("merchant").name, locale)}
         name="merchant"
         defaultValue={formData.merchant}
-        isRequired={fieldMap.merchant.isRequired}
+        isRequired={getField("merchant").isRequired}
       />
 
       <FormInput
-        title={getLocalizedValue(fieldMap.description.name, locale)}
+        title={getLocalizedValue(getField("description").name, locale)}
         name="description"
         defaultValue={formData.description}
-        isRequired={fieldMap.description.isRequired}
+        isRequired={getField("description").isRequired}
       />
 
       <div className="flex flex-row gap-4">
         <FormInput
-          title={getLocalizedValue(fieldMap.total.name, locale)}
+          title={getLocalizedValue(getField("total").name, locale)}
           type="number"
           step="0.01"
           name="total"
           defaultValue={formData.total.toFixed(2)}
           className="w-32"
-          isRequired={fieldMap.total.isRequired}
+          isRequired={getField("total").isRequired}
         />
 
         <FormSelectCurrency
-          title={getLocalizedValue(fieldMap.currencyCode.name, locale)}
+          title={getLocalizedValue(getField("currencyCode").name, locale)}
           name="currencyCode"
           value={formData.currencyCode}
           onValueChange={(value) => {
             setFormData({ ...formData, currencyCode: value })
           }}
           currencies={currencies}
-          isRequired={fieldMap.currencyCode.isRequired}
+          isRequired={getField("currencyCode").isRequired}
         />
 
         <FormSelectType
-          title={getLocalizedValue(fieldMap.type.name, locale)}
+          title={getLocalizedValue(getField("type").name, locale)}
           name="type"
           defaultValue={formData.type}
-          isRequired={fieldMap.type.isRequired}
+          isRequired={getField("type").isRequired}
         />
       </div>
 
       <div className="flex flex-row flex-grow gap-4">
         <FormInput
-          title={getLocalizedValue(fieldMap.issuedAt.name, locale)}
+          title={getLocalizedValue(getField("issuedAt").name, locale)}
           type="date"
           name="issuedAt"
           defaultValue={formData.issuedAt}
-          isRequired={fieldMap.issuedAt.isRequired}
+          isRequired={getField("issuedAt").isRequired}
         />
-        {formData.currencyCode !== settings.default_currency || formData.convertedTotal !== 0 ? (
+        {formData.currencyCode !== settings["default_currency"] || formData.convertedTotal !== 0 ? (
           <>
             {formData.convertedTotal !== null && (
               <FormInput
@@ -160,17 +168,17 @@ export default function TransactionEditForm({
                 step="0.01"
                 name="convertedTotal"
                 defaultValue={formData.convertedTotal.toFixed(2)}
-                isRequired={fieldMap.convertedTotal.isRequired}
+                isRequired={getField("convertedTotal").isRequired}
                 className="max-w-36"
               />
             )}
-            {(!formData.convertedCurrencyCode || formData.convertedCurrencyCode !== settings.default_currency) && (
+            {(!formData.convertedCurrencyCode || formData.convertedCurrencyCode !== settings["default_currency"]) && (
               <FormSelectCurrency
                 title={t("convertedTotal")}
                 name="convertedCurrencyCode"
-                defaultValue={formData.convertedCurrencyCode || settings.default_currency}
+                defaultValue={formData.convertedCurrencyCode ?? settings["default_currency"] ?? ""}
                 currencies={currencies}
-                isRequired={fieldMap.convertedCurrencyCode.isRequired}
+                isRequired={getField("convertedCurrencyCode").isRequired}
               />
             )}
           </>
@@ -181,28 +189,28 @@ export default function TransactionEditForm({
 
       <div className="flex flex-row gap-4">
         <FormSelectCategory
-          title={getLocalizedValue(fieldMap.categoryCode.name, locale)}
+          title={getLocalizedValue(getField("categoryCode").name, locale)}
           categories={categories}
           name="categoryCode"
           defaultValue={formData.categoryCode}
-          isRequired={fieldMap.categoryCode.isRequired}
+          isRequired={getField("categoryCode").isRequired}
         />
 
         <FormSelectProject
-          title={getLocalizedValue(fieldMap.projectCode.name, locale)}
+          title={getLocalizedValue(getField("projectCode").name, locale)}
           projects={projects}
           name="projectCode"
           defaultValue={formData.projectCode}
-          isRequired={fieldMap.projectCode.isRequired}
+          isRequired={getField("projectCode").isRequired}
         />
       </div>
 
       <FormTextarea
-        title={getLocalizedValue(fieldMap.note.name, locale)}
+        title={getLocalizedValue(getField("note").name, locale)}
         name="note"
         defaultValue={formData.note}
         className="h-24"
-        isRequired={fieldMap.note.isRequired}
+        isRequired={getField("note").isRequired}
       />
 
       <div className="flex flex-wrap gap-4">

@@ -29,10 +29,10 @@ import { useTranslations } from "next-intl"
 
 function getInitialProviderOrder(settings: Record<string, string>) {
   let order: string[] = []
-  if (!settings.llm_providers) {
+  if (!settings["llm_providers"]) {
     order = PROVIDERS.map(p => p.key)
   } else {
-    order = settings.llm_providers.split(",").map(p => p.trim())
+    order = settings["llm_providers"].split(",").map(p => p.trim())
   }
   return order.filter((key, idx) => PROVIDERS.some(p => p.key === key) && order.indexOf(key) === idx)
 }
@@ -47,8 +47,8 @@ export default function LLMSettingsForm({
   const t = useTranslations("settings")
   const [saveState, saveAction, pending] = useActionState(saveSettingsAction, null)
   const [providerOrder, setProviderOrder] = useState<string[]>(getInitialProviderOrder(settings))
-  const [primaryProvider, setPrimaryProvider] = useState(settings.llm_primary_provider || providerOrder[0] || "anthropic")
-  const [backupProvider, setBackupProvider] = useState(settings.llm_backup_provider || providerOrder.find(k => k !== (settings.llm_primary_provider || providerOrder[0])) || "")
+  const [primaryProvider, setPrimaryProvider] = useState(settings["llm_primary_provider"] || providerOrder[0] || "anthropic")
+  const [backupProvider, setBackupProvider] = useState(settings["llm_backup_provider"] || providerOrder.find(k => k !== (settings["llm_primary_provider"] || providerOrder[0])) || "")
 
   const [providerValues, setProviderValues] = useState(() => {
     const values: Record<string, { apiKey: string; model: string; thinking: string; baseUrl: string }> = {}
@@ -64,10 +64,13 @@ export default function LLMSettingsForm({
   })
 
   function handleProviderValueChange(providerKey: string, field: string, value: string) {
-    setProviderValues((prev) => ({
-      ...prev,
-      [providerKey]: { ...prev[providerKey], [field]: value },
-    }))
+    setProviderValues((prev) => {
+      const existing = prev[providerKey] ?? { apiKey: "", model: "", thinking: "", baseUrl: "" }
+      return {
+        ...prev,
+        [providerKey]: { ...existing, [field]: value },
+      }
+    })
   }
 
   const sensors = useSensors(useSensor(PointerSensor))
@@ -123,7 +126,7 @@ export default function LLMSettingsForm({
                     if (primaryProvider === providerKey) return
                     setBackupProvider(providerKey)
                   }}
-                  value={providerValues[providerKey]}
+                  value={providerValues[providerKey] ?? { apiKey: "", model: "", thinking: "", baseUrl: "" }}
                   onValueChange={handleProviderValueChange}
                 />
               ))}
@@ -135,7 +138,7 @@ export default function LLMSettingsForm({
         <FormTextarea
           title={t("promptForFileAnalysis")}
           name="prompt_analyse_new_file"
-          defaultValue={settings.prompt_analyse_new_file}
+          defaultValue={settings["prompt_analyse_new_file"] ?? ""}
           className="h-64"
         />
 
@@ -200,8 +203,8 @@ function SortableProviderCard({ id, providerKey, isPrimary, isBackup, onSetPrima
       provider: providerKey,
       apiKey: value.apiKey,
       model: value.model,
-      thinking: value.thinking || undefined,
-      baseUrl: value.baseUrl || undefined,
+      ...(value.thinking ? { thinking: value.thinking } : {}),
+      ...(value.baseUrl ? { baseUrl: value.baseUrl } : {}),
     })
     setTestResult(result)
     setTesting(false)

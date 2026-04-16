@@ -37,7 +37,7 @@ async function postJson(url: string, body?: unknown): Promise<ImportResult> {
     const res = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: body !== undefined ? JSON.stringify(body) : undefined,
+      ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
     })
     return await res.json()
   } catch (e) {

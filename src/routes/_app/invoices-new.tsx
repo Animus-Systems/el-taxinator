@@ -1,7 +1,7 @@
 /**
  * New invoice page — SPA equivalent of app/[locale]/(app)/invoices/new/page.tsx
  *
- * Fetches clients, products, and billable time entries for the invoice form.
+ * Fetches clients and products for the invoice form.
  */
 import { useTranslation } from "react-i18next"
 import { trpc } from "~/trpc"
@@ -12,12 +12,8 @@ export function NewInvoicePage() {
 
   const { data: clients, isLoading: clientsLoading } = trpc.clients.list.useQuery({})
   const { data: products, isLoading: productsLoading } = trpc.products.list.useQuery({})
-  const { data: timeEntries, isLoading: timeLoading } = trpc.timeEntries.list.useQuery({
-    isBillable: true,
-    isInvoiced: false,
-  })
 
-  if (clientsLoading || productsLoading || timeLoading) {
+  if (clientsLoading || productsLoading) {
     return (
       <div className="flex items-center justify-center min-h-[200px]">
         <div className="text-muted-foreground">Loading...</div>
@@ -31,7 +27,6 @@ export function NewInvoicePage() {
       <InvoiceForm
         clients={clients ?? []}
         products={products ?? []}
-        timeEntries={timeEntries ?? []}
       />
     </div>
   )

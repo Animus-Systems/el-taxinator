@@ -13,7 +13,7 @@ export function setRequestLocale(_locale: string) {
 
 export async function getTranslations(namespace: string) {
   return (key: string, options?: Record<string, unknown>) =>
-    i18n.t(`${namespace}.${key}`, options)
+    options !== undefined ? i18n.t(`${namespace}.${key}`, options) : i18n.t(`${namespace}.${key}`)
 }
 
 export async function getLocale() {

@@ -21,7 +21,8 @@ export default function TransactionFiles({ transaction, files }: { transaction: 
       const formData = new FormData()
       formData.append("transactionId", transaction.id)
       for (let i = 0; i < e.target.files.length; i++) {
-        formData.append("files", e.target.files[i])
+        const file = e.target.files[i]
+        if (file) formData.append("files", file)
       }
       await uploadTransactionFilesAction(formData)
       setIsUploading(false)

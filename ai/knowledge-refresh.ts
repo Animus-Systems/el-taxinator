@@ -159,9 +159,9 @@ function extractMarkdown(output: unknown): string {
   if (typeof output === "string") return output
   if (output && typeof output === "object") {
     const obj = output as Record<string, unknown>
-    if (typeof obj.content === "string") return obj.content
-    if (typeof obj.markdown === "string") return obj.markdown
-    if (typeof obj.text === "string") return obj.text
+    if (typeof obj["content"] === "string") return obj["content"]
+    if (typeof obj["markdown"] === "string") return obj["markdown"]
+    if (typeof obj["text"] === "string") return obj["text"]
   }
   return ""
 }

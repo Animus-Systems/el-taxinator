@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { PROVIDERS, type ProviderConfig } from "@/lib/llm-providers"
+import { PROVIDERS } from "@/lib/llm-providers"
 
 describe("PROVIDERS list", () => {
   it("contains expected provider keys", () => {

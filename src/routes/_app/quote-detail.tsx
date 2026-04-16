@@ -4,8 +4,22 @@
  * Fetches a single quote by ID from the URL and renders QuoteDetail.
  */
 import { useParams } from "@tanstack/react-router"
+import type { ComponentProps } from "react"
 import { trpc } from "~/trpc"
 import { QuoteDetail } from "@/components/invoicing/quote-detail"
+
+type QuoteProp = ComponentProps<typeof QuoteDetail>["quote"]
+
+function normalizeQuote(q: {
+  invoice?: unknown
+  [x: string]: unknown
+}): QuoteProp {
+  const { invoice, ...rest } = q
+  const base = rest as Omit<QuoteProp, "invoice">
+  return invoice !== undefined
+    ? ({ ...base, invoice } as QuoteProp)
+    : (base as QuoteProp)
+}
 
 export function QuoteDetailPage() {
   const { quoteId } = useParams({ strict: false }) as { quoteId: string }
@@ -33,7 +47,7 @@ export function QuoteDetailPage() {
 
   return (
     <div className="max-w-4xl">
-      <QuoteDetail quote={quote} />
+      <QuoteDetail quote={normalizeQuote(quote)} />
     </div>
   )
 }

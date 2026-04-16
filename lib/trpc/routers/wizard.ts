@@ -22,6 +22,7 @@ import {
   reopenSession as reopenSessionModel,
   listResumableSessions,
   listArchivedSessions,
+  listCommittedSessions,
 } from "@/models/import-sessions"
 import {
   listBusinessFacts,
@@ -141,6 +142,13 @@ export const wizardRouter = router({
       return listArchivedSessions(ctx.user.id)
     }),
 
+  listCommitted: authedProcedure
+    .input(z.object({}).optional())
+    .output(z.array(resumableSessionSummarySchema))
+    .query(async ({ ctx }) => {
+      return listCommittedSessions(ctx.user.id)
+    }),
+
   reopenSession: authedProcedure
     .input(z.object({ sessionId: z.string() }))
     .output(z.object({ ok: z.boolean() }))
@@ -197,7 +205,7 @@ export const wizardRouter = router({
           sessionId: input.sessionId,
           userMessage: input.userMessage,
           focusRowIndexes: input.focusRowIndexes ?? null,
-          locale: input.locale,
+          ...(input.locale !== undefined && { locale: input.locale }),
         })
 
         // T2: persist assistant message + clear the lock.
@@ -250,7 +258,7 @@ export const wizardRouter = router({
           userId: ctx.user.id,
           sessionId: input.sessionId,
           userMessage: lastUser.content,
-          locale: input.locale,
+          ...(input.locale !== undefined && { locale: input.locale }),
         })
         const assistantMsg = makeAssistantMessage(reply)
         if (ruleConflictNotes.length > 0) {

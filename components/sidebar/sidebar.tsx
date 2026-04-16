@@ -1,6 +1,5 @@
 
 import { useNotification } from "@/lib/context"
-import { UploadButton } from "@/components/files/upload-button"
 import { usePathname } from "@/lib/navigation"
 import {
   Sidebar,
@@ -13,23 +12,22 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarRail,
-  useSidebar,
 } from "@/components/ui/sidebar"
 import config from "@/lib/config"
 import Link from "next/link"
 import {
   Calculator,
-  Clock,
   ClockArrowUp,
   Coins,
   FileText,
+  FolderOpen,
+  History,
   House,
   LogOut,
   Package,
   Receipt,
   ScrollText,
   Settings,
-  Upload,
   Users,
 } from "lucide-react"
 import { useTranslation } from "react-i18next"
@@ -85,7 +83,6 @@ export function AppSidebar({
   entityName?: string
 }) {
   const { t } = useTranslation("sidebar")
-  const { open } = useSidebar()
   const { notification } = useNotification()
   const [isDisconnecting, startDisconnectTransition] = useTransition()
 
@@ -113,12 +110,6 @@ export function AppSidebar({
         </SidebarHeader>
         <SidebarContent>
           <SidebarGroup>
-            <UploadButton className="w-full mt-4 mb-2">
-              <Upload className="h-4 w-4" />
-              {open ? <span>{t("upload")}</span> : ""}
-            </UploadButton>
-          </SidebarGroup>
-          <SidebarGroup>
             <SidebarGroupContent>
               <SidebarMenu>
                 <NavItem href="/dashboard" icon={House} label={t("home")} />
@@ -135,6 +126,7 @@ export function AppSidebar({
                   badge={unsortedFilesCount}
                   blink={notification?.code === "sidebar.unsorted" && !!notification.message}
                 />
+                <NavItem href="/files" icon={FolderOpen} label={t("files")} />
                 <NavItem
                   href="/crypto"
                   icon={Coins}
@@ -145,8 +137,8 @@ export function AppSidebar({
                 <NavItem href="/quotes" icon={ScrollText} label={t("quotes")} />
                 <NavItem href="/clients" icon={Users} label={t("clients")} />
                 <NavItem href="/products" icon={Package} label={t("products")} />
-                <NavItem href="/time" icon={Clock} label={t("timeTracking")} />
                 <NavItem href="/tax" icon={Calculator} label={t("tax")} />
+                <NavItem href="/reports" icon={History} label={t("reports")} />
                 <NavItem href="/settings" icon={Settings} label={t("settings")} />
               </SidebarMenu>
             </SidebarGroupContent>

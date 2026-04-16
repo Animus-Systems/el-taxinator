@@ -179,8 +179,8 @@ export function TaxDashboard({ year, summary, deadlines, entityType = "autonomo"
                     { label: t("corporateTax"), value: summary.reduce((s, q) => s + (q.modelo202?.casilla05_aIngresar ?? 0), 0) },
                   ]
                 : [
-                    { label: t("totalIncome"), value: summary.length > 0 ? summary[summary.length - 1].modelo130?.casilla01_ingresos ?? 0 : 0 },
-                    { label: t("totalIrpfWithheld"), value: summary.length > 0 ? summary[summary.length - 1].modelo130?.casilla05_irpfRetenido ?? 0 : 0 },
+                    { label: t("totalIncome"), value: summary[summary.length - 1]?.modelo130?.casilla01_ingresos ?? 0 },
+                    { label: t("totalIrpfWithheld"), value: summary[summary.length - 1]?.modelo130?.casilla05_irpfRetenido ?? 0 },
                   ]),
             ].map(({ label, value }) => (
               <div key={label} className="space-y-1">

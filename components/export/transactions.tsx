@@ -102,10 +102,12 @@ export function ExportTransactionsDialog({
                 }}
                 defaultRange="all-time"
                 onChange={(date) => {
+                  const dateFrom = date?.from ? formatDate(date.from, "yyyy-MM-dd") : undefined
+                  const dateTo = date?.to ? formatDate(date.to, "yyyy-MM-dd") : undefined
                   setExportFilters({
                     ...exportFilters,
-                    dateFrom: date?.from ? formatDate(date.from, "yyyy-MM-dd") : undefined,
-                    dateTo: date?.to ? formatDate(date.to, "yyyy-MM-dd") : undefined,
+                    ...(dateFrom !== undefined ? { dateFrom } : {}),
+                    ...(dateTo !== undefined ? { dateTo } : {}),
                   })
                 }}
               />
@@ -116,7 +118,7 @@ export function ExportTransactionsDialog({
                 title="Category"
                 name="category"
                 categories={categories}
-                value={exportFilters.categoryCode}
+                {...(exportFilters.categoryCode !== undefined ? { value: exportFilters.categoryCode } : {})}
                 onValueChange={(value) => setExportFilters({ ...exportFilters, categoryCode: value })}
                 placeholder="All Categories"
                 emptyValue="All Categories"
@@ -126,7 +128,7 @@ export function ExportTransactionsDialog({
                 title="Project"
                 name="project"
                 projects={projects}
-                value={exportFilters.projectCode}
+                {...(exportFilters.projectCode !== undefined ? { value: exportFilters.projectCode } : {})}
                 onValueChange={(value) => setExportFilters({ ...exportFilters, projectCode: value })}
                 placeholder="All Projects"
                 emptyValue="All Projects"

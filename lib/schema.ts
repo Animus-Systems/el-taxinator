@@ -15,7 +15,7 @@ import path from "path"
 // 2. Add a migration entry here with the next version number
 // 3. The migration SQL should be idempotent (use IF NOT EXISTS, etc.)
 
-const SCHEMA_VERSION = 9 // bump this when adding a migration
+const SCHEMA_VERSION = 10 // bump this when adding a migration
 
 const migrations: { version: number; description: string; sql: string }[] = [
   {
@@ -272,6 +272,19 @@ const migrations: { version: number; description: string; sql: string }[] = [
         ON crypto_disposal_matches (user_id, (EXTRACT(YEAR FROM matched_at)));
     `,
   },
+  {
+    version: 10,
+    description: "Drop time_entries table; link import_sessions to files",
+    sql: `
+      DROP TABLE IF EXISTS time_entries CASCADE;
+
+      ALTER TABLE import_sessions
+        ADD COLUMN IF NOT EXISTS file_id uuid REFERENCES files(id) ON DELETE SET NULL;
+      CREATE INDEX IF NOT EXISTS import_sessions_file_id_idx
+        ON import_sessions (file_id)
+        WHERE file_id IS NOT NULL;
+    `,
+  },
 ]
 
 // ---------------------------------------------------------------------------
@@ -289,7 +302,7 @@ export async function hasSchema(pool: Pool): Promise<boolean> {
         WHERE table_name = 'users'
       ) AS has_users`
     )
-    return result.rows[0]?.has_users === true
+    return result.rows[0]?.["has_users"] === true
   } catch {
     return false
   }
@@ -325,7 +338,7 @@ async function ensureDefaults(pool: Pool): Promise<void> {
   const tables = [
     "users", "settings", "categories", "projects", "fields", "currencies",
     "files", "transactions", "app_data", "progress", "clients", "products",
-    "quotes", "quote_items", "invoices", "invoice_items", "time_entries",
+    "quotes", "quote_items", "invoices", "invoice_items",
     "accountant_invites", "accountant_access_logs", "accountant_comments",
     "sessions", "account", "verification", "past_searches",
   ]
@@ -365,7 +378,7 @@ async function ensureVersionTable(pool: Pool): Promise<void> {
 async function getCurrentVersion(pool: Pool): Promise<number> {
   await ensureVersionTable(pool)
   const result = await pool.query(`SELECT version FROM schema_version WHERE id = 1`)
-  return result.rows[0]?.version ?? 1
+  return (result.rows[0]?.["version"] as number | undefined) ?? 1
 }
 
 async function runMigrations(pool: Pool): Promise<{ ran: number; from: number; to: number }> {
@@ -406,8 +419,9 @@ export type SchemaResult = {
   descriptions?: string[]
 }
 
-export async function ensureSchema(pool: Pool, userId?: string): Promise<SchemaResult> {
-  const connId = (pool as any).options?.connectionString ?? "default"
+export async function ensureSchema(pool: Pool, _userId?: string): Promise<SchemaResult> {
+  const poolWithOptions = pool as Pool & { options?: { connectionString?: string } }
+  const connId = poolWithOptions.options?.connectionString ?? "default"
 
   if (schemaChecked.has(connId)) return { status: "up_to_date" }
 

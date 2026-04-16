@@ -6,7 +6,7 @@
  * Skipped on the Edge runtime (Postgres can't run there).
  */
 export async function register() {
-  if (process.env.NEXT_RUNTIME !== "nodejs") return
+  if (process.env["NEXT_RUNTIME"] !== "nodejs") return
 
   const { getEntities, getActiveEntityIdFromFile } = await import("./lib/entities")
   const entities = getEntities()
@@ -18,6 +18,10 @@ export async function register() {
 
   const activeId = getActiveEntityIdFromFile()
   const entity = entities.find((e) => e.id === activeId) ?? entities[0]
+  if (!entity) {
+    console.log("[instrumentation] No entity available — skipping cluster startup")
+    return
+  }
 
   if (entity.db) {
     console.log(`[instrumentation] Entity "${entity.id}" uses external DB — skipping cluster startup`)

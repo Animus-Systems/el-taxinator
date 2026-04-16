@@ -5,7 +5,7 @@ import { trpc } from "~/trpc"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Download, PartyPopper, FileText, PlusCircle, Lightbulb, Sparkles, Loader2 } from "lucide-react"
+import { Download, PartyPopper, FileText, PlusCircle, Lightbulb, Sparkles, Loader2, History } from "lucide-react"
 import type { SessionReport } from "@/ai/session-report"
 
 export function WizardCommittedPage() {
@@ -48,9 +48,9 @@ export function WizardCommittedPage() {
             {report.session.title || report.session.fileName || report.session.id}
             {report.session.bankName ? ` · ${report.session.bankName}` : ""}
             {" · "}
-            {report.totals.byStatus.business?.count ?? 0} deductible ·{" "}
-            {report.totals.byStatus.business_non_deductible?.count ?? 0} non-deductible ·{" "}
-            {report.totals.byStatus.personal_ignored?.count ?? 0} personal
+            {report.totals.byStatus["business"]?.count ?? 0} deductible ·{" "}
+            {report.totals.byStatus["business_non_deductible"]?.count ?? 0} non-deductible ·{" "}
+            {report.totals.byStatus["personal_ignored"]?.count ?? 0} personal
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -70,6 +70,12 @@ export function WizardCommittedPage() {
             <Link to={"/transactions" as string}>
               <FileText className="h-4 w-4 mr-1" />
               Transactions
+            </Link>
+          </Button>
+          <Button asChild variant="ghost">
+            <Link to={"/reports" as string}>
+              <History className="h-4 w-4 mr-1" />
+              {t("viewAllReports")}
             </Link>
           </Button>
         </div>

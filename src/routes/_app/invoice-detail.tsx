@@ -4,8 +4,22 @@
  * Fetches a single invoice by ID from the URL and renders InvoiceDetail.
  */
 import { useParams } from "@tanstack/react-router"
+import type { ComponentProps } from "react"
 import { trpc } from "~/trpc"
 import { InvoiceDetail } from "@/components/invoicing/invoice-detail"
+
+type InvoiceProp = ComponentProps<typeof InvoiceDetail>["invoice"]
+
+function normalizeInvoice(inv: {
+  quote?: unknown
+  [x: string]: unknown
+}): InvoiceProp {
+  const { quote, ...rest } = inv
+  const base = rest as Omit<InvoiceProp, "quote">
+  return quote !== undefined
+    ? ({ ...base, quote } as InvoiceProp)
+    : (base as InvoiceProp)
+}
 
 export function InvoiceDetailPage() {
   const { invoiceId } = useParams({ strict: false }) as { invoiceId: string }
@@ -33,7 +47,7 @@ export function InvoiceDetailPage() {
 
   return (
     <div className="max-w-4xl">
-      <InvoiceDetail invoice={invoice} />
+      <InvoiceDetail invoice={normalizeInvoice(invoice)} />
     </div>
   )
 }

@@ -27,16 +27,16 @@ export default function GlobalSettingsForm({
       <FormSelectCurrency
         title={t("defaultCurrency")}
         name="default_currency"
-        defaultValue={settings.default_currency}
+        defaultValue={settings["default_currency"] ?? ""}
         currencies={currencies}
       />
 
-      <FormSelectType title={t("defaultTransactionType")} name="default_type" defaultValue={settings.default_type} />
+      <FormSelectType title={t("defaultTransactionType")} name="default_type" defaultValue={settings["default_type"] ?? ""} />
 
       <FormSelectCategory
         title={t("defaultCategory")}
         name="default_category"
-        defaultValue={settings.default_category}
+        defaultValue={settings["default_category"] ?? ""}
         categories={categories}
       />
 

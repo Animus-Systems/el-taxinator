@@ -21,9 +21,11 @@ export function FiltersWidget({
       }}
       defaultRange={defaultRange}
       onChange={(date) => {
+        const dateFrom = date && date.from ? format(date.from, "yyyy-MM-dd") : undefined
+        const dateTo = date && date.to ? format(date.to, "yyyy-MM-dd") : undefined
         setFilters({
-          dateFrom: date && date.from ? format(date.from, "yyyy-MM-dd") : undefined,
-          dateTo: date && date.to ? format(date.to, "yyyy-MM-dd") : undefined,
+          ...(dateFrom !== undefined ? { dateFrom } : {}),
+          ...(dateTo !== undefined ? { dateTo } : {}),
         })
       }}
     />

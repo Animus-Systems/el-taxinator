@@ -121,7 +121,7 @@ export function EntityPicker({ entities }: Props) {
       return
     }
 
-    const schema = (result as Record<string, unknown>).schema as { status: string; migrationsRan?: number; descriptions?: string[] } | undefined
+    const schema = (result as Record<string, unknown>)["schema"] as { status: string; migrationsRan?: number; descriptions?: string[] } | undefined
     if (schema?.status === "migrated") {
       setSchemaMessage(`Database updated (${schema.migrationsRan} migration${(schema.migrationsRan ?? 0) > 1 ? "s" : ""}): ${schema.descriptions?.join(", ")}`)
       // Brief pause so user sees the message before navigating
@@ -346,7 +346,7 @@ export function EntityPicker({ entities }: Props) {
           <AddCompanyForm
             dataDir={dataDir}
             onSuccess={() => router.push("/dashboard")}
-            onCancel={entityList.length > 0 ? () => setShowAdd(false) : undefined}
+            {...(entityList.length > 0 ? { onCancel: () => setShowAdd(false) } : {})}
           />
         ) : !showImport ? (
           <div className="grid grid-cols-3 gap-2">
@@ -699,7 +699,7 @@ function AddCompanyForm({ dataDir: appDataDir, onSuccess, onCancel }: { dataDir:
       const result = await addAndConnectAction({
         name,
         type,
-        dataDir: customDataDir || undefined,
+        ...(customDataDir ? { dataDir: customDataDir } : {}),
       })
       if (result && !result.success) {
         setError("error" in result && result.error ? result.error : "Failed")

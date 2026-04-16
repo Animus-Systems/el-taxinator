@@ -33,8 +33,8 @@ export async function getOrCreateSelfHostedUser(): Promise<User> {
   return user!
 }
 
-export async function getOrCreateCloudUser(email: string, data: Record<string, unknown>): Promise<User> {
-  if (!data.id) data.id = randomUUID()
+export async function getOrCreateCloudUser(_email: string, data: Record<string, unknown>): Promise<User> {
+  if (!data["id"]) data["id"] = randomUUID()
   const pool = await getPool()
   // Build dynamic column lists from the data object
   const insertCols: string[] = []
@@ -61,7 +61,9 @@ export async function getOrCreateCloudUser(email: string, data: Record<string, u
   const text = `INSERT INTO users (${insertCols.join(", ")}) VALUES (${insertPlaceholders.join(", ")}) ON CONFLICT (email) DO UPDATE SET ${updateClauses.join(", ")} RETURNING *`
 
   const result = await pool.query(text, values)
-  const user = mapRow<User>(result.rows[0])
+  const firstRow = result.rows[0]
+  if (!firstRow) throw new Error("Failed to create user")
+  const user = mapRow<User>(firstRow)
 
   if (await isDatabaseEmpty(user.id)) {
     await createUserDefaults(user.id)
@@ -105,12 +107,12 @@ export function updateUser(userId: string, data: Record<string, unknown>) {
       const op = value as Record<string, unknown>
       if ("increment" in op) {
         setClauses.push(`${col} = ${col} + $${values.length + 1}`)
-        values.push(op.increment)
+        values.push(op["increment"])
         continue
       }
       if ("decrement" in op) {
         setClauses.push(`${col} = ${col} - $${values.length + 1}`)
-        values.push(op.decrement)
+        values.push(op["decrement"])
         continue
       }
     }

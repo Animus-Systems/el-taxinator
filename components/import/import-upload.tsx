@@ -59,11 +59,11 @@ export function ImportUpload({ accounts, onComplete }: Props) {
 
   const categoryOptions = categories.map((category) => ({
     code: category.code,
-    name: typeof category.name === "string" ? category.name : category.name.en || Object.values(category.name)[0] || category.code,
+    name: typeof category.name === "string" ? category.name : category.name["en"] || Object.values(category.name)[0] || category.code,
   }))
   const projectOptions = projects.map((project) => ({
     code: project.code,
-    name: typeof project.name === "string" ? project.name : project.name.en || Object.values(project.name)[0] || project.code,
+    name: typeof project.name === "string" ? project.name : project.name["en"] || Object.values(project.name)[0] || project.code,
   }))
 
   useEffect(() => {

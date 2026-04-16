@@ -1,4 +1,4 @@
-import { sql, queryMany, queryOne, execute, buildInsert } from "@/lib/sql"
+import { sql, queryMany, queryOne, execute } from "@/lib/sql"
 import type { Progress } from "@/lib/db-types"
 
 export const getOrCreateProgress = async (

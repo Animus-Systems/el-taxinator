@@ -90,7 +90,9 @@ type CryptoRow = Transaction & {
   extra: { crypto?: Record<string, unknown> } | null
 }
 
-function pickCryptoMeta(row: CryptoRow): Record<string, unknown> {
+type CryptoMetaPartial = z.infer<ReturnType<typeof cryptoMetaSchema.partial>>
+
+function pickCryptoMeta(row: CryptoRow): CryptoMetaPartial {
   const raw = (row.extra?.crypto ?? {}) as Record<string, unknown>
   // Re-parse through the schema so clients always get the canonical shape.
   const parsed = cryptoMetaSchema.partial().safeParse(raw)
@@ -287,7 +289,7 @@ export const cryptoRouter = router({
       }
 
       const currentExtra = (disposal.extra ?? {}) as Record<string, unknown>
-      const currentCrypto = (currentExtra.crypto ?? {}) as Record<string, unknown>
+      const currentCrypto = (currentExtra["crypto"] ?? {}) as Record<string, unknown>
       const nextCrypto = { ...currentCrypto, gatewayTransactionId: input.gatewayTransactionId }
       const nextExtra = { ...currentExtra, crypto: nextCrypto }
 
@@ -400,16 +402,16 @@ export const cryptoRouter = router({
         throw new TRPCError({ code: "NOT_FOUND", message: "Transaction not found" })
       }
       const prevExtra = (existing.extra ?? {}) as Record<string, unknown>
-      const prevCrypto = (prevExtra.crypto ?? {}) as Record<string, unknown>
+      const prevCrypto = (prevExtra["crypto"] ?? {}) as Record<string, unknown>
       const nextCrypto: Record<string, unknown> = { ...prevCrypto, ...input.crypto }
 
-      const price = typeof nextCrypto.pricePerUnit === "number" ? nextCrypto.pricePerUnit : null
-      const cost = typeof nextCrypto.costBasisPerUnit === "number" ? nextCrypto.costBasisPerUnit : null
-      const qtyStr = typeof nextCrypto.quantity === "string" ? nextCrypto.quantity : "0"
+      const price = typeof nextCrypto["pricePerUnit"] === "number" ? nextCrypto["pricePerUnit"] : null
+      const cost = typeof nextCrypto["costBasisPerUnit"] === "number" ? nextCrypto["costBasisPerUnit"] : null
+      const qtyStr = typeof nextCrypto["quantity"] === "string" ? nextCrypto["quantity"] : "0"
       const qty = Number(qtyStr) || 0
       const realizedGainCents =
         price !== null && cost !== null && qty !== 0 ? Math.round((price - cost) * qty) : null
-      nextCrypto.realizedGainCents = realizedGainCents
+      nextCrypto["realizedGainCents"] = realizedGainCents
 
       const nextExtra = { ...prevExtra, crypto: nextCrypto }
       await updateTransaction(input.transactionId, ctx.user.id, { extra: nextExtra })

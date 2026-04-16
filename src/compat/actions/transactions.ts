@@ -18,28 +18,28 @@ type ActionState<T> = CompatActionResult<T>
 function transactionPayloadFromFormData(formData: FormData): Record<string, unknown> {
   const values = formDataToObject(formData)
   const payload: Record<string, unknown> = {
-    name: nullableStringValue(values.name),
-    merchant: nullableStringValue(values.merchant),
-    description: nullableStringValue(values.description),
-    note: nullableStringValue(values.note),
-    currencyCode: nullableStringValue(values.currencyCode),
-    convertedCurrencyCode: nullableStringValue(values.convertedCurrencyCode),
-    type: nullableStringValue(values.type),
-    categoryCode: nullableStringValue(values.categoryCode),
-    projectCode: nullableStringValue(values.projectCode),
-    accountId: nullableStringValue(values.accountId),
-    issuedAt: nullableStringValue(values.issuedAt),
-    text: nullableStringValue(values.text),
-    total: numberValue(values.total),
-    convertedTotal: numberValue(values.convertedTotal),
-    deductible: booleanValue(values.deductible),
-    files: parseJsonField<string[]>(values.files, []),
-    items: parseJsonField<unknown[]>(values.items, []),
+    name: nullableStringValue(values["name"]),
+    merchant: nullableStringValue(values["merchant"]),
+    description: nullableStringValue(values["description"]),
+    note: nullableStringValue(values["note"]),
+    currencyCode: nullableStringValue(values["currencyCode"]),
+    convertedCurrencyCode: nullableStringValue(values["convertedCurrencyCode"]),
+    type: nullableStringValue(values["type"]),
+    categoryCode: nullableStringValue(values["categoryCode"]),
+    projectCode: nullableStringValue(values["projectCode"]),
+    accountId: nullableStringValue(values["accountId"]),
+    issuedAt: nullableStringValue(values["issuedAt"]),
+    text: nullableStringValue(values["text"]),
+    total: numberValue(values["total"]),
+    convertedTotal: numberValue(values["convertedTotal"]),
+    deductible: booleanValue(values["deductible"]),
+    files: parseJsonField<string[]>(values["files"], []),
+    items: parseJsonField<unknown[]>(values["items"], []),
   }
 
-  const transactionId = nullableStringValue(values.transactionId)
+  const transactionId = nullableStringValue(values["transactionId"])
   if (transactionId) {
-    payload.id = transactionId
+    payload["id"] = transactionId
   }
 
   const reservedKeys = new Set([
@@ -71,7 +71,7 @@ function transactionPayloadFromFormData(formData: FormData): Record<string, unkn
   }
 
   if (Object.keys(extra).length > 0) {
-    payload.extra = extra
+    payload["extra"] = extra
   }
 
   return payload

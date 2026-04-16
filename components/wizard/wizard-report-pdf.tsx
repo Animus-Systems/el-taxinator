@@ -1,6 +1,16 @@
-import { Document, Page, StyleSheet, Text, View } from "@react-pdf/renderer"
+import { Document, Page, StyleSheet, Text, View, renderToBuffer } from "@react-pdf/renderer"
 import { format } from "date-fns"
 import type { SessionReport } from "@/ai/session-report"
+
+/**
+ * Render the session-report component to a PDF Buffer.
+ *
+ * Lives here (in the component file) so the JSX stays in .tsx and we don't
+ * need a fake `as ReactElement<DocumentProps>` cast in server code.
+ */
+export async function renderWizardSessionReportPdf(report: SessionReport): Promise<Buffer> {
+  return renderToBuffer(<WizardSessionReportPDF report={report} />)
+}
 
 const styles = StyleSheet.create({
   page: { padding: 40, fontSize: 10, fontFamily: "Helvetica", color: "#111" },
@@ -212,10 +222,10 @@ export function WizardSessionReportPDF({ report, labels: userLabels }: Props) {
             <Text style={styles.colCount}>{L.countColumn}</Text>
             <Text style={styles.colAmount}>{L.amountColumn}</Text>
           </View>
-          {renderStatusRow(L.statusBusiness, report.totals.byStatus.business, ccy)}
-          {renderStatusRow(L.statusNonDeductible, report.totals.byStatus.business_non_deductible, ccy)}
-          {renderStatusRow(L.statusPersonal, report.totals.byStatus.personal_ignored, ccy)}
-          {renderStatusRow(L.statusNeedsReview, report.totals.byStatus.needs_review, ccy)}
+          {renderStatusRow(L.statusBusiness, report.totals.byStatus["business"], ccy)}
+          {renderStatusRow(L.statusNonDeductible, report.totals.byStatus["business_non_deductible"], ccy)}
+          {renderStatusRow(L.statusPersonal, report.totals.byStatus["personal_ignored"], ccy)}
+          {renderStatusRow(L.statusNeedsReview, report.totals.byStatus["needs_review"], ccy)}
         </View>
 
         {/* By category */}

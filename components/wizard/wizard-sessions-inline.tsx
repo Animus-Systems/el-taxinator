@@ -19,15 +19,15 @@ export function WizardSessionsInline() {
   if (isLoading || sessions.length === 0) return null
 
   return (
-    <section className="space-y-2">
+    <section className="space-y-3">
       <div className="flex items-center gap-2">
         <Sparkles className="h-4 w-4 text-primary" />
-        <h3 className="text-sm font-medium">{t("inboxSectionTitle")}</h3>
+        <h2 className="text-sm font-medium">{t("inboxSectionTitle")}</h2>
         <Badge variant="secondary" className="ml-1">
           {sessions.length}
         </Badge>
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+      <div className="flex flex-col gap-2">
         {sessions.map((s) => (
           <Card
             key={s.id}

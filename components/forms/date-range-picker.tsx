@@ -120,8 +120,8 @@ export function DateRangePicker({
         <Calendar
           initialFocus
           mode="range"
-          defaultMonth={dateRange?.from}
-          selected={dateRange}
+          {...(dateRange?.from !== undefined ? { defaultMonth: dateRange.from } : {})}
+          {...(dateRange !== undefined ? { selected: dateRange } : {})}
           onSelect={(newDateRange) => {
             setRangeName("custom")
             setDateRange(newDateRange)

@@ -129,14 +129,17 @@ describe("applyCandidateUpdates merges crypto meta", () => {
 
     applyCandidateUpdates(candidates, [update], [])
 
-    const meta = candidates[0].extra?.crypto
+    const [c0] = candidates
+    expect(c0).toBeDefined()
+    if (!c0) throw new Error("expected candidate")
+    const meta = c0.extra?.crypto
     expect(meta?.asset).toBe("BTC")
     expect(meta?.quantity).toBe("0.05")
     expect(meta?.pricePerUnit).toBe(5500000)
     expect(meta?.costBasisPerUnit).toBe(3500000)
     // (5_500_000 - 3_500_000) * 0.05 = 100_000 cents (€1,000.00 gain)
     expect(meta?.realizedGainCents).toBe(100000)
-    expect(candidates[0].categoryCode).toBe("crypto_disposal")
+    expect(c0.categoryCode).toBe("crypto_disposal")
   })
 
   it("leaves realizedGainCents null when cost basis is unknown", () => {
@@ -150,7 +153,10 @@ describe("applyCandidateUpdates merges crypto meta", () => {
 
     applyCandidateUpdates(candidates, [update], [])
 
-    const meta = candidates[0].extra?.crypto
+    const [c0] = candidates
+    expect(c0).toBeDefined()
+    if (!c0) throw new Error("expected candidate")
+    const meta = c0.extra?.crypto
     expect(meta?.costBasisPerUnit).toBeUndefined()
     expect(meta?.realizedGainCents).toBeNull()
   })
@@ -177,7 +183,10 @@ describe("applyCandidateUpdates merges crypto meta", () => {
       ],
       [],
     )
-    const meta = candidates[0].extra?.crypto
+    const [c0] = candidates
+    expect(c0).toBeDefined()
+    if (!c0) throw new Error("expected candidate")
+    const meta = c0.extra?.crypto
     // Should preserve asset/quantity/price from the first update.
     expect(meta?.asset).toBe("BTC")
     expect(meta?.quantity).toBe("0.1")
@@ -204,7 +213,10 @@ describe("applyCandidateUpdates merges crypto meta", () => {
       [{ rowIndex: 0, status: "business" }],
       [],
     )
-    expect(candidates[0].extra?.crypto?.asset).toBe("BTC")
-    expect(candidates[0].status).toBe("business")
+    const [c0] = candidates
+    expect(c0).toBeDefined()
+    if (!c0) throw new Error("expected candidate")
+    expect(c0.extra?.crypto?.asset).toBe("BTC")
+    expect(c0.status).toBe("business")
   })
 })

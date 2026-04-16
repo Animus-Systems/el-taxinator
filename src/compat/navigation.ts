@@ -7,7 +7,7 @@
  * In the SPA, we provide TanStack Router equivalents for internal navigation.
  */
 import React, { type ComponentPropsWithoutRef } from "react"
-import { Link as RouterLink, useNavigate, useRouterState } from "@tanstack/react-router"
+import { useNavigate, useRouterState } from "@tanstack/react-router"
 
 type AnchorProps = Omit<ComponentPropsWithoutRef<"a">, "href">
 
@@ -18,11 +18,19 @@ interface LinkProps extends AnchorProps {
 }
 
 export const Link = React.forwardRef<HTMLAnchorElement, LinkProps>(
-  ({ href, locale: _locale, prefetch: _prefetch, children, ...rest }, ref) => {
-    if (href.startsWith("http") || href.startsWith("//")) {
-      return React.createElement("a", { ref, href, ...rest }, children)
+  ({ href, locale: _locale, prefetch: _prefetch, children, onClick, ...rest }, ref) => {
+    const navigate = useNavigate()
+    const isExternal = href.startsWith("http") || href.startsWith("//")
+
+    const handleClick = (event: React.MouseEvent<HTMLAnchorElement>) => {
+      onClick?.(event)
+      if (event.defaultPrevented || isExternal) return
+      if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return
+      event.preventDefault()
+      void navigate({ to: href })
     }
-    return React.createElement(RouterLink, { ref, to: href, ...rest }, children)
+
+    return React.createElement("a", { ref, href, onClick: handleClick, ...rest }, children)
   },
 )
 Link.displayName = "Link"

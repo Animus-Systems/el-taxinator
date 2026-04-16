@@ -104,7 +104,6 @@ export function AccountantExport({ entityName, entityType }: Props) {
           <li>{t("includes3")}</li>
           <li>{t("includes4", { models: entityType === "autonomo" ? "420 + 130" : "420 + 202" })}</li>
           <li>{t("includes5")}</li>
-          <li>{t("includes6")}</li>
         </ul>
       </div>
     </div>

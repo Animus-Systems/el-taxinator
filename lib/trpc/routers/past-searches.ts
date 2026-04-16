@@ -4,7 +4,6 @@ import {
   createPastSearch,
   listPastSearches,
   getLatestPastSearch,
-  getPastSearch,
   diffResults,
   deletePastSearch,
   deletePastSearchesByTopic,

@@ -28,9 +28,10 @@ export function ImportCSVTable({ fields }: { fields: Field[] }) {
     if (parseState?.success && parseState.data) {
       const parsedData = parseState.data as string[][]
       setCSVData(parsedData)
-      if (parsedData.length > 0) {
+      const header = parsedData[0]
+      if (header) {
         setColumnMappings(
-          parsedData[0].map((value) => {
+          header.map((value) => {
             const field = fields.find((field) => field.code === value || field.name === value)
             return field?.code || ""
           })
@@ -153,7 +154,7 @@ export function ImportCSVTable({ fields }: { fields: Field[] }) {
               <table className="w-full caption-bottom text-sm">
                 <thead className="[&_tr]:border-b">
                   <tr className="border-b transition-colors hover:bg-muted/50">
-                    {csvData[0].map((_, index) => (
+                    {(csvData[0] ?? []).map((_, index) => (
                       <th key={index} className="h-12 min-w-[200px] px-4 text-left align-middle font-medium">
                         <select
                           className="w-full p-2 border rounded-md"
@@ -179,7 +180,7 @@ export function ImportCSVTable({ fields }: { fields: Field[] }) {
                         rowIndex === 0 && csvSettings.skipHeader ? "line-through text-muted-foreground" : ""
                       }`}
                     >
-                      {csvData[0].map((_, colIndex) => (
+                      {(csvData[0] ?? []).map((_, colIndex) => (
                         <td key={colIndex} className="p-4 align-middle">
                           {(row[colIndex] || "").toString().slice(0, 256)}
                         </td>

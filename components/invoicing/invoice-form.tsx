@@ -5,19 +5,16 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import type { Client, Product } from "@/lib/db-types"
-import type { TimeEntryWithRelations } from "@/models/time-entries"
 import { format } from "date-fns"
 import { useRouter } from "@/lib/navigation"
 import { useRef, useState, useTransition } from "react"
 import { useTranslations } from "next-intl"
 import { toast } from "sonner"
 import { LineItem, LineItemsEditor } from "./line-items-editor"
-import { ImportTimeEntries } from "./import-time-entries"
 
 type Props = {
   clients: Client[]
   products: Product[]
-  timeEntries?: TimeEntryWithRelations[]
 }
 
 function generateInvoiceNumber() {
@@ -25,7 +22,7 @@ function generateInvoiceNumber() {
   return `F-${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}-001`
 }
 
-export function InvoiceForm({ clients, products, timeEntries = [] }: Props) {
+export function InvoiceForm({ clients, products }: Props) {
   const router = useRouter()
   const t = useTranslations("invoices")
   const tSettings = useTranslations("settings")
@@ -101,13 +98,7 @@ export function InvoiceForm({ clients, products, timeEntries = [] }: Props) {
       </div>
 
       <div className="space-y-2">
-        <div className="flex items-center justify-between">
-          <Label>{t("lineItems")}</Label>
-          <ImportTimeEntries
-            timeEntries={timeEntries}
-            onImport={(newItems) => setItems((prev) => [...prev, ...newItems.map((item, i) => ({ ...item, position: prev.length + i }))])}
-          />
-        </div>
+        <Label>{t("lineItems")}</Label>
         <LineItemsEditor products={products} initialItems={items} onChange={setItems} />
       </div>
 

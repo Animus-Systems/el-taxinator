@@ -21,11 +21,10 @@ El Taxinator is a self-hosted accounting and tax management app built for freela
 - **Canary Islands tax calculators** — Modelo 420 (quarterly IGIC), Modelo 425 (annual IGIC summary), Modelo 130 (quarterly IRPF for autónomos), Modelo 202/200 (corporate tax for SLs), **Modelo 100 annual IRPF with base del ahorro brackets (19/21/23/27/28%)**, and **Modelo 721 informativa** for foreign crypto holdings. All with IGIC rates (0%, 3%, 7%, 9.5%, 15%).
 - **Multi-company support** — Manage multiple businesses from one instance. Each company gets its own database inside the embedded cluster. Supports both Autónomo and Sociedad Limitada entity types.
 - **Per-company uploads folder** — Each company can keep its receipts and files in its own folder, anywhere on disk (local, external drive, or a Google Drive–synced folder).
-- **Invoicing & quotes** — Create, track, and export professional invoices with IGIC and IRPF withholding. Convert quotes to invoices. Import billable time entries.
-- **Time tracking** — Log billable hours, track by project and client, import into invoices.
+- **Invoicing & quotes** — Create, track, and export professional invoices with IGIC and IRPF withholding. Convert quotes to invoices.
 - **Multi-language** — Full English and Spanish UI with locale-aware database content (category names, field names, etc. stored in both languages).
 - **Multiple AI providers** — Claude, OpenAI, Google Gemini, Mistral, OpenRouter, subscription CLIs (Claude Code, codex), or any custom OpenAI-compatible API (Ollama, vLLM, etc.). Enhanced logging shows which provider/model/thinking level is actually serving each request.
-- **Accountant data export** — Generate organized ZIP bundles with transactions, invoices, tax calculations, time entries, and receipt attachments — by quarter or full year.
+- **Accountant data export** — Generate organized ZIP bundles with transactions, invoices, tax calculations, and receipt attachments — by quarter or full year.
 - **Portable backups** — Full database dump + uploaded files in a single `.taxinator.zip`. Import on any instance with one click. Auto-backup to Google Drive with configurable frequency.
 - **Bank statement processing** — Upload a bank statement PDF, AI splits it into individual transactions, auto-categorizes, and matches to existing invoices.
 - **Currency conversion** — Automatic multi-currency support with historical exchange rates, including crypto (BTC, ETH, etc.).

@@ -47,11 +47,14 @@ describe("applyRulesToCandidates", () => {
       },
     ] as never)
 
-    expect(candidates[0].status).toBe("needs_review")
-    expect(candidates[0].suggestedStatus).toBe("business")
-    expect(candidates[0].categoryCode).toBe("software")
-    expect(candidates[0].ruleMatched).toBe(true)
-    expect(candidates[0].confidence.status).toBe(1)
+    const [c0] = candidates
+    expect(c0).toBeDefined()
+    if (!c0) throw new Error("expected candidate")
+    expect(c0.status).toBe("needs_review")
+    expect(c0.suggestedStatus).toBe("business")
+    expect(c0.categoryCode).toBe("software")
+    expect(c0.ruleMatched).toBe(true)
+    expect(c0.confidence.status).toBe(1)
   })
 
   it("prioritizes manual rules over learned rules for the same candidate", () => {
@@ -116,7 +119,10 @@ describe("applyRulesToCandidates", () => {
       },
     ] as never)
 
-    expect(candidates[0].categoryCode).toBe("software")
-    expect(candidates[0].suggestedStatus).toBe("business")
+    const [c0] = candidates
+    expect(c0).toBeDefined()
+    if (!c0) throw new Error("expected candidate")
+    expect(c0.categoryCode).toBe("software")
+    expect(c0.suggestedStatus).toBe("business")
   })
 })

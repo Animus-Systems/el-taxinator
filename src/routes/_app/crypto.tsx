@@ -378,12 +378,12 @@ type DisposalRow = {
   accountId: string | null
   status: string | null
   crypto: {
-    asset?: string
-    quantity?: string
-    pricePerUnit?: number | null
-    costBasisPerUnit?: number | null
-    realizedGainCents?: number | null
-    gatewayTransactionId?: string | null
+    asset?: string | undefined
+    quantity?: string | undefined
+    pricePerUnit?: number | null | undefined
+    costBasisPerUnit?: number | null | undefined
+    realizedGainCents?: number | null | undefined
+    gatewayTransactionId?: string | null | undefined
   }
   gatewayLinked: boolean
 }

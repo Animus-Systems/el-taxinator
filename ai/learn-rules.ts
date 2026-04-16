@@ -33,7 +33,7 @@ interface Correction {
  */
 export function findCommonSubstring(strings: string[]): string | null {
   if (strings.length === 0) return null
-  if (strings.length === 1) return strings[0]
+  if (strings.length === 1) return strings[0] ?? null
 
   // Split each string into words with 3+ chars (case-insensitive comparison)
   const wordSets = strings.map((s) => {
@@ -46,6 +46,7 @@ export function findCommonSubstring(strings: string[]): string | null {
 
   // Get words from the first string and check which appear in ALL others
   const [first, ...rest] = wordSets
+  if (!first) return null
   const common: string[] = []
   for (const word of first) {
     if (rest.every((set) => set.has(word))) {
@@ -139,8 +140,8 @@ export async function learnFromImport(
 
     // Parse the group key back to category/project
     const [toCategory, toProject] = key.split("|")
-    const categoryCode = toCategory === "null" ? null : toCategory
-    const projectCode = toProject === "null" ? null : toProject
+    const categoryCode: string | null = !toCategory || toCategory === "null" ? null : toCategory
+    const projectCode: string | null = !toProject || toProject === "null" ? null : toProject
 
     // Confidence proportional to group size, capped at 0.9
     const confidence = Math.min(0.5 + group.length / 10, 0.9)

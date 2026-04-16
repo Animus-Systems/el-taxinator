@@ -1,5 +1,4 @@
 import { google } from "googleapis"
-import type { Readable } from "stream"
 
 const SCOPES = ["https://www.googleapis.com/auth/drive.file"]
 const FOLDER_NAME = "Taxinator Backups"
@@ -8,9 +7,9 @@ const FOLDER_NAME = "Taxinator Backups"
  * Create OAuth2 client. Reads credentials from provided params, env vars, or throws.
  */
 function getOAuth2Client(clientId?: string, clientSecret?: string) {
-  const id = clientId || process.env.GOOGLE_DRIVE_CLIENT_ID
-  const secret = clientSecret || process.env.GOOGLE_DRIVE_CLIENT_SECRET
-  const redirectUri = `${process.env.BASE_URL || "http://localhost:7331"}/api/auth/google-drive/callback`
+  const id = clientId || process.env["GOOGLE_DRIVE_CLIENT_ID"]
+  const secret = clientSecret || process.env["GOOGLE_DRIVE_CLIENT_SECRET"]
+  const redirectUri = `${process.env["BASE_URL"] || "http://localhost:7331"}/api/auth/google-drive/callback`
 
   if (!id || !secret) {
     throw new Error("Google Drive credentials not configured")
@@ -23,8 +22,8 @@ function getOAuth2Client(clientId?: string, clientSecret?: string) {
  * Check if Google Drive credentials are available (from env or settings).
  */
 export function isGoogleDriveConfigured(settings?: Record<string, string>): boolean {
-  const fromEnv = !!(process.env.GOOGLE_DRIVE_CLIENT_ID && process.env.GOOGLE_DRIVE_CLIENT_SECRET)
-  const fromSettings = !!(settings?.google_drive_client_id && settings?.google_drive_client_secret)
+  const fromEnv = !!(process.env["GOOGLE_DRIVE_CLIENT_ID"] && process.env["GOOGLE_DRIVE_CLIENT_SECRET"])
+  const fromSettings = !!(settings?.["google_drive_client_id"] && settings?.["google_drive_client_secret"])
   return fromEnv || fromSettings
 }
 
@@ -32,7 +31,7 @@ export function isGoogleDriveConfigured(settings?: Record<string, string>): bool
  * Get the Google OAuth2 authorization URL for Drive access.
  */
 export function getAuthUrl(settings?: Record<string, string>): string {
-  const oauth2Client = getOAuth2Client(settings?.google_drive_client_id, settings?.google_drive_client_secret)
+  const oauth2Client = getOAuth2Client(settings?.["google_drive_client_id"], settings?.["google_drive_client_secret"])
   return oauth2Client.generateAuthUrl({
     access_type: "offline",
     scope: SCOPES,
@@ -44,7 +43,7 @@ export function getAuthUrl(settings?: Record<string, string>): string {
  * Exchange an authorization code for tokens.
  */
 export async function getTokensFromCode(code: string, settings?: Record<string, string>) {
-  const oauth2Client = getOAuth2Client(settings?.google_drive_client_id, settings?.google_drive_client_secret)
+  const oauth2Client = getOAuth2Client(settings?.["google_drive_client_id"], settings?.["google_drive_client_secret"])
   const { tokens } = await oauth2Client.getToken(code)
   return tokens
 }
@@ -71,8 +70,9 @@ async function getOrCreateFolder(refreshToken: string): Promise<string> {
     spaces: "drive",
   })
 
-  if (existing.data.files && existing.data.files.length > 0) {
-    return existing.data.files[0].id!
+  const firstExisting = existing.data.files?.[0]
+  if (firstExisting?.id) {
+    return firstExisting.id
   }
 
   // Create the folder
@@ -116,10 +116,15 @@ export async function uploadToGoogleDrive(
     fields: "id, webViewLink",
   })
 
-  return {
-    fileId: response.data.id!,
-    webViewLink: response.data.webViewLink ?? undefined,
+  const fileId = response.data.id
+  if (!fileId) {
+    throw new Error("Google Drive upload did not return a file id")
   }
+
+  const webViewLink = response.data.webViewLink ?? undefined
+  return webViewLink === undefined
+    ? { fileId }
+    : { fileId, webViewLink }
 }
 
 /**
@@ -141,12 +146,16 @@ export async function listBackups(refreshToken: string): Promise<{
     pageSize: 50,
   })
 
-  return (response.data.files ?? []).map((f) => ({
-    id: f.id!,
-    name: f.name!,
-    size: f.size ?? "0",
-    createdTime: f.createdTime!,
-  }))
+  return (response.data.files ?? [])
+    .filter((f): f is typeof f & { id: string; name: string; createdTime: string } =>
+      typeof f.id === "string" && typeof f.name === "string" && typeof f.createdTime === "string",
+    )
+    .map((f) => ({
+      id: f.id,
+      name: f.name,
+      size: f.size ?? "0",
+      createdTime: f.createdTime,
+    }))
 }
 
 /**

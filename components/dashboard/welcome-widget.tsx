@@ -3,7 +3,7 @@ import { Card, CardDescription, CardTitle } from "@/components/ui/card"
 import { ColoredText } from "@/components/ui/colored-text"
 import { getCurrentUser } from "@/lib/auth"
 import { getSettings, updateSettings } from "@/models/settings"
-import { Banknote, Brain, Building2, Calculator, ChartBarStacked, FileText, FolderOpenDot, Key, Receipt, TextCursorInput, X } from "lucide-react"
+import { Banknote, Brain, ChartBarStacked, FolderOpenDot, TextCursorInput, X } from "lucide-react"
 import { revalidatePath } from "next/cache"
 import Image from "next/image"
 import { Link } from "@/lib/navigation"
@@ -15,7 +15,7 @@ export async function WelcomeWidget() {
 
   const t = await getTranslations("welcome")
   const tSettings = await getTranslations("settings")
-  const hasLLMKey = settings.openai_api_key || settings.google_api_key || settings.mistral_api_key || settings.anthropic_api_key || settings.openrouter_api_key
+  const hasLLMKey = settings["openai_api_key"] || settings["google_api_key"] || settings["mistral_api_key"] || settings["anthropic_api_key"] || settings["openrouter_api_key"]
 
   return (
     <Card className="flex flex-col lg:flex-row items-start gap-10 p-10 w-full">
@@ -78,7 +78,7 @@ export async function WelcomeWidget() {
           <Link href="/settings">
             <Button variant="outline">
               <Banknote className="h-4 w-4" />
-              {t("currency", { code: settings.default_currency || "EUR" })}
+              {t("currency", { code: settings["default_currency"] || "EUR" })}
             </Button>
           </Link>
           <Link href="/settings/categories">

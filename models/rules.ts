@@ -1,4 +1,4 @@
-import { sql, queryMany, queryOne, execute, buildInsert, buildUpdate } from "@/lib/sql"
+import { sql, queryMany, queryOne, buildInsert, buildUpdate } from "@/lib/sql"
 import type { CategorizationRule } from "@/lib/db-types"
 import type { TransactionCandidate } from "@/ai/import-csv"
 import { cache } from "react"

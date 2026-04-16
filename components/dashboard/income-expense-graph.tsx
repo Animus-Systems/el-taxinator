@@ -64,6 +64,7 @@ export function IncomeExpenseGraph({ data, defaultCurrency }: IncomeExpenseGraph
     } else {
       // Monthly period: use first and last day of the month, add 1 day to dateTo
       const [year, month] = item.period.split("-")
+      if (!year || !month) return
       const monthDate = new Date(parseInt(year), parseInt(month) - 1, 1)
 
       dateFrom = format(startOfMonth(monthDate), "yyyy-MM-dd")

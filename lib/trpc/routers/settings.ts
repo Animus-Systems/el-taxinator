@@ -54,7 +54,15 @@ export const settingsRouter = router({
     .output(llmSettingsSchema)
     .query(async ({ ctx }) => {
       const settings = await getSettings(ctx.user.id)
-      return getLLMSettings(settings)
+      const llm = getLLMSettings(settings)
+      return {
+        providers: llm.providers.map((p) => ({
+          provider: p.provider,
+          apiKey: p.apiKey,
+          model: p.model,
+          ...(p.thinking !== undefined && { thinking: p.thinking }),
+        })),
+      }
     }),
 
   getActiveLLMHint: authedProcedure
@@ -72,7 +80,7 @@ export const settingsRouter = router({
           provider: p.provider,
           model: p.model,
           thinking: p.thinking ?? null,
-          modelIsDefault: p.modelIsDefault,
+          modelIsDefault: p.modelIsDefault ?? false,
           isSubscription: subscriptionKeys.has(p.provider),
         }))
       return { eligible }

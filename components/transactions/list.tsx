@@ -89,8 +89,8 @@ export const standardFieldRenderers: Record<string, FieldRenderer> = {
     classes: "min-w-[120px] max-w-[200px] overflow-hidden",
     sortable: true,
     formatValue: (transaction: TransactionWithRelations) => {
-      const accountName = (transaction as Record<string, unknown>).accountName as string | null
-      const accountBankName = (transaction as Record<string, unknown>).accountBankName as string | null
+      const accountName = (transaction as Record<string, unknown>)["accountName"] as string | null
+      const accountBankName = (transaction as Record<string, unknown>)["accountBankName"] as string | null
       if (!accountName) return <span className="text-muted-foreground">-</span>
       const titleAttr = accountBankName ? `${accountName} (${accountBankName})` : undefined
       return <span title={titleAttr}>{accountName}</span>
@@ -191,15 +191,15 @@ export const standardFieldRenderers: Record<string, FieldRenderer> = {
 }
 
 const getFieldRenderer = (field: Field): FieldRenderer => {
-  if (standardFieldRenderers[field.code as keyof typeof standardFieldRenderers]) {
-    return standardFieldRenderers[field.code as keyof typeof standardFieldRenderers]
-  } else {
-    return {
-      name: getLocalizedValue(field.name, "en"),
-      code: field.code,
-      classes: "",
-      sortable: false,
-    }
+  const existing = standardFieldRenderers[field.code as keyof typeof standardFieldRenderers]
+  if (existing) {
+    return existing
+  }
+  return {
+    name: getLocalizedValue(field.name, "en"),
+    code: field.code,
+    classes: "",
+    sortable: false,
   }
 }
 

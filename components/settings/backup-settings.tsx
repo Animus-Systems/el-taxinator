@@ -1,7 +1,7 @@
 
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Check, Cloud, CloudOff, Download, Loader2, Package } from "lucide-react"
+import { Card, CardContent } from "@/components/ui/card"
+import { Check, Cloud, CloudOff, Loader2, Package } from "lucide-react"
 import { useTranslations } from "next-intl"
 import { useState } from "react"
 
@@ -83,7 +83,7 @@ export function BackupSettings({
     setSavingSettings(true)
     try {
       // Save via tRPC settings update
-      const response = await fetch("/api/trpc/settings.update", {
+      await fetch("/api/trpc/settings.update", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

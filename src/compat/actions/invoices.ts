@@ -6,15 +6,15 @@ import { formDataToObject, nullableStringValue, numberValue, parseJsonField, trp
 function invoicePayload(formData: FormData): Record<string, unknown> {
   const values = formDataToObject(formData)
   return {
-    clientId: nullableStringValue(values.clientId),
-    quoteId: nullableStringValue(values.quoteId),
-    number: values.number,
-    status: nullableStringValue(values.status),
-    issueDate: values.issueDate,
-    dueDate: nullableStringValue(values.dueDate),
-    notes: nullableStringValue(values.notes),
-    irpfRate: numberValue(values.irpfRate),
-    items: parseJsonField(values.items, []),
+    clientId: nullableStringValue(values["clientId"]),
+    quoteId: nullableStringValue(values["quoteId"]),
+    number: values["number"],
+    status: nullableStringValue(values["status"]),
+    issueDate: values["issueDate"],
+    dueDate: nullableStringValue(values["dueDate"]),
+    notes: nullableStringValue(values["notes"]),
+    irpfRate: numberValue(values["irpfRate"]),
+    items: parseJsonField(values["items"], []),
   }
 }
 
@@ -45,7 +45,7 @@ export async function updateInvoiceAction(
   arg1: string | CompatActionResult<unknown> | null,
   arg2: Record<string, unknown> | FormData,
 ): Promise<CompatActionResult<unknown>> {
-  const payload = arg2 instanceof FormData ? { id: formDataToObject(arg2).id, ...invoicePayload(arg2) } : { id: arg1, ...arg2 }
+  const payload = arg2 instanceof FormData ? { id: formDataToObject(arg2)["id"], ...invoicePayload(arg2) } : { id: arg1, ...arg2 }
   try {
     const data = await trpcMutate("invoices.update", payload)
     return { success: true, data }
@@ -69,8 +69,8 @@ export async function updateInvoiceStatusAction(
   const payload =
     arg2 instanceof FormData
       ? {
-          id: formDataToObject(arg2).invoiceId,
-          status: formDataToObject(arg2).status,
+          id: formDataToObject(arg2)["invoiceId"],
+          status: formDataToObject(arg2)["status"],
         }
       : { id: arg1, status: arg2 }
 
@@ -115,8 +115,8 @@ export async function convertQuoteToInvoiceAction(
   const payload =
     arg2 instanceof FormData
       ? {
-          quoteId: formDataToObject(arg2).quoteId,
-          invoiceNumber: formDataToObject(arg2).invoiceNumber,
+          quoteId: formDataToObject(arg2)["quoteId"],
+          invoiceNumber: formDataToObject(arg2)["invoiceNumber"],
         }
       : { quoteId: arg1, invoiceNumber: arg2 }
   try {

@@ -9,7 +9,7 @@ export function FilePreview({ file }: { file: File }) {
   const [isEnlarged, setIsEnlarged] = useState(false)
 
   const fileSize =
-    file.metadata && typeof file.metadata === "object" && "size" in file.metadata ? Number(file.metadata.size) : 0
+    file.metadata && typeof file.metadata === "object" && "size" in file.metadata ? Number(file.metadata["size"]) : 0
 
   return (
     <>

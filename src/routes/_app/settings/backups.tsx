@@ -25,21 +25,21 @@ export function BackupsSettingsPage() {
   }
 
   const s = (settings ?? {}) as Record<string, unknown>
-  const hasClientId = !!s.google_drive_client_id
-  const hasClientSecret = !!s.google_drive_client_secret
+  const hasClientId = !!s["google_drive_client_id"]
+  const hasClientSecret = !!s["google_drive_client_secret"]
   const isGoogleDriveConfigured = hasClientId && hasClientSecret
 
   return (
     <div className="w-full max-w-xl">
       <BackupSettings
-        isGoogleDriveConnected={!!s.google_drive_refresh_token}
+        isGoogleDriveConnected={!!s["google_drive_refresh_token"]}
         isGoogleDriveConfigured={isGoogleDriveConfigured}
         googleAuthUrl={null}
-        googleClientId={(s.google_drive_client_id as string) || ""}
-        googleClientSecret={s.google_drive_client_secret ? "--------" : ""}
-        backupFrequency={(s.backup_frequency as string) || "weekly"}
-        backupRetention={(s.backup_retention as string) || "5"}
-        lastBackupAt={(s.last_backup_at as string) || null}
+        googleClientId={(s["google_drive_client_id"] as string) || ""}
+        googleClientSecret={s["google_drive_client_secret"] ? "--------" : ""}
+        backupFrequency={(s["backup_frequency"] as string) || "weekly"}
+        backupRetention={(s["backup_retention"] as string) || "5"}
+        lastBackupAt={(s["last_backup_at"] as string) || null}
         justConnected={justConnected}
         oauthError={oauthError}
       />

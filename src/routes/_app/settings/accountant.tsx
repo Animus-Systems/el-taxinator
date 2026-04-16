@@ -26,8 +26,8 @@ export function AccountantSettingsPage() {
 
   // Entity name/type would come from entity context; use defaults for now
   const s = (settings ?? {}) as Record<string, unknown>
-  const entityName = (s.entity_name as string) || ""
-  const entityType = ((s.entity_type as string) || "autonomo") as EntityType
+  const entityName = (s["entity_name"] as string) || ""
+  const entityType = ((s["entity_type"] as string) || "autonomo") as EntityType
 
   return (
     <div className="w-full max-w-2xl">

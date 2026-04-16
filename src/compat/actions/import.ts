@@ -34,7 +34,7 @@ export async function saveTransactionsAction(
   formData: FormData,
 ): Promise<CompatActionResult<{ count: number }>> {
   const values = formDataToObject(formData)
-  const rows = parseJsonField<Array<Record<string, unknown>>>(values.rows, [])
+  const rows = parseJsonField<Array<Record<string, unknown>>>(values["rows"], [])
 
   try {
     await Promise.all(rows.map((row) => trpcMutate("transactions.create", row)))

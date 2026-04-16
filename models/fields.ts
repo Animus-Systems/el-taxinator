@@ -14,8 +14,8 @@ export const getFields = cache(async (userId: string) => {
 })
 
 export const createField = async (userId: string, field: FieldData) => {
-  if (!field.code) {
-    field.code = codeFromName(field.name as string)
+  if (!field["code"]) {
+    field["code"] = codeFromName(field["name"] as string)
   }
   return queryOne<Field>(
     buildInsert("fields", { ...field, userId })

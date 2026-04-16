@@ -266,7 +266,9 @@ export async function recordDisposal(input: RecordDisposalInput): Promise<Dispos
           input.soldAt,
         ],
       )
-      matches.push(mapRow<CryptoDisposalMatch>(insert.rows[0]))
+      const insertedRow = insert.rows[0]
+      if (!insertedRow) throw new Error("Failed to insert crypto_disposal_matches row")
+      matches.push(mapRow<CryptoDisposalMatch>(insertedRow))
 
       await client.query(
         `UPDATE crypto_lots
@@ -408,15 +410,15 @@ export async function replayFromTransactions(userId: string): Promise<{
 
     for (const tx of txRes.rows) {
       const meta = (tx.extra?.crypto ?? {}) as Record<string, unknown>
-      const asset = typeof meta.asset === "string" ? meta.asset : null
-      const qtyStr = typeof meta.quantity === "string" ? meta.quantity : null
+      const asset = typeof meta["asset"] === "string" ? meta["asset"] : null
+      const qtyStr = typeof meta["quantity"] === "string" ? meta["quantity"] : null
       if (!asset || !qtyStr) continue
       const issuedAt = tx.issuedAt ?? new Date()
 
       if (tx.categoryCode === "crypto_purchase" || tx.categoryCode === "crypto_airdrop") {
         const pricePerUnit =
-          typeof meta.pricePerUnit === "number"
-            ? meta.pricePerUnit
+          typeof meta["pricePerUnit"] === "number"
+            ? meta["pricePerUnit"]
             : tx.categoryCode === "crypto_airdrop"
               ? 0
               : null
@@ -432,7 +434,7 @@ export async function replayFromTransactions(userId: string): Promise<{
         lotsCreated += 1
       } else if (tx.categoryCode === "crypto_disposal") {
         const price =
-          typeof meta.pricePerUnit === "number" ? meta.pricePerUnit : null
+          typeof meta["pricePerUnit"] === "number" ? meta["pricePerUnit"] : null
         if (price === null) continue
 
         const lotsRes = await client.query<Record<string, unknown>>(

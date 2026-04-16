@@ -106,5 +106,5 @@ export async function isDatabaseEmpty(userId: string) {
     `SELECT COUNT(*)::int AS count FROM fields WHERE user_id = $1`,
     [userId],
   )
-  return (result.rows[0]?.count ?? 0) === 0
+  return (result.rows[0]?.["count"] ?? 0) === 0
 }

@@ -39,7 +39,6 @@ export default defineConfig({
       { find: "@/actions/products", replacement: compat("actions/products.ts") },
       { find: "@/actions/quotes", replacement: compat("actions/quotes.ts") },
       { find: "@/actions/invoices", replacement: compat("actions/invoices.ts") },
-      { find: "@/actions/time", replacement: compat("actions/time.ts") },
       { find: "@/actions/ai-import", replacement: compat("actions/ai-import.ts") },
       { find: "@/actions/import", replacement: compat("actions/import.ts") },
       { find: "@/actions/accountant", replacement: compat("actions/accountant.ts") },

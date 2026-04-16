@@ -12,7 +12,11 @@ import Link from "next/link"
 import { Badge } from "../ui/badge"
 
 export function SubscriptionPlan({ user }: { user: User }) {
-  const plan = PLANS[user.membershipPlan as keyof typeof PLANS] || PLANS.unlimited
+  const fallbackPlan = PLANS["unlimited"]
+  const plan = (user.membershipPlan ? PLANS[user.membershipPlan] : undefined) ?? fallbackPlan
+  if (!plan) {
+    throw new Error("Unable to resolve subscription plan")
+  }
 
   return (
     <div className="flex flex-wrap gap-5">

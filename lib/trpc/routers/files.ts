@@ -4,10 +4,23 @@ import {
   getUnsortedFiles,
   getUnsortedFilesCount,
   getFileById,
+  getFiles,
   deleteFile,
 } from "@/models/files"
 import { fileSchema } from "@/lib/db-types"
 import { getActiveEntityId } from "@/lib/entities"
+
+const fileStatusFilterSchema = z.enum(["all", "unreviewed", "linked", "orphan"])
+
+const fileWithLinkSchema = fileSchema.extend({
+  linkedTransactionId: z.string().nullable(),
+  linkedTransactionName: z.string().nullable(),
+})
+
+const filesListOutputSchema = z.object({
+  files: z.array(fileWithLinkSchema),
+  total: z.number().int(),
+})
 
 export const filesRouter = router({
   listUnsorted: authedProcedure
@@ -16,6 +29,21 @@ export const filesRouter = router({
     .output(z.array(fileSchema))
     .query(async ({ ctx }) => {
       return getUnsortedFiles(ctx.user.id)
+    }),
+
+  list: authedProcedure
+    .meta({ openapi: { method: "GET", path: "/api/v1/files" } })
+    .input(
+      z.object({
+        status: fileStatusFilterSchema.default("all"),
+        search: z.string().default(""),
+        page: z.number().int().min(1).default(1),
+        pageSize: z.number().int().min(1).max(200).default(50),
+      }),
+    )
+    .output(filesListOutputSchema)
+    .query(async ({ ctx, input }) => {
+      return getFiles(ctx.user.id, input)
     }),
 
   unsortedCount: authedProcedure

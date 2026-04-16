@@ -1,6 +1,6 @@
 import { getPool } from "@/lib/pg"
 import { cache } from "react"
-import { getTaxPeriod, Quarter, calcModelo420, getQuarterLabel, getFilingDeadline, getUpcomingDeadlines, queryInvoiceRevenue, queryExpenses, type Modelo420Result } from "./tax"
+import { getTaxPeriod, Quarter, calcModelo420, getUpcomingDeadlines, queryInvoiceRevenue, queryExpenses, type Modelo420Result } from "./tax"
 
 // ─── Modelo 202 — Quarterly corporate tax installment (SL) ──────────────────
 
@@ -137,8 +137,8 @@ export const calcModelo200 = cache(
 
     const { totalRevenue } = revenue
     const { totalExpenses } = expenses
-    const cryptoGainCents = Number(fifoRes.rows[0]?.total ?? 0)
-    const stakingIncomeCents = Number(stakingRes.rows[0]?.total ?? 0)
+    const cryptoGainCents = Number(fifoRes.rows[0]?.["total"] ?? 0)
+    const stakingIncomeCents = Number(stakingRes.rows[0]?.["total"] ?? 0)
     const baseImponible = Math.max(
       0,
       totalRevenue - totalExpenses + cryptoGainCents + stakingIncomeCents,

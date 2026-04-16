@@ -3,7 +3,6 @@ import fs from "fs"
 import path from "path"
 import {
   startCluster,
-  getClusterInfo,
   getRunningClusterEntityId,
   getEmbeddedConnectionString,
   getDataRoot,
@@ -41,7 +40,7 @@ export type Entity = {
 export const ENTITY_COOKIE = "TAXINATOR_ENTITY"
 
 function getEntitiesFilePath(): string {
-  return process.env.ENTITIES_FILE ?? path.join(process.cwd(), "data", "entities.json")
+  return process.env["ENTITIES_FILE"] ?? path.join(process.cwd(), "data", "entities.json")
 }
 
 function loadEntitiesFromFile(): Entity[] | null {
@@ -58,7 +57,7 @@ function loadEntitiesFromFile(): Entity[] | null {
 }
 
 function loadEntitiesFromEnv(): Entity[] | null {
-  const raw = process.env.ENTITIES
+  const raw = process.env["ENTITIES"]
   if (!raw) return null
   try {
     const parsed = JSON.parse(raw) as Entity[]
@@ -70,7 +69,7 @@ function loadEntitiesFromEnv(): Entity[] | null {
 }
 
 function loadEntitiesFromDatabaseUrl(): Entity[] {
-  const db = process.env.DATABASE_URL
+  const db = process.env["DATABASE_URL"]
   if (!db) return []
   return [{ id: "default", name: "Default", type: "autonomo", db }]
 }
@@ -183,7 +182,7 @@ export function getActiveEntityIdFromFile(): string {
     if (entities.some((e) => e.id === id)) return id
   } catch {}
   const entities = getEntities()
-  return entities.length > 0 ? entities[0].id : "default"
+  return entities[0]?.id ?? "default"
 }
 
 /** Set the active entity and persist to file. */
@@ -194,14 +193,16 @@ export async function setActiveEntity(entityId: string): Promise<void> {
 export async function getActiveEntityId(): Promise<string> {
   const entities = getEntities()
   if (entities.length === 0) return "default"
-  if (entities.length === 1) return entities[0].id
+  const first = entities[0]
+  if (!first) return "default"
+  if (entities.length === 1) return first.id
 
   const fromFile = getActiveEntityIdFromFile()
   if (fromFile) {
     const entity = getEntityById(fromFile)
     if (entity) return entity.id
   }
-  return entities[0].id
+  return first.id
 }
 
 export async function getActiveEntity(): Promise<Entity> {
@@ -211,7 +212,8 @@ export async function getActiveEntity(): Promise<Entity> {
 
   // Fallback to first entity if the active one was deleted
   const entities = getEntities()
-  if (entities.length > 0) return entities[0]
+  const first = entities[0]
+  if (first) return first
 
   // No entities configured — return a synthetic default backed by the
   // embedded cluster's "default" database.
@@ -228,7 +230,7 @@ const globalForPools = globalThis as unknown as {
 
 const poolMap = globalForPools.entityPools ?? new Map<string, Pool>()
 
-if (process.env.NODE_ENV !== "production") {
+if (process.env["NODE_ENV"] !== "production") {
   globalForPools.entityPools = poolMap
 }
 

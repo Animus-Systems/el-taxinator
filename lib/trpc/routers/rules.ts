@@ -47,7 +47,18 @@ export const rulesRouter = router({
     .input(ruleInputSchema)
     .output(categorizationRuleSchema.nullable())
     .mutation(async ({ ctx, input }) => {
-      return createRule(ctx.user.id, input)
+      return createRule(ctx.user.id, {
+        name: input.name,
+        matchType: input.matchType,
+        matchField: input.matchField,
+        matchValue: input.matchValue,
+        priority: input.priority,
+        ...(input.categoryCode !== undefined && { categoryCode: input.categoryCode }),
+        ...(input.projectCode !== undefined && { projectCode: input.projectCode }),
+        ...(input.type !== undefined && { type: input.type }),
+        ...(input.status !== undefined && { status: input.status }),
+        ...(input.note !== undefined && { note: input.note }),
+      })
     }),
 
   update: authedProcedure
@@ -56,7 +67,19 @@ export const rulesRouter = router({
     .output(categorizationRuleSchema.nullable())
     .mutation(async ({ ctx, input }) => {
       const { id, ...data } = input
-      return updateRule(id, ctx.user.id, data)
+      const update: Parameters<typeof updateRule>[2] = {
+        ...(data.name !== undefined && { name: data.name }),
+        ...(data.matchType !== undefined && { matchType: data.matchType }),
+        ...(data.matchField !== undefined && { matchField: data.matchField }),
+        ...(data.matchValue !== undefined && { matchValue: data.matchValue }),
+        ...(data.categoryCode !== undefined && { categoryCode: data.categoryCode }),
+        ...(data.projectCode !== undefined && { projectCode: data.projectCode }),
+        ...(data.type !== undefined && { type: data.type }),
+        ...(data.status !== undefined && { status: data.status }),
+        ...(data.note !== undefined && { note: data.note }),
+        ...(data.priority !== undefined && { priority: data.priority }),
+      }
+      return updateRule(id, ctx.user.id, update)
     }),
 
   delete: authedProcedure

@@ -2,19 +2,21 @@ import { sql, queryMany, queryOne } from "@/lib/sql"
 import { PROVIDERS } from "@/lib/llm-providers"
 import type { Setting } from "@/lib/db-types"
 import { cache } from "react"
-import { LLMProvider } from "@/ai/providers/llmProvider"
+import type { LLMConfig, LLMProvider, LLMSettings } from "@/ai/providers/llmProvider"
 
 export type SettingsMap = Record<string, string>
+
+const readSetting = (settings: SettingsMap, key: string): string => settings[key] ?? ""
 
 /**
  * Helper to extract LLM provider settings from SettingsMap.
  * Respects llm_primary_provider for quick-switching, with llm_providers as fallback order.
  */
-export function getLLMSettings(settings: SettingsMap) {
-  const primaryProvider = settings.llm_primary_provider || ""
-  const backupProvider = settings.llm_backup_provider || ""
-  const fallbackOrder = (settings.llm_providers || PROVIDERS.map(p => p.key).join(","))
-    .split(",").map(p => p.trim()).filter(Boolean)
+export function getLLMSettings(settings: SettingsMap): LLMSettings {
+  const primaryProvider = readSetting(settings, "llm_primary_provider")
+  const backupProvider = readSetting(settings, "llm_backup_provider")
+  const fallbackRaw = readSetting(settings, "llm_providers") || PROVIDERS.map(p => p.key).join(",")
+  const fallbackOrder = fallbackRaw.split(",").map(p => p.trim()).filter(Boolean)
 
   // Build ordered list: primary first, backup second, then remaining fallback order
   const seen = new Set<string>()
@@ -23,30 +25,31 @@ export function getLLMSettings(settings: SettingsMap) {
   if (backupProvider && !seen.has(backupProvider)) { orderedKeys.push(backupProvider); seen.add(backupProvider) }
   for (const k of fallbackOrder) { if (!seen.has(k)) { orderedKeys.push(k); seen.add(k) } }
 
-  const providers = orderedKeys.map((providerKey) => {
+  const providers = orderedKeys.flatMap<LLMConfig>((providerKey) => {
     const providerMeta = PROVIDERS.find(p => p.key === providerKey)
-    if (!providerMeta) return null
+    if (!providerMeta) return []
 
-    const userSetModel = settings[providerMeta.modelName]
+    const userSetModel = readSetting(settings, providerMeta.modelName)
     const model = userSetModel || providerMeta.defaultModelName
+    const thinking = providerMeta.thinkingSettingName
+      ? (readSetting(settings, providerMeta.thinkingSettingName) || "medium")
+      : undefined
+    const baseUrl = providerMeta.baseUrlName
+      ? (readSetting(settings, providerMeta.baseUrlName) || undefined)
+      : undefined
 
-    return {
+    const config: LLMConfig = {
       provider: providerKey as LLMProvider,
-      apiKey: settings[providerMeta.apiKeyName] || "",
+      apiKey: readSetting(settings, providerMeta.apiKeyName),
       model,
       modelIsDefault: !userSetModel,
-      thinking: providerMeta.thinkingSettingName
-        ? (settings[providerMeta.thinkingSettingName] || "medium")
-        : undefined,
-      baseUrl: providerMeta.baseUrlName
-        ? (settings[providerMeta.baseUrlName] || undefined)
-        : undefined,
     }
-  }).filter((provider): provider is NonNullable<typeof provider> => provider !== null)
+    if (thinking !== undefined) config.thinking = thinking
+    if (baseUrl !== undefined) config.baseUrl = baseUrl
+    return [config]
+  })
 
-  return {
-    providers,
-  }
+  return { providers }
 }
 
 export const getSettings = cache(async (userId: string): Promise<SettingsMap> => {

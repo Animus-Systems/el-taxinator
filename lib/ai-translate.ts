@@ -1,7 +1,7 @@
 import { getLLMSettings } from "@/models/settings"
 import { getSettings } from "@/models/settings"
 import { requestLLM } from "@/ai/providers/llmProvider"
-import { isI18nValue, setLocalizedValue, getLocalizedValue } from "./i18n-db"
+import { isI18nValue, setLocalizedValue } from "./i18n-db"
 
 /**
  * Auto-translate a text value to the missing locale using AI.
@@ -39,7 +39,7 @@ export async function autoTranslate(
     if (!response.error && response.output) {
       const translated = typeof response.output === "string"
         ? response.output
-        : (response.output as Record<string, unknown>).translation as string ?? JSON.stringify(response.output)
+        : (response.output as Record<string, unknown>)["translation"] as string ?? JSON.stringify(response.output)
       if (translated) {
         i18nValue = setLocalizedValue(i18nValue, translated.trim(), targetLocale)
       }

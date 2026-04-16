@@ -4,7 +4,7 @@ import { buildInsert, mapRow } from "@/lib/sql"
 type BackupSetting = {
   filename: string
   tableName: string
-  backup: (userId: string, row: any) => Record<string, any>
+  backup: (_userId: string, row: any) => Record<string, any>
   restore: (userId: string, json: Record<string, any>) => Record<string, any>
 }
 
@@ -13,7 +13,7 @@ export const MODEL_BACKUP: BackupSetting[] = [
   {
     filename: "settings.json",
     tableName: "settings",
-    backup: (userId: string, row: any) => {
+    backup: (_userId: string, row: any) => {
       return {
         id: row.id,
         code: row.code,
@@ -35,7 +35,7 @@ export const MODEL_BACKUP: BackupSetting[] = [
   {
     filename: "currencies.json",
     tableName: "currencies",
-    backup: (userId: string, row: any) => {
+    backup: (_userId: string, row: any) => {
       return {
         id: row.id,
         code: row.code,
@@ -53,7 +53,7 @@ export const MODEL_BACKUP: BackupSetting[] = [
   {
     filename: "categories.json",
     tableName: "categories",
-    backup: (userId: string, row: any) => {
+    backup: (_userId: string, row: any) => {
       return {
         id: row.id,
         code: row.code,
@@ -77,7 +77,7 @@ export const MODEL_BACKUP: BackupSetting[] = [
   {
     filename: "projects.json",
     tableName: "projects",
-    backup: (userId: string, row: any) => {
+    backup: (_userId: string, row: any) => {
       return {
         id: row.id,
         code: row.code,
@@ -101,7 +101,7 @@ export const MODEL_BACKUP: BackupSetting[] = [
   {
     filename: "fields.json",
     tableName: "fields",
-    backup: (userId: string, row: any) => {
+    backup: (_userId: string, row: any) => {
       return {
         id: row.id,
         code: row.code,
@@ -133,7 +133,7 @@ export const MODEL_BACKUP: BackupSetting[] = [
   {
     filename: "files.json",
     tableName: "files",
-    backup: (userId: string, row: any) => {
+    backup: (_userId: string, row: any) => {
       return {
         id: row.id,
         filename: row.filename,
@@ -159,7 +159,7 @@ export const MODEL_BACKUP: BackupSetting[] = [
   {
     filename: "transactions.json",
     tableName: "transactions",
-    backup: (userId: string, row: any) => {
+    backup: (_userId: string, row: any) => {
       return {
         id: row.id,
         name: row.name,

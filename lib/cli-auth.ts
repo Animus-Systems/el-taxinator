@@ -2,7 +2,7 @@ import { readFileSync, existsSync, unlinkSync } from "fs"
 import { execFileSync, spawn } from "child_process"
 import { join } from "path"
 
-const HOME = process.env.HOME || "/home/taxuser"
+const HOME = process.env["HOME"] || "/home/taxuser"
 const CLI_ENV = { ...process.env, HOME }
 const CLI_ENV_NO_BROWSER = { ...CLI_ENV, BROWSER: "echo" }
 

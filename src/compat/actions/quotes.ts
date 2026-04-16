@@ -6,13 +6,13 @@ import { formDataToObject, nullableStringValue, parseJsonField, trpcMutate, type
 function quotePayload(formData: FormData): Record<string, unknown> {
   const values = formDataToObject(formData)
   return {
-    clientId: nullableStringValue(values.clientId),
-    number: values.number,
-    status: nullableStringValue(values.status),
-    issueDate: values.issueDate,
-    expiryDate: nullableStringValue(values.expiryDate),
-    notes: nullableStringValue(values.notes),
-    items: parseJsonField(values.items, []),
+    clientId: nullableStringValue(values["clientId"]),
+    number: values["number"],
+    status: nullableStringValue(values["status"]),
+    issueDate: values["issueDate"],
+    expiryDate: nullableStringValue(values["expiryDate"]),
+    notes: nullableStringValue(values["notes"]),
+    items: parseJsonField(values["items"], []),
   }
 }
 
@@ -43,7 +43,7 @@ export async function updateQuoteAction(
   arg1: string | CompatActionResult<unknown> | null,
   arg2: Record<string, unknown> | FormData,
 ): Promise<CompatActionResult<unknown>> {
-  const payload = arg2 instanceof FormData ? { id: formDataToObject(arg2).id, ...quotePayload(arg2) } : { id: arg1, ...arg2 }
+  const payload = arg2 instanceof FormData ? { id: formDataToObject(arg2)["id"], ...quotePayload(arg2) } : { id: arg1, ...arg2 }
   try {
     const data = await trpcMutate("quotes.update", payload)
     return { success: true, data }

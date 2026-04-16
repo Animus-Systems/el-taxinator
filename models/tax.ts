@@ -6,17 +6,30 @@ import { cache } from "react"
 export type Quarter = 1 | 2 | 3 | 4
 
 export function getTaxPeriod(year: number, quarter: Quarter): { start: Date; end: Date } {
-  const quarterStart = [0, 3, 6, 9][quarter - 1]
+  const quarterStarts: Record<Quarter, number> = { 1: 0, 2: 3, 3: 6, 4: 9 }
+  const quarterStart = quarterStarts[quarter]
   const start = new Date(year, quarterStart, 1)
   const end = new Date(year, quarterStart + 3, 0, 23, 59, 59, 999)
   return { start, end }
 }
 
 export function getQuarterLabel(quarter: Quarter, locale?: string): string {
-  if (locale === "es") {
-    return [`Q1 (Ene–Mar)`, `Q2 (Abr–Jun)`, `Q3 (Jul–Sep)`, `Q4 (Oct–Dic)`][quarter - 1]
+  const esLabels: Record<Quarter, string> = {
+    1: `Q1 (Ene–Mar)`,
+    2: `Q2 (Abr–Jun)`,
+    3: `Q3 (Jul–Sep)`,
+    4: `Q4 (Oct–Dic)`,
   }
-  return [`Q1 (Jan–Mar)`, `Q2 (Apr–Jun)`, `Q3 (Jul–Sep)`, `Q4 (Oct–Dec)`][quarter - 1]
+  const enLabels: Record<Quarter, string> = {
+    1: `Q1 (Jan–Mar)`,
+    2: `Q2 (Apr–Jun)`,
+    3: `Q3 (Jul–Sep)`,
+    4: `Q4 (Oct–Dec)`,
+  }
+  if (locale === "es") {
+    return esLabels[quarter]
+  }
+  return enLabels[quarter]
 }
 
 /**
@@ -58,9 +71,10 @@ export async function queryInvoiceRevenue(pool: Awaited<ReturnType<typeof getPoo
        AND i.issue_date <= $3`,
     [userId, start, end],
   )
+  const row = result.rows[0]
   return {
-    totalRevenue: (result.rows[0]?.total_revenue ?? 0) as number,
-    invoiceCount: (result.rows[0]?.invoice_count ?? 0) as number,
+    totalRevenue: typeof row?.["total_revenue"] === "number" ? row["total_revenue"] : 0,
+    invoiceCount: typeof row?.["invoice_count"] === "number" ? row["invoice_count"] : 0,
   }
 }
 
@@ -78,9 +92,10 @@ export async function queryExpenses(pool: Awaited<ReturnType<typeof getPool>>, u
        ${requireConverted ? "AND converted_total IS NOT NULL" : ""}`,
     [userId, start, end],
   )
+  const row = result.rows[0]
   return {
-    totalExpenses: (result.rows[0]?.total_expenses ?? 0) as number,
-    expenseCount: (result.rows[0]?.expense_count ?? 0) as number,
+    totalExpenses: typeof row?.["total_expenses"] === "number" ? row["total_expenses"] : 0,
+    expenseCount: typeof row?.["expense_count"] === "number" ? row["expense_count"] : 0,
   }
 }
 
@@ -160,17 +175,18 @@ export const calcModelo420 = cache(
     ])
 
     const r = igicResult.rows[0]
-    const baseZero = r?.base_zero ?? 0
+    const num = (v: unknown): number => (typeof v === "number" ? v : 0)
+    const baseZero = num(r?.["base_zero"])
     const cuotaZero = 0
-    const baseReducido = r?.base_reducido ?? 0
-    const cuotaReducido = r?.cuota_reducido ?? 0
-    const baseGeneral = r?.base_general ?? 0
-    const cuotaGeneral = r?.cuota_general ?? 0
-    const baseIncrementado = r?.base_incrementado ?? 0
-    const cuotaIncrementado = r?.cuota_incrementado ?? 0
-    const baseEspecial = r?.base_especial ?? 0
-    const cuotaEspecial = r?.cuota_especial ?? 0
-    const invoiceCount = r?.invoice_count ?? 0
+    const baseReducido = num(r?.["base_reducido"])
+    const cuotaReducido = num(r?.["cuota_reducido"])
+    const baseGeneral = num(r?.["base_general"])
+    const cuotaGeneral = num(r?.["cuota_general"])
+    const baseIncrementado = num(r?.["base_incrementado"])
+    const cuotaIncrementado = num(r?.["cuota_incrementado"])
+    const baseEspecial = num(r?.["base_especial"])
+    const cuotaEspecial = num(r?.["cuota_especial"])
+    const invoiceCount = num(r?.["invoice_count"])
 
     const totalIgicDevengado = cuotaZero + cuotaReducido + cuotaGeneral + cuotaIncrementado + cuotaEspecial
 
@@ -255,9 +271,11 @@ export const calcModelo130 = cache(
       queryExpenses(pool, userId, cumulativeStart, cumulativeEnd, true),
     ])
 
-    const totalIngresos = invoiceResult.rows[0]?.total_ingresos ?? 0
-    const totalIrpfRetenido = invoiceResult.rows[0]?.total_irpf_retenido ?? 0
-    const invoiceCount = invoiceResult.rows[0]?.invoice_count ?? 0
+    const invoiceRow = invoiceResult.rows[0]
+    const num = (v: unknown): number => (typeof v === "number" ? v : 0)
+    const totalIngresos = num(invoiceRow?.["total_ingresos"])
+    const totalIrpfRetenido = num(invoiceRow?.["total_irpf_retenido"])
+    const invoiceCount = num(invoiceRow?.["invoice_count"])
 
     const totalGastos = expenses.totalExpenses
     const expenseCount = expenses.expenseCount
@@ -466,12 +484,16 @@ export const calcModelo100 = cache(
       ),
     ])
 
-    const ingresosActividad = Math.round(invoiceResult.rows[0]?.total_ingresos ?? 0)
+    const invoiceRow = invoiceResult.rows[0]
+    const totalIngresosRaw = invoiceRow?.["total_ingresos"]
+    const ingresosActividad = Math.round(typeof totalIngresosRaw === "number" ? totalIngresosRaw : 0)
     const gastosActividad = Math.round(expenses.totalExpenses)
     const rendimientoNetoActividad = Math.max(0, ingresosActividad - gastosActividad)
 
-    const gananciasPatrimoniales = Number(fifoRes.rows[0]?.total ?? 0)
-    const rendimientoCapitalMobiliario = Number(stakingRes.rows[0]?.total ?? 0)
+    const fifoRow = fifoRes.rows[0]
+    const stakingRow = stakingRes.rows[0]
+    const gananciasPatrimoniales = Number(fifoRow?.["total"] ?? 0)
+    const rendimientoCapitalMobiliario = Number(stakingRow?.["total"] ?? 0)
     const baseImponibleAhorro = Math.max(
       0,
       gananciasPatrimoniales + rendimientoCapitalMobiliario,
@@ -488,7 +510,7 @@ export const calcModelo100 = cache(
       baseImponibleAhorro,
       cuotaAhorro: totalCuotaCents,
       ahorroBreakdown: breakdown,
-      untrackedDisposalsCount: Number(untrackedRes.rows[0]?.n ?? 0),
+      untrackedDisposalsCount: Number(untrackedRes.rows[0]?.["n"] ?? 0),
     }
   },
 )

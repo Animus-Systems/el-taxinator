@@ -32,7 +32,7 @@ export function AccountsSettingsPage() {
     )
   }
 
-  const currencyCodes = (currencies ?? []).map((c) => (c as Record<string, unknown>).code as string)
+  const currencyCodes = (currencies ?? []).map((c) => (c as Record<string, unknown>)["code"] as string)
 
   const accountsWithActions = (accounts ?? []).map((account) => ({
     ...account,
@@ -60,7 +60,7 @@ export function AccountsSettingsPage() {
           try {
             await deleteMutation.mutateAsync({ id })
             return { success: true }
-          } catch (error) {
+          } catch {
             return { success: false, error: "Failed to delete account" }
           }
         }}
@@ -68,14 +68,14 @@ export function AccountsSettingsPage() {
           try {
             const d = data as Record<string, unknown>
             await createMutation.mutateAsync({
-              name: d.name as string,
-              bankName: (d.bankName as string) || undefined,
-              currencyCode: d.currencyCode as string,
-              accountNumber: (d.accountNumber as string) || undefined,
-              isActive: d.isActive as boolean ?? true,
+              name: d["name"] as string,
+              bankName: (d["bankName"] as string) || undefined,
+              currencyCode: d["currencyCode"] as string,
+              accountNumber: (d["accountNumber"] as string) || undefined,
+              isActive: d["isActive"] as boolean ?? true,
             })
             return { success: true }
-          } catch (error) {
+          } catch {
             return { success: false, error: "Failed to create account" }
           }
         }}
@@ -84,14 +84,14 @@ export function AccountsSettingsPage() {
             const d = data as Record<string, unknown>
             await updateMutation.mutateAsync({
               id,
-              name: (d.name as string) || undefined,
-              bankName: (d.bankName as string) || undefined,
-              currencyCode: (d.currencyCode as string) || undefined,
-              accountNumber: (d.accountNumber as string) || undefined,
-              isActive: d.isActive as boolean,
+              name: (d["name"] as string) || undefined,
+              bankName: (d["bankName"] as string) || undefined,
+              currencyCode: (d["currencyCode"] as string) || undefined,
+              accountNumber: (d["accountNumber"] as string) || undefined,
+              isActive: d["isActive"] as boolean,
             })
             return { success: true }
-          } catch (error) {
+          } catch {
             return { success: false, error: "Failed to update account" }
           }
         }}

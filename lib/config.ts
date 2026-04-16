@@ -34,7 +34,7 @@ const config = {
   app: {
     title: "Taxinator",
     description: "Your personal AI accountant",
-    version: process.env.npm_package_version || "0.0.1",
+    version: process.env["npm_package_version"] || "0.0.1",
     baseURL: env.BASE_URL || `http://localhost:${env.PORT || "7331"}`,
     supportEmail: "me@vas3k.com",
   },
@@ -92,7 +92,7 @@ const config = {
   },
 } as const
 
-if (env.BETTER_AUTH_SECRET === "please-set-your-key-here" && process.env.NODE_ENV === "production") {
+if (env.BETTER_AUTH_SECRET === "please-set-your-key-here" && process.env["NODE_ENV"] === "production") {
   console.warn("WARNING: Using default auth secret. Set BETTER_AUTH_SECRET for production.")
 }
 

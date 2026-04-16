@@ -69,11 +69,11 @@ export function TaxPage() {
           year={year}
           summary={(Array.isArray(summary) ? summary : []) as TaxSummaryItem[]}
           deadlines={deadlines ?? []}
-          entityType={(((entityType as Record<string, unknown>)?.type as string) ?? "autonomo") as EntityType}
+          entityType={(((entityType as Record<string, unknown>)?.["type"] as string) ?? "autonomo") as EntityType}
         />
         <CryptoTaxCards
           year={year}
-          entityType={(((entityType as Record<string, unknown>)?.type as string) ?? "autonomo") as EntityType}
+          entityType={(((entityType as Record<string, unknown>)?.["type"] as string) ?? "autonomo") as EntityType}
         />
       </main>
     </>

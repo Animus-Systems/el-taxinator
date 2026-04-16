@@ -81,7 +81,7 @@ export async function processWizardTurn(input: ProcessTurnInput): Promise<Proces
   const { prompt, promptVersion } = buildWizardPrompt({
     entityType: (user.entityType as EntityType | null) ?? null,
     businessName: user.businessName,
-    locale: input.locale ?? settings.language ?? "en",
+    locale: input.locale ?? settings["language"] ?? "en",
     businessFacts,
     categories,
     projects,
@@ -183,7 +183,7 @@ export async function processWizardTurn(input: ProcessTurnInput): Promise<Proces
       projectCode: null,
       suggestedStatus: null,
       confidence: { category: 0, type: 0, status: 0, overall: 0 },
-      clarifyingQuestion: parsed.clarifyingQuestions[0],
+      clarifyingQuestion: parsed.clarifyingQuestions[0] ?? null,
       tokensUsed: llmResponse.tokensUsed ?? null,
     })
   }
@@ -399,21 +399,21 @@ function mergeCandidateExtra(
   const currentExtra = (target.extra ?? {}) as Record<string, unknown>
   const merged: Record<string, unknown> = { ...currentExtra, ...updateExtra }
 
-  const cryptoIn = updateExtra.crypto as Record<string, unknown> | undefined
+  const cryptoIn = updateExtra["crypto"] as Record<string, unknown> | undefined
   if (cryptoIn && typeof cryptoIn === "object") {
-    const prevCrypto = (currentExtra.crypto ?? {}) as Record<string, unknown>
+    const prevCrypto = (currentExtra["crypto"] ?? {}) as Record<string, unknown>
     const nextCrypto: Record<string, unknown> = { ...prevCrypto, ...cryptoIn }
-    nextCrypto.realizedGainCents = computeRealizedGainCents(nextCrypto)
-    merged.crypto = nextCrypto
+    nextCrypto["realizedGainCents"] = computeRealizedGainCents(nextCrypto)
+    merged["crypto"] = nextCrypto
   }
 
-  target.extra = merged as TransactionCandidate["extra"]
+  target.extra = merged as NonNullable<TransactionCandidate["extra"]>
 }
 
 function computeRealizedGainCents(crypto: Record<string, unknown>): number | null {
-  const price = crypto.pricePerUnit
-  const cost = crypto.costBasisPerUnit
-  const qtyRaw = crypto.quantity
+  const price = crypto["pricePerUnit"]
+  const cost = crypto["costBasisPerUnit"]
+  const qtyRaw = crypto["quantity"]
   if (typeof price !== "number" || typeof cost !== "number") return null
   if (typeof qtyRaw !== "string" && typeof qtyRaw !== "number") return null
   const qty = typeof qtyRaw === "string" ? Number(qtyRaw) : qtyRaw

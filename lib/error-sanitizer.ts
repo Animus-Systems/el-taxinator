@@ -65,10 +65,13 @@ const GENERIC_MESSAGES: Record<string, string> = {
  * // Input: new Error("prisma: connection refused to database")
  * // Output: "A database error occurred. Please try again later."
  */
+const UNKNOWN_MESSAGE = "An unexpected error occurred. Please try again later."
+const VALIDATION_MESSAGE = "Invalid input provided. Please check your data."
+
 export function sanitizeError(error: unknown, category?: string): string {
   // Handle null/undefined
   if (error == null) {
-    return GENERIC_MESSAGES.unknown
+    return GENERIC_MESSAGES["unknown"] ?? UNKNOWN_MESSAGE
   }
 
   // Get the error message as string
@@ -102,7 +105,7 @@ export function sanitizeError(error: unknown, category?: string): string {
     if (error instanceof Error) {
       logErrorForDebug(error, category)
     }
-    return GENERIC_MESSAGES[category]
+    return GENERIC_MESSAGES[category] ?? UNKNOWN_MESSAGE
   }
 
   // For truly unknown errors, return generic message
@@ -111,7 +114,7 @@ export function sanitizeError(error: unknown, category?: string): string {
     logErrorForDebug(error, category)
   }
 
-  return GENERIC_MESSAGES.unknown
+  return GENERIC_MESSAGES["unknown"] ?? UNKNOWN_MESSAGE
 }
 
 /**
@@ -120,20 +123,20 @@ export function sanitizeError(error: unknown, category?: string): string {
  */
 export function sanitizeValidationError(error: unknown): string {
   if (error == null) {
-    return GENERIC_MESSAGES.validation
+    return GENERIC_MESSAGES["validation"] ?? VALIDATION_MESSAGE
   }
 
   // Handle ZodError-like structures
   if (typeof error === "object" && error !== null) {
     const err = error as Record<string, unknown>
-    
+
     // Check for Zod error format
-    if (Array.isArray(err.errors)) {
-      const messages = err.errors
+    if (Array.isArray(err["errors"])) {
+      const messages = err["errors"]
         .slice(0, 3) // Limit to first 3 errors to prevent info leakage
         .map((e: Record<string, unknown>) => {
-          const path = Array.isArray(e.path) ? e.path.join(".") : String(e.path)
-          const message = String(e.message || "Invalid value")
+          const path = Array.isArray(e["path"]) ? e["path"].join(".") : String(e["path"])
+          const message = String(e["message"] || "Invalid value")
           // Don't expose field names if they contain sensitive patterns
           if (path.includes("password") || path.includes("token") || path.includes("secret")) {
             return "Invalid input in sensitive field"
@@ -144,8 +147,8 @@ export function sanitizeValidationError(error: unknown): string {
     }
 
     // Check for generic message property
-    if (typeof err.message === "string") {
-      return sanitizeError(err.message, "validation")
+    if (typeof err["message"] === "string") {
+      return sanitizeError(err["message"], "validation")
     }
   }
 

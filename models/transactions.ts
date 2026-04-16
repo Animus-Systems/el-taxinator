@@ -171,12 +171,13 @@ function mapTransactionRow(row: Record<string, unknown>): TransactionRow {
   tx.category = mapCategoryFromRow(row)
   tx.project = mapProjectFromRow(row)
   // Map account fields from aliased columns
-  if (row.account_name !== null && row.account_name !== undefined) {
-    ;(tx as Record<string, unknown>).accountName = row.account_name
-    ;(tx as Record<string, unknown>).accountBankName = row.account_bank_name ?? null
+  const txAsRecord = tx as Record<string, unknown>
+  if (row["account_name"] !== null && row["account_name"] !== undefined) {
+    txAsRecord["accountName"] = row["account_name"]
+    txAsRecord["accountBankName"] = row["account_bank_name"] ?? null
   } else {
-    ;(tx as Record<string, unknown>).accountName = null
-    ;(tx as Record<string, unknown>).accountBankName = null
+    txAsRecord["accountName"] = null
+    txAsRecord["accountBankName"] = null
   }
   return tx
 }
@@ -223,7 +224,7 @@ export const getTransactions = cache(
         `SELECT COUNT(*)::int AS count FROM transactions t ${clause}`,
         values,
       )
-      const total: number = countResult.rows[0]?.count ?? 0
+      const total: number = (countResult.rows[0]?.["count"] as number | undefined) ?? 0
 
       // Get page of results with JOINs
       const limitIdx = values.length + 1
@@ -252,8 +253,9 @@ export const getTransactionById = cache(
       `${SELECT_WITH_JOINS} WHERE t.id = $1 AND t.user_id = $2`,
       [id, userId],
     )
-    if (result.rows.length === 0) return null
-    return mapTransactionRow(result.rows[0])
+    const row = result.rows[0]
+    if (!row) return null
+    return mapTransactionRow(row)
   },
 )
 
@@ -334,6 +336,7 @@ export const deleteTransaction = async (
     )
     return transaction
   }
+  return undefined
 }
 
 export const bulkDeleteTransactions = async (ids: string[], userId: string, entityId: string) => {
@@ -356,7 +359,7 @@ export const bulkDeleteTransactions = async (ids: string[], userId: string, enti
   // Clean up orphaned files
   const allFileIds = new Set<string>()
   for (const row of txRows.rows) {
-    const files = row.files
+    const files = row["files"]
     if (Array.isArray(files)) {
       for (const fid of files) allFileIds.add(fid as string)
     }

@@ -21,8 +21,8 @@ export const getCategoryByCode = cache(async (userId: string, code: string) => {
 })
 
 export const createCategory = async (userId: string, category: CategoryData) => {
-  if (!category.code) {
-    category.code = codeFromName(category.name as string)
+  if (!category["code"]) {
+    category["code"] = codeFromName(category["name"] as string)
   }
   return queryOne<Category>(
     buildInsert("categories", { ...category, userId })

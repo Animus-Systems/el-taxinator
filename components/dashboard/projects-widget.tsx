@@ -16,9 +16,17 @@ export async function ProjectsWidget({
   statsPerProject: Record<string, ProjectStats>
 }) {
   const locale = await getLocale()
+  const emptyStats: ProjectStats = {
+    totalIncomePerCurrency: {},
+    totalExpensesPerCurrency: {},
+    profitPerCurrency: {},
+    invoicesProcessed: 0,
+  }
   return (
     <div className="grid gap-4 md:grid-cols-2">
-      {projects.map((project) => (
+      {projects.map((project) => {
+        const stats = statsPerProject[project.code] ?? emptyStats
+        return (
         <Link key={project.code} href={`/transactions?projectCode=${project.code}`}>
           <Card className="bg-gradient-to-tr from-white via-slate-50/40 to-purple-50/30 border-slate-200/60 hover:shadow-xl transition-all duration-500 hover:scale-[1.01] group cursor-pointer">
             <CardHeader className="group-hover:translate-y-[-2px] transition-transform duration-300">
@@ -36,7 +44,7 @@ export async function ProjectsWidget({
                 <div className="bg-gradient-to-br from-green-50/80 to-emerald-50/60 p-3 rounded-xl border border-green-100/50">
                   <div className="text-sm font-medium text-muted-foreground">Income</div>
                   <div className="text-2xl font-bold text-green-500">
-                    {Object.entries(statsPerProject[project.code]?.totalIncomePerCurrency).map(([currency, total]) => (
+                    {Object.entries(stats.totalIncomePerCurrency).map(([currency, total]) => (
                       <div
                         key={currency}
                         className="flex flex-col gap-2 font-bold text-green-500 text-base first:text-2xl"
@@ -44,7 +52,7 @@ export async function ProjectsWidget({
                         {formatCurrency(total, currency)}
                       </div>
                     ))}
-                    {!Object.entries(statsPerProject[project.code]?.totalIncomePerCurrency).length && (
+                    {!Object.entries(stats.totalIncomePerCurrency).length && (
                       <div className="font-bold text-base first:text-2xl">0.00</div>
                     )}
                   </div>
@@ -52,7 +60,7 @@ export async function ProjectsWidget({
                 <div className="bg-gradient-to-br from-red-50/80 to-rose-50/60 p-3 rounded-xl border border-red-100/50">
                   <div className="text-sm font-medium text-muted-foreground">Expenses</div>
                   <div className="text-2xl font-bold text-red-500">
-                    {Object.entries(statsPerProject[project.code]?.totalExpensesPerCurrency).map(
+                    {Object.entries(stats.totalExpensesPerCurrency).map(
                       ([currency, total]) => (
                         <div
                           key={currency}
@@ -62,7 +70,7 @@ export async function ProjectsWidget({
                         </div>
                       )
                     )}
-                    {!Object.entries(statsPerProject[project.code]?.totalExpensesPerCurrency).length && (
+                    {!Object.entries(stats.totalExpensesPerCurrency).length && (
                       <div className="font-bold text-base first:text-2xl">0.00</div>
                     )}
                   </div>
@@ -70,7 +78,7 @@ export async function ProjectsWidget({
                 <div className="bg-gradient-to-br from-violet-50/80 to-indigo-50/60 p-3 rounded-xl border border-violet-100/50">
                   <div className="text-sm font-medium text-muted-foreground">Profit</div>
                   <div className="text-2xl font-bold">
-                    {Object.entries(statsPerProject[project.code]?.profitPerCurrency).map(([currency, total]) => (
+                    {Object.entries(stats.profitPerCurrency).map(([currency, total]) => (
                       <div
                         key={currency}
                         className={`flex flex-col gap-2 items-center text-2xl font-bold ${
@@ -80,7 +88,7 @@ export async function ProjectsWidget({
                         {formatCurrency(total, currency)}
                       </div>
                     ))}
-                    {!Object.entries(statsPerProject[project.code]?.profitPerCurrency).length && (
+                    {!Object.entries(stats.profitPerCurrency).length && (
                       <div className="text-2xl font-bold">0.00</div>
                     )}
                   </div>
@@ -89,7 +97,8 @@ export async function ProjectsWidget({
             </CardContent>
           </Card>
         </Link>
-      ))}
+        )
+      })}
       <Link
         href="/settings/projects"
         className="flex items-center justify-center gap-2 border-dashed border-2 border-gradient-to-r rounded-lg p-6 text-muted-foreground transition-all duration-300 hover:scale-[1.02] hover:shadow-lg group"
