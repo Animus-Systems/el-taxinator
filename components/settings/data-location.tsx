@@ -6,9 +6,11 @@ import { Card, CardContent } from "@/components/ui/card"
 import { FolderOpen, Loader2, ChevronRight, HardDrive } from "lucide-react"
 import { useState, useEffect, useTransition } from "react"
 import { useTranslations } from "next-intl"
+import { useConfirm } from "@/components/ui/confirm-dialog"
 
 export function DataLocation({ currentPath }: { currentPath: string }) {
   const t = useTranslations("settings")
+  const confirm = useConfirm()
   const [browsing, setBrowsing] = useState(false)
 
   return (
@@ -32,7 +34,12 @@ export function DataLocation({ currentPath }: { currentPath: string }) {
         <FolderBrowser
           initialPath={currentPath}
           onSelect={async (selected) => {
-            if (!confirm(t("changeDataLocationConfirm"))) return
+            const ok = await confirm({
+              title: t("changeDataLocationTitle"),
+              description: t("changeDataLocationConfirm"),
+              confirmLabel: t("confirm"),
+            })
+            if (!ok) return
             try {
               await updateDataLocationAction(selected)
             } catch {

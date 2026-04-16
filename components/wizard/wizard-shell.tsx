@@ -1,5 +1,6 @@
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
+import { useConfirm } from "@/components/ui/confirm-dialog"
 import { useNavigate } from "@tanstack/react-router"
 import { trpc } from "~/trpc"
 import { Button } from "@/components/ui/button"
@@ -19,6 +20,7 @@ type Props = {
 
 export function WizardShell({ sessionId }: Props) {
   const { t } = useTranslation("wizard")
+  const confirm = useConfirm()
   const navigate = useNavigate()
   const utils = trpc.useUtils()
   const dock = useWizardDock()
@@ -172,10 +174,13 @@ export function WizardShell({ sessionId }: Props) {
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => {
-              if (window.confirm(t("confirmAbandon"))) {
-                abandonMutation.mutate({ sessionId })
-              }
+            onClick={async () => {
+              const ok = await confirm({
+                title: t("confirmAbandonTitle"),
+                description: t("confirmAbandon"),
+                confirmLabel: t("close"),
+              })
+              if (ok) abandonMutation.mutate({ sessionId })
             }}
             disabled={abandonMutation.isPending || deleteMutation.isPending || committing}
             title={t("close")}
@@ -187,10 +192,14 @@ export function WizardShell({ sessionId }: Props) {
             variant="ghost"
             size="sm"
             className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive"
-            onClick={() => {
-              if (window.confirm(t("confirmDelete"))) {
-                deleteMutation.mutate({ sessionId })
-              }
+            onClick={async () => {
+              const ok = await confirm({
+                title: t("confirmDeleteTitle"),
+                description: t("confirmDelete"),
+                confirmLabel: t("delete"),
+                variant: "destructive",
+              })
+              if (ok) deleteMutation.mutate({ sessionId })
             }}
             disabled={abandonMutation.isPending || deleteMutation.isPending || committing}
             title={t("delete")}

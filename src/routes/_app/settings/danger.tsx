@@ -7,22 +7,32 @@
  */
 import { useTranslation } from "react-i18next"
 import { Button } from "@/components/ui/button"
+import { useConfirm } from "@/components/ui/confirm-dialog"
 
 export function DangerSettingsPage() {
   const { t } = useTranslation("settings")
+  const confirm = useConfirm()
 
   const handleResetLLM = async () => {
-    // TODO: Wire up tRPC mutation for resetting LLM settings
-    if (window.confirm("Are you sure you want to reset LLM settings to defaults?")) {
-      window.location.href = "/settings/llm"
-    }
+    const ok = await confirm({
+      title: "Reset LLM settings?",
+      description: "This will reset LLM settings to defaults.",
+      confirmLabel: "Reset",
+      variant: "destructive",
+    })
+    if (!ok) return
+    window.location.href = "/settings/llm"
   }
 
   const handleResetFieldsAndCategories = async () => {
-    // TODO: Wire up tRPC mutation for resetting fields, currencies, categories
-    if (window.confirm("Are you sure you want to reset fields, currencies, and categories to defaults?")) {
-      window.location.href = "/settings/fields"
-    }
+    const ok = await confirm({
+      title: "Reset fields, currencies, and categories?",
+      description: "This will reset fields, currencies, and categories to defaults.",
+      confirmLabel: "Reset",
+      variant: "destructive",
+    })
+    if (!ok) return
+    window.location.href = "/settings/fields"
   }
 
   return (

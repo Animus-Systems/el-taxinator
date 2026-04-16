@@ -16,6 +16,7 @@ import { Loader2, Save, Trash2 } from "lucide-react"
 import { useRouter } from "@/lib/navigation"
 import { startTransition, useActionState, useEffect, useMemo, useState } from "react"
 import { useTranslations, useLocale } from "next-intl"
+import { useConfirm } from "@/components/ui/confirm-dialog"
 import { getLocalizedValue } from "@/lib/i18n-db"
 
 export default function TransactionEditForm({
@@ -35,6 +36,7 @@ export default function TransactionEditForm({
 }) {
   const router = useRouter()
   const t = useTranslations("transactions")
+  const confirm = useConfirm()
   const locale = useLocale()
   const [deleteState, deleteAction, isDeleting] = useActionState(deleteTransactionAction, null)
   const [saveState, saveAction, isSaving] = useActionState(saveTransactionAction, null)
@@ -82,12 +84,17 @@ export default function TransactionEditForm({
   }
 
   const handleDelete = async () => {
-    if (confirm(t("confirmDeletePermanent"))) {
-      startTransition(async () => {
-        await deleteAction(transaction.id)
-        router.back()
-      })
-    }
+    const ok = await confirm({
+      title: t("confirmDeletePermanentTitle"),
+      description: t("confirmDeletePermanent"),
+      confirmLabel: t("delete"),
+      variant: "destructive",
+    })
+    if (!ok) return
+    startTransition(async () => {
+      await deleteAction(transaction.id)
+      router.back()
+    })
   }
 
   useEffect(() => {

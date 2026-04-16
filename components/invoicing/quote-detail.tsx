@@ -13,6 +13,7 @@ import { Link, useRouter } from "@/lib/navigation"
 import { useTransition } from "react"
 import { useTranslations } from "next-intl"
 import { toast } from "sonner"
+import { useConfirm } from "@/components/ui/confirm-dialog"
 
 export function QuoteDetail({
   quote,
@@ -21,11 +22,18 @@ export function QuoteDetail({
 }) {
   const router = useRouter()
   const t = useTranslations("quotes")
+  const confirm = useConfirm()
   const [isPending, startTransition] = useTransition()
   const { subtotal, vatTotal, total } = calcInvoiceTotals(quote.items)
 
   async function handleDelete() {
-    if (!confirm(t("deleteConfirm"))) return
+    const ok = await confirm({
+      title: t("deleteConfirmTitle"),
+      description: t("deleteConfirm"),
+      confirmLabel: t("delete"),
+      variant: "destructive",
+    })
+    if (!ok) return
     startTransition(async () => {
       const result = await deleteQuoteAction(null, quote.id)
       if (result.success) {

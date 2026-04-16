@@ -38,6 +38,7 @@ export type InvoiceItemData = {
 export type InvoiceData = {
   clientId?: string | null
   quoteId?: string | null
+  pdfFileId?: string | null
   number: string
   status?: string
   issueDate: Date
@@ -319,6 +320,24 @@ export async function deleteInvoice(id: string, userId: string) {
   await execute(sql`DELETE FROM invoice_items WHERE invoice_id = ${id}`)
   return queryOne<Invoice>(
     sql`DELETE FROM invoices WHERE id = ${id} AND user_id = ${userId} RETURNING *`,
+  )
+}
+
+/**
+ * Set (or clear) the attached PDF reference on an existing invoice.
+ * Used by the "re-attach PDF" flow on the invoice detail page after an
+ * orphaned file was deleted or a different PDF needs to replace the current.
+ */
+export async function setInvoicePdfFileId(
+  id: string,
+  userId: string,
+  pdfFileId: string | null,
+): Promise<Invoice | null> {
+  return queryOne<Invoice>(
+    sql`UPDATE invoices
+        SET pdf_file_id = ${pdfFileId}, updated_at = now()
+        WHERE id = ${id} AND user_id = ${userId}
+        RETURNING *`,
   )
 }
 

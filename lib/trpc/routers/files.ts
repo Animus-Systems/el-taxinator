@@ -15,6 +15,8 @@ const fileStatusFilterSchema = z.enum(["all", "unreviewed", "linked", "orphan"])
 const fileWithLinkSchema = fileSchema.extend({
   linkedTransactionId: z.string().nullable(),
   linkedTransactionName: z.string().nullable(),
+  linkedInvoiceId: z.string().nullable(),
+  linkedInvoiceNumber: z.string().nullable(),
 })
 
 const filesListOutputSchema = z.object({

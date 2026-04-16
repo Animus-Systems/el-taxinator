@@ -9,13 +9,21 @@ import { useState } from "react"
 import { useTranslations } from "next-intl"
 import { toast } from "sonner"
 import { EditProductDialog } from "./edit-product-dialog"
+import { useConfirm } from "@/components/ui/confirm-dialog"
 
 export function ProductList({ products }: { products: Product[] }) {
   const t = useTranslations("products")
+  const confirm = useConfirm()
   const [editingProduct, setEditingProduct] = useState<Product | null>(null)
 
   async function handleDelete(productId: string) {
-    if (!confirm(t("deleteProduct"))) return
+    const ok = await confirm({
+      title: t("deleteProductTitle"),
+      description: t("deleteProduct"),
+      confirmLabel: t("delete"),
+      variant: "destructive",
+    })
+    if (!ok) return
     const result = await deleteProductAction(null, productId)
     if (result.success) {
       toast.success(t("productDeleted"))

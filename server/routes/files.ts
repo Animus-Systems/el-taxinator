@@ -57,7 +57,7 @@ export async function filesRoutes(app: FastifyInstance) {
     }
   })
 
-  // ─── Download (stream original bytes) ────────────────────────────────
+  // ─── Download (stream original bytes, attachment disposition) ────────
   app.get<{ Params: { id: string } }>("/files/download/:id", async (request, reply) => {
     try {
       const user = await getOrCreateSelfHostedUser()
@@ -80,6 +80,33 @@ export async function filesRoutes(app: FastifyInstance) {
       console.error("[files/download] Error:", error)
       return reply.code(500).send({
         error: error instanceof Error ? error.message : "Download failed",
+      })
+    }
+  })
+
+  // ─── View (same bytes, inline disposition so iframes render the PDF) ─
+  app.get<{ Params: { id: string } }>("/files/view/:id", async (request, reply) => {
+    try {
+      const user = await getOrCreateSelfHostedUser()
+      if (!user) return reply.code(401).send({ error: "Not authenticated" })
+
+      const file = await getFileById(request.params.id, user.id)
+      if (!file) return reply.code(404).send({ error: "File not found" })
+
+      const entityId = await getActiveEntityId()
+      const abs = fullPathForFile(entityId, file)
+      const stats = await stat(abs).catch(() => null)
+      if (!stats) return reply.code(404).send({ error: "File bytes missing on disk" })
+
+      const safeFilename = file.filename.replace(/["\\]/g, "_")
+      reply.header("Content-Type", file.mimetype || "application/octet-stream")
+      reply.header("Content-Length", String(stats.size))
+      reply.header("Content-Disposition", `inline; filename="${safeFilename}"`)
+      return reply.send(createReadStream(abs))
+    } catch (error) {
+      console.error("[files/view] Error:", error)
+      return reply.code(500).send({
+        error: error instanceof Error ? error.message : "View failed",
       })
     }
   })

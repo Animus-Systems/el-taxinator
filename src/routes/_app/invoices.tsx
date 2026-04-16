@@ -7,6 +7,7 @@ import { useTranslation } from "react-i18next"
 import type { ComponentProps } from "react"
 import { trpc } from "~/trpc"
 import { InvoiceList } from "@/components/invoicing/invoice-list"
+import { UploadExternalInvoiceDialog } from "@/components/invoicing/upload-external-invoice-dialog"
 import { Button } from "@/components/ui/button"
 import { Plus } from "lucide-react"
 import { Link } from "@/lib/navigation"
@@ -51,6 +52,10 @@ export function InvoicesPage() {
           <Button asChild variant="outline">
             <Link href="/quotes">{tQuotes("title")}</Link>
           </Button>
+          <Button asChild variant="outline">
+            <Link href="/reconcile">{t("reconcile.trigger")}</Link>
+          </Button>
+          <UploadExternalInvoiceDialog triggerLabel={t("uploadExternal.trigger")} />
           <Button asChild>
             <Link href="/invoices/new">
               <Plus /> <span className="hidden md:block">{t("newInvoice")}</span>

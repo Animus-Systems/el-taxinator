@@ -41,6 +41,8 @@ export type FilesListOptions = {
 export type FileWithLink = File & {
   linkedTransactionId: string | null
   linkedTransactionName: string | null
+  linkedInvoiceId: string | null
+  linkedInvoiceNumber: string | null
 }
 
 export type FilesListResult = {
@@ -50,10 +52,13 @@ export type FilesListResult = {
 
 /**
  * Paginated list of every file this user owns, plus the linked-transaction
- * pointer (if any) and filtering by reviewed/linked/orphan status.
+ * and linked-invoice pointers (if any), and filtering by status.
  *
- * `linked` = file id appears in any transaction's `files` jsonb array.
- * `orphan` = reviewed but not linked to any transaction.
+ * A file is considered "linked" if either:
+ *   - its id appears in any transaction's `files` jsonb array, OR
+ *   - it is referenced by an invoice's `pdf_file_id`.
+ *
+ * `orphan` = reviewed but not linked to any transaction nor invoice.
  * `unreviewed` = `is_reviewed = false`.
  */
 export const getFiles = async (userId: string, options: FilesListOptions): Promise<FilesListResult> => {
@@ -75,14 +80,16 @@ export const getFiles = async (userId: string, options: FilesListOptions): Promi
   if (status === "unreviewed") {
     conditions.push("f.is_reviewed = false")
   } else if (status === "linked") {
-    conditions.push("lt.id IS NOT NULL")
+    conditions.push("(lt.id IS NOT NULL OR li.id IS NOT NULL)")
   } else if (status === "orphan") {
-    conditions.push("lt.id IS NULL AND f.is_reviewed = true")
+    conditions.push("lt.id IS NULL AND li.id IS NULL AND f.is_reviewed = true")
   }
 
   const whereClause = conditions.join(" AND ")
 
-  // LATERAL join resolves the linked transaction (if any) once per file.
+  // Two LATERAL joins: one for the transaction that references this file in
+  // its `files` jsonb array, and one for the invoice that has this file as
+  // its `pdf_file_id`. Either (or both) makes the file "linked".
   const fromClause = `
     FROM files f
     LEFT JOIN LATERAL (
@@ -91,6 +98,12 @@ export const getFiles = async (userId: string, options: FilesListOptions): Promi
       WHERE t.user_id = f.user_id AND t.files ? f.id::text
       LIMIT 1
     ) lt ON TRUE
+    LEFT JOIN LATERAL (
+      SELECT i.id, i.number
+      FROM invoices i
+      WHERE i.user_id = f.user_id AND i.pdf_file_id = f.id
+      LIMIT 1
+    ) li ON TRUE
     WHERE ${whereClause}
   `
 
@@ -100,7 +113,9 @@ export const getFiles = async (userId: string, options: FilesListOptions): Promi
   const offsetPlaceholder = `$${params.length}`
 
   const rowsResult = await pool.query(
-    `SELECT f.*, lt.id AS linked_transaction_id, lt.name AS linked_transaction_name
+    `SELECT f.*,
+            lt.id AS linked_transaction_id, lt.name AS linked_transaction_name,
+            li.id AS linked_invoice_id, li.number AS linked_invoice_number
      ${fromClause}
      ORDER BY f.created_at DESC
      LIMIT ${limitPlaceholder} OFFSET ${offsetPlaceholder}`,
@@ -115,12 +130,16 @@ export const getFiles = async (userId: string, options: FilesListOptions): Promi
 
   const files: FileWithLink[] = rowsResult.rows.map((row) => {
     const file = mapRow<File>(row)
-    const linkedId = row["linked_transaction_id"]
-    const linkedName = row["linked_transaction_name"]
+    const linkedTxId = row["linked_transaction_id"]
+    const linkedTxName = row["linked_transaction_name"]
+    const linkedInvId = row["linked_invoice_id"]
+    const linkedInvNumber = row["linked_invoice_number"]
     return {
       ...file,
-      linkedTransactionId: typeof linkedId === "string" ? linkedId : null,
-      linkedTransactionName: typeof linkedName === "string" ? linkedName : null,
+      linkedTransactionId: typeof linkedTxId === "string" ? linkedTxId : null,
+      linkedTransactionName: typeof linkedTxName === "string" ? linkedTxName : null,
+      linkedInvoiceId: typeof linkedInvId === "string" ? linkedInvId : null,
+      linkedInvoiceNumber: typeof linkedInvNumber === "string" ? linkedInvNumber : null,
     }
   })
 

@@ -1,6 +1,6 @@
 <div align="center"><a name="readme-top"></a>
 
-<img src="public/logo/512.png" alt="" width="320">
+<img src="public/logo/readme-hero.webp" alt="El Taxinator" width="480">
 
 <br>
 

@@ -3,7 +3,8 @@ import { Link } from "@tanstack/react-router"
 import { trpc } from "~/trpc"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Download, FileText, History, Loader2 } from "lucide-react"
+import { Archive, Download, FileText, History, Loader2 } from "lucide-react"
+import { useConfirm } from "@/components/ui/confirm-dialog"
 
 function formatDate(d: Date | string | null | undefined): string {
   if (!d) return "—"
@@ -19,7 +20,25 @@ function formatDate(d: Date | string | null | undefined): string {
 
 export function ReportsPage() {
   const { t } = useTranslation("reports")
+  const confirm = useConfirm()
+  const utils = trpc.useUtils()
   const { data: sessions = [], isLoading } = trpc.wizard.listCommitted.useQuery({})
+  const archive = trpc.wizard.abandonSession.useMutation({
+    onSuccess: () => {
+      utils.wizard.listCommitted.invalidate()
+      utils.wizard.listArchived.invalidate()
+    },
+  })
+
+  const onArchive = async (id: string) => {
+    const ok = await confirm({
+      title: t("archiveConfirmTitle"),
+      description: t("archiveConfirm"),
+      confirmLabel: t("archive"),
+    })
+    if (!ok) return
+    archive.mutate({ sessionId: id })
+  }
 
   return (
     <div className="mx-auto w-full max-w-5xl space-y-6 py-4">
@@ -78,6 +97,16 @@ export function ReportsPage() {
                     <Download className="h-4 w-4 mr-1.5" />
                     {t("downloadPdf")}
                   </a>
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => onArchive(s.id)}
+                  disabled={archive.isPending && archive.variables?.sessionId === s.id}
+                  aria-label={t("archive")}
+                >
+                  <Archive className="h-4 w-4 mr-1.5" />
+                  {archive.isPending && archive.variables?.sessionId === s.id ? t("archiving") : t("archive")}
                 </Button>
               </div>
             </div>

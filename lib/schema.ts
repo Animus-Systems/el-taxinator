@@ -15,7 +15,7 @@ import path from "path"
 // 2. Add a migration entry here with the next version number
 // 3. The migration SQL should be idempotent (use IF NOT EXISTS, etc.)
 
-const SCHEMA_VERSION = 10 // bump this when adding a migration
+const SCHEMA_VERSION = 13 // bump this when adding a migration
 
 const migrations: { version: number; description: string; sql: string }[] = [
   {
@@ -283,6 +283,52 @@ const migrations: { version: number; description: string; sql: string }[] = [
       CREATE INDEX IF NOT EXISTS import_sessions_file_id_idx
         ON import_sessions (file_id)
         WHERE file_id IS NOT NULL;
+    `,
+  },
+  {
+    version: 11,
+    description: "Link invoices to uploaded PDF file",
+    sql: `
+      ALTER TABLE invoices
+        ADD COLUMN IF NOT EXISTS pdf_file_id uuid REFERENCES files(id) ON DELETE SET NULL;
+      CREATE INDEX IF NOT EXISTS invoices_pdf_file_id_idx
+        ON invoices (pdf_file_id)
+        WHERE pdf_file_id IS NOT NULL;
+    `,
+  },
+  {
+    version: 12,
+    description: "Give updated_at columns a CURRENT_TIMESTAMP default",
+    sql: `
+      ALTER TABLE clients             ALTER COLUMN updated_at SET DEFAULT CURRENT_TIMESTAMP;
+      ALTER TABLE products            ALTER COLUMN updated_at SET DEFAULT CURRENT_TIMESTAMP;
+      ALTER TABLE quotes              ALTER COLUMN updated_at SET DEFAULT CURRENT_TIMESTAMP;
+      ALTER TABLE invoices            ALTER COLUMN updated_at SET DEFAULT CURRENT_TIMESTAMP;
+      ALTER TABLE accountant_invites  ALTER COLUMN updated_at SET DEFAULT CURRENT_TIMESTAMP;
+      ALTER TABLE accountant_comments ALTER COLUMN updated_at SET DEFAULT CURRENT_TIMESTAMP;
+    `,
+  },
+  {
+    version: 13,
+    description: "Invoice ↔ transaction allocation table",
+    sql: `
+      CREATE TABLE IF NOT EXISTS invoice_payments (
+        id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
+        user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        invoice_id uuid NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
+        transaction_id uuid NOT NULL REFERENCES transactions(id) ON DELETE CASCADE,
+        amount_cents bigint NOT NULL,
+        note text,
+        source text NOT NULL DEFAULT 'manual',
+        created_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL,
+        UNIQUE (invoice_id, transaction_id)
+      );
+      CREATE INDEX IF NOT EXISTS invoice_payments_user_idx
+        ON invoice_payments (user_id);
+      CREATE INDEX IF NOT EXISTS invoice_payments_invoice_idx
+        ON invoice_payments (invoice_id);
+      CREATE INDEX IF NOT EXISTS invoice_payments_transaction_idx
+        ON invoice_payments (transaction_id);
     `,
   },
 ]

@@ -8,11 +8,16 @@ import { calcInvoiceTotals } from "@/lib/invoice-calculations"
 import { formatCurrency } from "@/lib/utils"
 import type { InvoiceWithRelations } from "@/models/invoices"
 import { format } from "date-fns"
-import { ArrowLeft, Download, Trash2 } from "lucide-react"
+import { ArrowLeft, Download, Eye, Link2, Paperclip, RefreshCw, Trash2, X } from "lucide-react"
 import { Link, useRouter } from "@/lib/navigation"
-import { useTransition } from "react"
+import { useRef, useState, useTransition } from "react"
 import { useTranslations } from "next-intl"
 import { toast } from "sonner"
+import { trpc } from "~/trpc"
+import { LinkInvoiceToTransactionDialog } from "./link-invoice-to-transaction-dialog"
+import { PdfPreviewDialog } from "./pdf-preview-dialog"
+import { AttachPdfDialog } from "./attach-pdf-dialog"
+import { useConfirm } from "@/components/ui/confirm-dialog"
 
 const STATUSES = ["draft", "sent", "paid", "overdue", "cancelled"] as const
 
@@ -23,8 +28,96 @@ export function InvoiceDetail({
 }) {
   const router = useRouter()
   const t = useTranslations("invoices")
+  const confirm = useConfirm()
   const [isPending, startTransition] = useTransition()
   const { subtotal, vatTotal, total } = calcInvoiceTotals(invoice.items)
+
+  const utils = trpc.useUtils()
+  const { data: payments = [] } = trpc.invoicePayments.listForInvoice.useQuery({
+    invoiceId: invoice.id,
+  })
+  const deletePayment = trpc.invoicePayments.delete.useMutation({
+    onSuccess: () => {
+      utils.invoicePayments.listForInvoice.invalidate({ invoiceId: invoice.id })
+      utils.invoices.getById.invalidate({ id: invoice.id })
+      utils.invoices.list.invalidate()
+      router.refresh()
+    },
+  })
+  const allocated = payments.reduce((sum, p) => sum + p.amountCents, 0)
+  const invoiceTotalCents = Math.round(total)
+  const outstanding = Math.max(invoiceTotalCents - allocated, 0)
+  const [linkOpen, setLinkOpen] = useState(false)
+  const attachInputRef = useRef<HTMLInputElement | null>(null)
+  const [isAttaching, setIsAttaching] = useState(false)
+  const [attachDialogOpen, setAttachDialogOpen] = useState(false)
+  const [previewOpen, setPreviewOpen] = useState(false)
+  const [previewOverrideFileId, setPreviewOverrideFileId] = useState<string | null>(null)
+  const [isRegenerating, setIsRegenerating] = useState(false)
+
+  async function onRegenerate() {
+    const ok = await confirm({
+      title: t("attachPdf.regenerateConfirmTitle"),
+      description: t("attachPdf.regenerateConfirm"),
+      confirmLabel: t("attachPdf.regenerate"),
+    })
+    if (!ok) return
+    setIsRegenerating(true)
+    try {
+      const res = await fetch(`/api/invoices/${invoice.id}/regenerate-pdf`, {
+        method: "POST",
+      })
+      const data = (await res.json()) as {
+        success: boolean
+        fileId?: string
+        error?: string
+      }
+      if (!res.ok || !data.success) {
+        toast.error(data.error ?? `Regenerate failed (${res.status})`)
+        return
+      }
+      toast.success(t("attachPdf.regenerateSuccess"))
+      utils.invoices.getById.invalidate({ id: invoice.id })
+      utils.invoices.list.invalidate()
+      router.refresh()
+      if (data.fileId) {
+        setPreviewOverrideFileId(data.fileId)
+        setPreviewOpen(true)
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : String(err))
+    } finally {
+      setIsRegenerating(false)
+    }
+  }
+
+  async function onAttachPdf(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setIsAttaching(true)
+    const body = new FormData()
+    body.append("file", file)
+    try {
+      const res = await fetch(`/api/invoices/${invoice.id}/attach-pdf`, {
+        method: "POST",
+        body,
+      })
+      const data = (await res.json()) as { success: boolean; error?: string }
+      if (!res.ok || !data.success) {
+        toast.error(data.error ?? `Upload failed (${res.status})`)
+        return
+      }
+      toast.success(t("attachPdf.success"))
+      utils.invoices.getById.invalidate({ id: invoice.id })
+      utils.invoices.list.invalidate()
+      router.refresh()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : String(err))
+    } finally {
+      setIsAttaching(false)
+      if (attachInputRef.current) attachInputRef.current.value = ""
+    }
+  }
 
   function handleStatusChange(status: string) {
     const formData = new FormData()
@@ -42,7 +135,13 @@ export function InvoiceDetail({
   }
 
   async function handleDelete() {
-    if (!confirm(t("deleteConfirm"))) return
+    const ok = await confirm({
+      title: t("deleteConfirmTitle"),
+      description: t("deleteConfirm"),
+      confirmLabel: t("delete"),
+      variant: "destructive",
+    })
+    if (!ok) return
     startTransition(async () => {
       const result = await deleteInvoiceAction(null, invoice.id)
       if (result.success) {
@@ -79,11 +178,6 @@ export function InvoiceDetail({
               ))}
             </SelectContent>
           </Select>
-          <Button asChild variant="outline" size="icon">
-            <Link href={`/api/invoices/${invoice.id}/pdf`} target="_blank">
-              <Download className="h-4 w-4" />
-            </Link>
-          </Button>
           <Button variant="ghost" size="icon" onClick={handleDelete} disabled={isPending}>
             <Trash2 className="h-4 w-4" />
           </Button>
@@ -169,6 +263,183 @@ export function InvoiceDetail({
           <p className="text-sm whitespace-pre-wrap">{invoice.notes}</p>
         </div>
       )}
+
+      <div className="space-y-2 p-4 border rounded-lg">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-medium">{t("payments.heading")}</p>
+            <p className="text-xs text-muted-foreground">
+              {t("payments.outstanding", {
+                allocated: formatCurrency(allocated, "EUR"),
+                total: formatCurrency(invoiceTotalCents, "EUR"),
+                outstanding: formatCurrency(outstanding, "EUR"),
+              })}
+            </p>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setLinkOpen(true)}
+            disabled={outstanding <= 0}
+          >
+            <Link2 className="mr-1.5 h-4 w-4" />
+            {t("payments.linkButton")}
+          </Button>
+        </div>
+        {payments.length > 0 && (
+          <ul className="divide-y rounded-md border">
+            {payments.map((p) => (
+              <li key={p.id} className="flex items-center justify-between px-3 py-2 text-sm">
+                <div className="flex min-w-0 flex-col">
+                  <Link
+                    href={`/transactions/${p.transactionId}`}
+                    className="truncate text-primary underline-offset-2 hover:underline"
+                  >
+                    {t("payments.transactionLink")}
+                  </Link>
+                  <span className="text-xs text-muted-foreground">
+                    {format(p.createdAt, "yyyy-MM-dd HH:mm")}
+                    {p.source === "ai" ? ` · ${t("payments.sourceAi")}` : ""}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="font-medium">{formatCurrency(p.amountCents, "EUR")}</span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => deletePayment.mutate({ id: p.id })}
+                    disabled={deletePayment.isPending}
+                    aria-label={t("payments.unlink")}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      <LinkInvoiceToTransactionDialog
+        open={linkOpen}
+        onOpenChange={setLinkOpen}
+        invoiceId={invoice.id}
+        invoiceTotalCents={invoiceTotalCents}
+        invoiceAllocatedCents={allocated}
+        invoiceCurrency="EUR"
+        onLinked={() => {
+          utils.invoicePayments.listForInvoice.invalidate({ invoiceId: invoice.id })
+          utils.invoices.getById.invalidate({ id: invoice.id })
+          utils.invoices.list.invalidate()
+          router.refresh()
+        }}
+      />
+
+      <input
+        ref={attachInputRef}
+        type="file"
+        accept="application/pdf,image/*"
+        className="hidden"
+        onChange={onAttachPdf}
+      />
+
+      {invoice.pdfFileId ? (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-4">
+          <div>
+            <p className="text-sm font-medium">{t("preview.attachedPdf")}</p>
+            <p className="text-xs text-muted-foreground">{t("attachPdf.rowHint")}</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setPreviewOpen(true)}
+            >
+              <Eye className="mr-1.5 h-4 w-4" />
+              {t("attachPdf.preview")}
+            </Button>
+            <Button asChild variant="outline" size="sm">
+              <a href={`/files/download/${invoice.pdfFileId}`} download>
+                <Download className="mr-1.5 h-4 w-4" />
+                {t("preview.download")}
+              </a>
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setAttachDialogOpen(true)}
+              disabled={isAttaching}
+            >
+              <Paperclip className="mr-1.5 h-4 w-4" />
+              {isAttaching ? t("attachPdf.uploading") : t("attachPdf.replace")}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={onRegenerate}
+              disabled={isRegenerating}
+            >
+              <RefreshCw className="mr-1.5 h-4 w-4" />
+              {isRegenerating ? t("attachPdf.regenerating") : t("attachPdf.regenerate")}
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-dashed p-4">
+          <div>
+            <p className="text-sm font-medium">{t("attachPdf.noneHeading")}</p>
+            <p className="text-xs text-muted-foreground">{t("attachPdf.noneHint")}</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setAttachDialogOpen(true)}
+              disabled={isAttaching}
+            >
+              <Paperclip className="mr-1.5 h-4 w-4" />
+              {isAttaching ? t("attachPdf.uploading") : t("attachPdf.attach")}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={onRegenerate}
+              disabled={isRegenerating}
+            >
+              <RefreshCw className="mr-1.5 h-4 w-4" />
+              {isRegenerating ? t("attachPdf.regenerating") : t("attachPdf.regenerate")}
+            </Button>
+          </div>
+        </div>
+      )}
+
+      <PdfPreviewDialog
+        open={previewOpen}
+        onOpenChange={(next) => {
+          setPreviewOpen(next)
+          if (!next) setPreviewOverrideFileId(null)
+        }}
+        fileId={previewOverrideFileId ?? invoice.pdfFileId}
+        title={invoice.number}
+      />
+
+      <AttachPdfDialog
+        open={attachDialogOpen}
+        onOpenChange={setAttachDialogOpen}
+        invoiceId={invoice.id}
+        onUploadNew={() => attachInputRef.current?.click()}
+        onAttached={() => {
+          toast.success(t("attachPdf.success"))
+          router.refresh()
+        }}
+      />
 
       {invoice.quote && (
         <div className="text-sm text-muted-foreground">

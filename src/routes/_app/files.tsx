@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { formatBytes } from "@/lib/utils"
 import { Download, FileText, Loader2, Trash2, Link2 } from "lucide-react"
+import { useConfirm } from "@/components/ui/confirm-dialog"
 
 type StatusFilter = "all" | "unreviewed" | "linked" | "orphan"
 
@@ -31,6 +32,7 @@ function readSize(metadata: unknown): number {
 
 export function FilesPage() {
   const { t } = useTranslation("files")
+  const confirm = useConfirm()
   const utils = trpc.useUtils()
   const [status, setStatus] = useState<StatusFilter>("all")
   const [searchDraft, setSearchDraft] = useState("")
@@ -76,9 +78,36 @@ export function FilesPage() {
     setStatus(next)
   }
 
-  function onDelete(id: string) {
-    if (!window.confirm(t("confirmDelete"))) return
-    deleteFile.mutate({ id })
+  async function onDelete(file: {
+    id: string
+    linkedTransactionId: string | null
+    linkedTransactionName: string | null
+    linkedInvoiceId: string | null
+    linkedInvoiceNumber: string | null
+  }) {
+    const targets: string[] = []
+    if (file.linkedInvoiceId) {
+      targets.push(
+        file.linkedInvoiceNumber
+          ? t("linkedToInvoice", { number: file.linkedInvoiceNumber })
+          : t("linkedToInvoiceGeneric"),
+      )
+    }
+    if (file.linkedTransactionId) {
+      targets.push(file.linkedTransactionName ?? t("linkedToTransaction"))
+    }
+    const description =
+      targets.length > 0
+        ? t("confirmDeleteLinked", { target: targets.join(", ") })
+        : t("confirmDelete")
+    const ok = await confirm({
+      title: t("confirmDeleteTitle"),
+      description,
+      confirmLabel: t("actionDelete"),
+      variant: "destructive",
+    })
+    if (!ok) return
+    deleteFile.mutate({ id: file.id })
   }
 
   return (
@@ -151,7 +180,7 @@ export function FilesPage() {
                     <span>{formatBytes(size)}</span>
                     <span>·</span>
                     <span>{formatDate(file.createdAt)}</span>
-                    {file.linkedTransactionId ? (
+                    {file.linkedTransactionId && (
                       <>
                         <span>·</span>
                         <Link
@@ -162,12 +191,28 @@ export function FilesPage() {
                           {file.linkedTransactionName ?? t("linkedToTransaction")}
                         </Link>
                       </>
-                    ) : !file.isReviewed ? (
+                    )}
+                    {file.linkedInvoiceId && (
+                      <>
+                        <span>·</span>
+                        <Link
+                          to={`/invoices/${file.linkedInvoiceId}` as string}
+                          className="inline-flex items-center gap-1 text-primary hover:underline"
+                        >
+                          <Link2 className="h-3 w-3" />
+                          {file.linkedInvoiceNumber
+                            ? t("linkedToInvoice", { number: file.linkedInvoiceNumber })
+                            : t("linkedToInvoiceGeneric")}
+                        </Link>
+                      </>
+                    )}
+                    {!file.linkedTransactionId && !file.linkedInvoiceId && !file.isReviewed && (
                       <>
                         <span>·</span>
                         <Badge variant="outline" className="text-[10px]">{t("unreviewedBadge")}</Badge>
                       </>
-                    ) : (
+                    )}
+                    {!file.linkedTransactionId && !file.linkedInvoiceId && file.isReviewed && (
                       <>
                         <span>·</span>
                         <Badge variant="outline" className="text-[10px]">{t("orphanBadge")}</Badge>
@@ -185,7 +230,7 @@ export function FilesPage() {
                     variant="ghost"
                     size="icon"
                     aria-label={t("actionDelete")}
-                    onClick={() => onDelete(file.id)}
+                    onClick={() => onDelete(file)}
                     disabled={deleteFile.isPending}
                   >
                     <Trash2 className="h-4 w-4" />

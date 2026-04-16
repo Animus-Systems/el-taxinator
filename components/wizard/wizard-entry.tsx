@@ -1,5 +1,6 @@
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
+import { useConfirm } from "@/components/ui/confirm-dialog"
 import { useNavigate } from "@tanstack/react-router"
 import { trpc } from "~/trpc"
 import { Button } from "@/components/ui/button"
@@ -10,6 +11,7 @@ import { useWizardDock } from "@/lib/wizard-dock-context"
 
 export function WizardEntry() {
   const { t } = useTranslation("wizard")
+  const confirm = useConfirm()
   const navigate = useNavigate()
   const utils = trpc.useUtils()
   const dock = useWizardDock()
@@ -191,11 +193,15 @@ export function WizardEntry() {
                         variant="ghost"
                         size="sm"
                         className="text-destructive hover:text-destructive"
-                        onClick={(e) => {
+                        onClick={async (e) => {
                           e.stopPropagation()
-                          if (window.confirm(t("confirmDelete"))) {
-                            deleteMutation.mutate({ sessionId: s.id })
-                          }
+                          const ok = await confirm({
+                            title: t("confirmDeleteTitle"),
+                            description: t("confirmDelete"),
+                            confirmLabel: t("delete"),
+                            variant: "destructive",
+                          })
+                          if (ok) deleteMutation.mutate({ sessionId: s.id })
                         }}
                         disabled={deleteMutation.isPending}
                       >

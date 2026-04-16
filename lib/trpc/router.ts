@@ -1,6 +1,7 @@
 import { router } from "./init"
 import { transactionsRouter } from "./routers/transactions"
 import { invoicesRouter } from "./routers/invoices"
+import { invoicePaymentsRouter } from "./routers/invoice-payments"
 import { quotesRouter } from "./routers/quotes"
 import { clientsRouter } from "./routers/clients"
 import { productsRouter } from "./routers/products"
@@ -26,6 +27,7 @@ import { cryptoRouter } from "./routers/crypto"
 export const appRouter = router({
   transactions: transactionsRouter,
   invoices: invoicesRouter,
+  invoicePayments: invoicePaymentsRouter,
   quotes: quotesRouter,
   clients: clientsRouter,
   products: productsRouter,

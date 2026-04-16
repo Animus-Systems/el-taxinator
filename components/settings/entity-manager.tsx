@@ -8,6 +8,7 @@ import { Building2, Loader2, LogOut, Plus, Trash2, User } from "lucide-react"
 import { useRouter } from "@/lib/navigation"
 import { useState, useTransition } from "react"
 import { useTranslations } from "next-intl"
+import { useConfirm } from "@/components/ui/confirm-dialog"
 
 type Props = {
   entities: Entity[]
@@ -16,11 +17,18 @@ type Props = {
 export function EntityManager({ entities: initialEntities }: Props) {
   const router = useRouter()
   const t = useTranslations("settings")
+  const confirm = useConfirm()
   const [showAddForm, setShowAddForm] = useState(false)
   const [isPending, startTransition] = useTransition()
 
-  const handleRemove = (id: string, name: string) => {
-    if (!confirm(t("removeEntityConfirm", { name }))) return
+  const handleRemove = async (id: string, name: string) => {
+    const ok = await confirm({
+      title: t("removeEntityTitle"),
+      description: t("removeEntityConfirm", { name }),
+      confirmLabel: t("remove"),
+      variant: "destructive",
+    })
+    if (!ok) return
     startTransition(async () => {
       try {
         const result = await removeEntityAction(id)

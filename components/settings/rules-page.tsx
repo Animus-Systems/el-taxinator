@@ -1,6 +1,7 @@
 
 import { useState, useTransition } from "react"
 import { useTranslations } from "next-intl"
+import { useConfirm } from "@/components/ui/confirm-dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -35,6 +36,7 @@ type FormState = typeof EMPTY_FORM
 
 export function RulesPage({ rules, categories, projects }: RulesPageProps) {
   const t = useTranslations("settings")
+  const confirm = useConfirm()
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingRule, setEditingRule] = useState<CategorizationRule | null>(null)
   const [form, setForm] = useState<FormState>(EMPTY_FORM)
@@ -95,8 +97,14 @@ export function RulesPage({ rules, categories, projects }: RulesPageProps) {
     })
   }
 
-  const handleDelete = (rule: CategorizationRule) => {
-    if (!confirm(t("deleteRuleConfirm"))) return
+  const handleDelete = async (rule: CategorizationRule) => {
+    const ok = await confirm({
+      title: t("deleteRuleConfirmTitle"),
+      description: t("deleteRuleConfirm"),
+      confirmLabel: t("delete"),
+      variant: "destructive",
+    })
+    if (!ok) return
     startTransition(async () => {
       await deleteRuleAction(rule.id)
     })

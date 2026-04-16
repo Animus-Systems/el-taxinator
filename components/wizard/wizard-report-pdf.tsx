@@ -1,3 +1,6 @@
+/** @jsxRuntime automatic */
+/** @jsxImportSource react */
+
 import { Document, Page, StyleSheet, Text, View, renderToBuffer } from "@react-pdf/renderer"
 import { format } from "date-fns"
 import type { SessionReport } from "@/ai/session-report"

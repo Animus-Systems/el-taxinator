@@ -3,6 +3,7 @@ import { bulkDeleteTransactionsAction } from "@/actions/transactions"
 import { Button } from "@/components/ui/button"
 import { Trash2 } from "lucide-react"
 import { useState } from "react"
+import { useConfirm } from "@/components/ui/confirm-dialog"
 
 interface BulkActionsMenuProps {
   selectedIds: string[]
@@ -10,12 +11,18 @@ interface BulkActionsMenuProps {
 }
 
 export function BulkActionsMenu({ selectedIds, onActionComplete }: BulkActionsMenuProps) {
+  const confirm = useConfirm()
   const [isLoading, setIsLoading] = useState(false)
 
   const handleDelete = async () => {
-    const confirmMessage =
-      "Are you sure you want to delete these transactions and all their files? This action cannot be undone."
-    if (!confirm(confirmMessage)) return
+    const ok = await confirm({
+      title: `Delete ${selectedIds.length} transactions?`,
+      description:
+        "Are you sure you want to delete these transactions and all their files? This action cannot be undone.",
+      confirmLabel: "Delete",
+      variant: "destructive",
+    })
+    if (!ok) return
 
     try {
       setIsLoading(true)

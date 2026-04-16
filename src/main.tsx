@@ -4,6 +4,7 @@ import { RouterProvider } from "@tanstack/react-router"
 import { QueryClientProvider } from "@tanstack/react-query"
 import { queryClient, trpc, trpcClient } from "./trpc"
 import { router } from "./router"
+import { ConfirmDialogProvider } from "@/components/ui/confirm-dialog"
 import "./i18n"
 import "./globals.css"
 
@@ -11,7 +12,9 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <trpc.Provider client={trpcClient} queryClient={queryClient}>
       <QueryClientProvider client={queryClient}>
-        <RouterProvider router={router} />
+        <ConfirmDialogProvider>
+          <RouterProvider router={router} />
+        </ConfirmDialogProvider>
       </QueryClientProvider>
     </trpc.Provider>
   </React.StrictMode>

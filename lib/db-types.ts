@@ -534,6 +534,7 @@ export const invoiceSchema = z.object({
   userId: z.string(),
   clientId: z.string().nullable(),
   quoteId: z.string().nullable(),
+  pdfFileId: z.string().nullable(),
   number: z.string(),
   status: z.string(),
   issueDate: z.date(),
@@ -554,6 +555,17 @@ export const invoiceItemSchema = z.object({
   unitPrice: z.number(),
   vatRate: z.number(),
   position: z.number(),
+})
+
+export const invoicePaymentSchema = z.object({
+  id: z.string(),
+  userId: z.string(),
+  invoiceId: z.string(),
+  transactionId: z.string(),
+  amountCents: z.number(),
+  note: z.string().nullable(),
+  source: z.string(),
+  createdAt: z.date(),
 })
 
 export const accountantInviteSchema = z.object({
@@ -611,6 +623,7 @@ export type Quote = z.infer<typeof quoteSchema>
 export type QuoteItem = z.infer<typeof quoteItemSchema>
 export type Invoice = z.infer<typeof invoiceSchema>
 export type InvoiceItem = z.infer<typeof invoiceItemSchema>
+export type InvoicePayment = z.infer<typeof invoicePaymentSchema>
 export type AccountantInvite = z.infer<typeof accountantInviteSchema>
 export type AccountantAccessLog = z.infer<typeof accountantAccessLogSchema>
 export type AccountantComment = z.infer<typeof accountantCommentSchema>

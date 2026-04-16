@@ -6,9 +6,11 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Loader2, RefreshCw, CheckCircle2, RotateCcw, BookOpen } from "lucide-react"
 import type { KnowledgePack } from "@/lib/db-types"
+import { useConfirm } from "@/components/ui/confirm-dialog"
 
 export function KnowledgeSettingsPage() {
   const { t } = useTranslation("knowledge")
+  const confirm = useConfirm()
   const utils = trpc.useUtils()
   const { data: packs = [], isLoading } = trpc.knowledge.list.useQuery()
   const [expandedSlug, setExpandedSlug] = useState<string | null>(null)
@@ -95,10 +97,14 @@ export function KnowledgeSettingsPage() {
               onToggle={() => setExpandedSlug((s) => (s === p.slug ? null : p.slug))}
               onRefresh={() => refresh.mutate({ slug: p.slug })}
               onMarkVerified={() => markVerified.mutate({ slug: p.slug })}
-              onResetSeed={() => {
-                if (window.confirm("Reset this pack to the shipped seed content?")) {
-                  resetToSeed.mutate({ slug: p.slug })
-                }
+              onResetSeed={async () => {
+                const ok = await confirm({
+                  title: "Reset knowledge pack?",
+                  description: "Reset this pack to the shipped seed content?",
+                  confirmLabel: "Reset",
+                  variant: "destructive",
+                })
+                if (ok) resetToSeed.mutate({ slug: p.slug })
               }}
               isRefreshing={refreshingSlug === p.slug}
               t={t}

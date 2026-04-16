@@ -7,12 +7,20 @@ import { Pencil, Trash2 } from "lucide-react"
 import { useState } from "react"
 import { toast } from "sonner"
 import { EditClientDialog } from "./edit-client-dialog"
+import { useConfirm } from "@/components/ui/confirm-dialog"
 
 export function ClientList({ clients }: { clients: Client[] }) {
+  const confirm = useConfirm()
   const [editingClient, setEditingClient] = useState<Client | null>(null)
 
   async function handleDelete(clientId: string) {
-    if (!confirm("Delete this client?")) return
+    const ok = await confirm({
+      title: "Delete client?",
+      description: "Delete this client? This cannot be undone.",
+      confirmLabel: "Delete",
+      variant: "destructive",
+    })
+    if (!ok) return
     const result = await deleteClientAction(null, clientId)
     if (result.success) {
       toast.success("Client deleted")

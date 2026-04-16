@@ -1,7 +1,32 @@
+/** @jsxRuntime automatic */
+/** @jsxImportSource react */
+
 import { calcInvoiceTotals } from "@/lib/invoice-calculations"
 import type { InvoiceWithRelations } from "@/models/invoices"
-import { Document, Page, StyleSheet, Text, View } from "@react-pdf/renderer"
+import { Document, Page, StyleSheet, Text, View, renderToBuffer } from "@react-pdf/renderer"
 import { format } from "date-fns"
+
+/**
+ * Render an invoice to a PDF Buffer. Kept in the .tsx file so the JSX
+ * flows naturally; server code calls this to get bytes it can persist.
+ */
+export async function renderInvoicePdfBuffer(
+  invoice: InvoiceWithRelations,
+  options?: {
+    businessName?: string
+    businessAddress?: string
+    businessTaxId?: string
+  },
+): Promise<Buffer> {
+  return renderToBuffer(
+    <InvoicePDF
+      invoice={invoice}
+      {...(options?.businessName !== undefined && { businessName: options.businessName })}
+      {...(options?.businessAddress !== undefined && { businessAddress: options.businessAddress })}
+      {...(options?.businessTaxId !== undefined && { businessTaxId: options.businessTaxId })}
+    />,
+  )
+}
 
 const styles = StyleSheet.create({
   page: { padding: 48, fontSize: 10, fontFamily: "Helvetica", color: "#111" },

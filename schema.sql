@@ -188,7 +188,7 @@ CREATE TABLE clients (
     tax_id text,
     notes text,
     created_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    updated_at timestamp(3) NOT NULL
+    updated_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
 CREATE INDEX clients_user_id_idx ON clients (user_id);
 
@@ -202,7 +202,7 @@ CREATE TABLE products (
     vat_rate double precision DEFAULT 7.0 NOT NULL,
     unit text,
     created_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    updated_at timestamp(3) NOT NULL
+    updated_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
 CREATE INDEX products_user_id_idx ON products (user_id);
 
@@ -216,7 +216,7 @@ CREATE TABLE quotes (
     expiry_date timestamp(3),
     notes text,
     created_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    updated_at timestamp(3) NOT NULL
+    updated_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
 CREATE INDEX quotes_user_id_idx ON quotes (user_id);
 
@@ -236,6 +236,7 @@ CREATE TABLE invoices (
     user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     client_id uuid REFERENCES clients(id) ON DELETE SET NULL,
     quote_id uuid UNIQUE REFERENCES quotes(id) ON DELETE SET NULL,
+    pdf_file_id uuid REFERENCES files(id) ON DELETE SET NULL,
     number text NOT NULL,
     status text DEFAULT 'draft' NOT NULL,
     issue_date timestamp(3) NOT NULL,
@@ -243,10 +244,11 @@ CREATE TABLE invoices (
     paid_at timestamp(3),
     notes text,
     created_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    updated_at timestamp(3) NOT NULL,
+    updated_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL,
     irpf_rate double precision DEFAULT 0.0 NOT NULL
 );
 CREATE INDEX invoices_user_id_idx ON invoices (user_id);
+CREATE INDEX invoices_pdf_file_id_idx ON invoices (pdf_file_id) WHERE pdf_file_id IS NOT NULL;
 
 CREATE TABLE invoice_items (
     id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
@@ -258,6 +260,21 @@ CREATE TABLE invoice_items (
     vat_rate double precision DEFAULT 7.0 NOT NULL,
     "position" integer DEFAULT 0 NOT NULL
 );
+
+CREATE TABLE invoice_payments (
+    id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
+    user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    invoice_id uuid NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
+    transaction_id uuid NOT NULL REFERENCES transactions(id) ON DELETE CASCADE,
+    amount_cents bigint NOT NULL,
+    note text,
+    source text DEFAULT 'manual' NOT NULL,
+    created_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    UNIQUE (invoice_id, transaction_id)
+);
+CREATE INDEX invoice_payments_user_idx ON invoice_payments (user_id);
+CREATE INDEX invoice_payments_invoice_idx ON invoice_payments (invoice_id);
+CREATE INDEX invoice_payments_transaction_idx ON invoice_payments (transaction_id);
 
 -- ─── Accountant Access ───────────────────────────────────────────────────────
 
@@ -271,7 +288,7 @@ CREATE TABLE accountant_invites (
     is_active boolean DEFAULT true NOT NULL,
     expires_at timestamp(3),
     created_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    updated_at timestamp(3) NOT NULL
+    updated_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
 CREATE UNIQUE INDEX accountant_invites_token_key ON accountant_invites (token);
 CREATE INDEX accountant_invites_user_id_idx ON accountant_invites (user_id);
@@ -295,7 +312,7 @@ CREATE TABLE accountant_comments (
     entity_id text NOT NULL,
     body text NOT NULL,
     created_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    updated_at timestamp(3) NOT NULL
+    updated_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
 CREATE INDEX accountant_comments_invite_id_idx ON accountant_comments (invite_id);
 CREATE INDEX accountant_comments_entity_type_entity_id_idx ON accountant_comments (entity_type, entity_id);

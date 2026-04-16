@@ -9,6 +9,7 @@ import type { AccountantPermissions } from "@/models/accountants"
 import { createInviteAction, deleteInviteAction, reactivateInviteAction, revokeInviteAction } from "@/actions/accountant"
 import { Check, Copy, Link, Plus, Trash2, UserX, UserCheck } from "lucide-react"
 import { useTranslations } from "next-intl"
+import { useConfirm } from "@/components/ui/confirm-dialog"
 
 type InviteWithUrl = {
   id: string
@@ -52,6 +53,7 @@ function PermissionBadge({ label, enabled }: { label: string; enabled: boolean }
 
 function InviteCard({ invite }: { invite: InviteWithUrl }) {
   const t = useTranslations("accountantInvite")
+  const confirm = useConfirm()
   const [pending, setPending] = useState(false)
 
   async function handleRevoke() {
@@ -65,7 +67,13 @@ function InviteCard({ invite }: { invite: InviteWithUrl }) {
     setPending(false)
   }
   async function handleDelete() {
-    if (!confirm(t("deleteConfirm", { name: invite.name }))) return
+    const ok = await confirm({
+      title: t("deleteConfirmTitle"),
+      description: t("deleteConfirm", { name: invite.name }),
+      confirmLabel: t("delete"),
+      variant: "destructive",
+    })
+    if (!ok) return
     setPending(true)
     await deleteInviteAction(invite.id)
     setPending(false)

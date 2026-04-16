@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { TRPCError } from "@trpc/server"
 import { router, authedProcedure } from "../init"
 import {
   getInvoices,
@@ -8,7 +9,9 @@ import {
   updateInvoiceStatus,
   deleteInvoice,
   convertQuoteToInvoice,
+  setInvoicePdfFileId,
 } from "@/models/invoices"
+import { getFileById } from "@/models/files"
 import type { InvoiceData } from "@/models/invoices"
 import {
   invoiceSchema,
@@ -42,6 +45,7 @@ const invoiceItemInputSchema = z.object({
 const invoiceInputSchema = z.object({
   clientId: z.string().nullish(),
   quoteId: z.string().nullish(),
+  pdfFileId: z.string().nullish(),
   number: z.string(),
   status: z.string().optional(),
   issueDate: z.union([z.date(), z.string().transform((v) => new Date(v))]),
@@ -115,5 +119,25 @@ export const invoicesRouter = router({
     .output(invoiceWithRelationsSchema)
     .mutation(async ({ ctx, input }) => {
       return convertQuoteToInvoice(input.quoteId, ctx.user.id, input.invoiceNumber)
+    }),
+
+  /**
+   * Attach an already-stored file (e.g. an orphaned upload the user wants to
+   * reuse) as this invoice's pdf_file_id. Both rows must belong to the
+   * current user.
+   */
+  attachExistingFile: authedProcedure
+    .input(z.object({ invoiceId: z.string(), fileId: z.string() }))
+    .output(invoiceSchema.nullable())
+    .mutation(async ({ ctx, input }) => {
+      const file = await getFileById(input.fileId, ctx.user.id)
+      if (!file) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "File not found" })
+      }
+      const updated = await setInvoicePdfFileId(input.invoiceId, ctx.user.id, file.id)
+      if (!updated) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Invoice not found" })
+      }
+      return updated
     }),
 })
