@@ -335,7 +335,7 @@ export const getDashboardAnalytics = cache(
       timeSeries,
       categoryBreakdown: categoryResult.rows.map((row) => ({
         code: String(row["code"] ?? "other"),
-        name: String(row["name"] ?? "Other"),
+        name: getLocalizedValue(row["name"], "en") || "Other",
         color: String(row["color"] ?? "#6b7280"),
         expenses: Number(row["expenses"] ?? 0),
         transactionCount: Number(row["transaction_count"] ?? 0),

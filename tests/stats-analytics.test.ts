@@ -36,7 +36,13 @@ describe("getDashboardAnalytics", () => {
       })
       .mockResolvedValueOnce({
         rows: [
-          { code: "software", name: "Software", color: "#0d9488", expenses: 420, transaction_count: 3 },
+          {
+            code: "software",
+            name: { en: "Software", es: "Software" },
+            color: "#0d9488",
+            expenses: 420,
+            transaction_count: 3,
+          },
           { code: null, name: null, color: null, expenses: 80, transaction_count: 1 },
         ],
       })
@@ -53,7 +59,12 @@ describe("getDashboardAnalytics", () => {
     expect(mockQuery.mock.calls[2]?.[0]).not.toContain("issued_at IS NOT NULL")
     expect(mockQuery.mock.calls[3]?.[0]).not.toContain("issued_at IS NOT NULL")
     expect(analytics.timeSeries).toHaveLength(2)
-    expect(analytics.categoryBreakdown[0]).toMatchObject({ code: "software", expenses: 420 })
+    expect(analytics.categoryBreakdown[0]).toMatchObject({
+      code: "software",
+      name: "Software",
+      expenses: 420,
+    })
+    expect(analytics.categoryBreakdown[0].name).toBe("Software")
     expect(analytics.categoryBreakdown[1]).toMatchObject({ code: "other", name: "Other", expenses: 80 })
     expect(analytics.topMerchants[0]).toMatchObject({ merchant: "Google Workspace", expenses: 210 })
     expect(analytics.profitTrend).toEqual([
