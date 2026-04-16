@@ -286,49 +286,10 @@ export const getDashboardAnalytics = cache(
     defaultCurrency: string = "EUR",
   ): Promise<DashboardAnalytics> => {
     const pool = await getPool()
-    const upperCurrency = defaultCurrency.toUpperCase()
-    const { clause, values, nextIdx } = buildTransactionWhere(userId, filters, {
-      alias: "t",
-      extraConditions: ["t.issued_at IS NOT NULL"],
-    })
-
-    const dateFrom = filters.dateFrom ? new Date(filters.dateFrom) : null
-    const dateTo = filters.dateTo ? new Date(filters.dateTo) : null
-    const daysDiff =
-      dateFrom && dateTo
-        ? Math.ceil((dateTo.getTime() - dateFrom.getTime()) / (1000 * 60 * 60 * 24))
-        : Number.POSITIVE_INFINITY
-    const groupByDay = daysDiff <= 50
-
-    const periodExpr = groupByDay
-      ? `TO_CHAR(t.issued_at, 'YYYY-MM-DD')`
-      : `TO_CHAR(t.issued_at, 'YYYY-MM')`
-
+    const timeSeries = await getTimeSeriesStats(userId, filters, defaultCurrency)
+    const { clause, values, nextIdx } = buildTransactionWhere(userId, filters, { alias: "t" })
     const currencyIdx = nextIdx
-    const analyticsValues = [...values, upperCurrency]
-
-    const timeSeriesResult = await pool.query(
-      `SELECT
-         ${periodExpr} AS period,
-         MIN(t.issued_at) AS period_date,
-         SUM(CASE WHEN t.type = 'income' THEN
-           CASE
-             WHEN UPPER(t.converted_currency_code) = $${currencyIdx} THEN COALESCE(t.converted_total, 0)
-             WHEN UPPER(t.currency_code) = $${currencyIdx} THEN COALESCE(t.total, 0)
-             ELSE 0
-           END ELSE 0 END)::float AS income,
-         SUM(CASE WHEN t.type = 'expense' THEN
-           CASE
-             WHEN UPPER(t.converted_currency_code) = $${currencyIdx} THEN COALESCE(t.converted_total, 0)
-             WHEN UPPER(t.currency_code) = $${currencyIdx} THEN COALESCE(t.total, 0)
-             ELSE 0
-           END ELSE 0 END)::float AS expenses
-       FROM transactions t
-       ${clause}
-       GROUP BY ${periodExpr}
-       ORDER BY ${periodExpr} ASC`,
-      analyticsValues,
-    )
+    const analyticsValues = [...values, defaultCurrency.toUpperCase()]
 
     const categoryResult = await pool.query(
       `SELECT
@@ -371,12 +332,7 @@ export const getDashboardAnalytics = cache(
     )
 
     return {
-      timeSeries: timeSeriesResult.rows.map((row) => ({
-        period: String(row["period"] ?? ""),
-        income: Number(row["income"] ?? 0),
-        expenses: Number(row["expenses"] ?? 0),
-        date: new Date(row["period_date"] as string | Date),
-      })),
+      timeSeries,
       categoryBreakdown: categoryResult.rows.map((row) => ({
         code: String(row["code"] ?? "other"),
         name: String(row["name"] ?? "Other"),
@@ -389,13 +345,11 @@ export const getDashboardAnalytics = cache(
         expenses: Number(row["expenses"] ?? 0),
         transactionCount: Number(row["transaction_count"] ?? 0),
       })),
-      profitTrend: timeSeriesResult.rows.map((row) => {
-        const income = Number(row["income"] ?? 0)
-        const expenses = Number(row["expenses"] ?? 0)
+      profitTrend: timeSeries.map((point) => {
         return {
-          period: String(row["period"] ?? ""),
-          profit: income - expenses,
-          date: new Date(row["period_date"] as string | Date),
+          period: point.period,
+          profit: point.income - point.expenses,
+          date: point.date,
         }
       }),
     }
