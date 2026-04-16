@@ -28,6 +28,10 @@ import { WizardNewPage } from "./routes/_app/wizard-new"
 import { WizardDetailPage } from "./routes/_app/wizard-detail"
 import { WizardCommittedPage } from "./routes/_app/wizard-committed"
 import { CryptoPage } from "./routes/_app/crypto"
+import { PersonalIndexPage } from "./routes/_app/personal/index"
+import { EmploymentPage } from "./routes/_app/personal/employment"
+import { RentalPage } from "./routes/_app/personal/rental"
+import { DeductionsPage } from "./routes/_app/personal/deductions"
 
 // Pages — settings layout
 import { SettingsLayout } from "./routes/_app/settings"
@@ -219,6 +223,30 @@ const cryptoRoute = createRoute({
   component: CryptoPage,
 })
 
+const personalIndexRoute = createRoute({
+  getParentRoute: () => appLayoutRoute,
+  path: "/personal",
+  component: PersonalIndexPage,
+})
+
+const personalEmploymentRoute = createRoute({
+  getParentRoute: () => appLayoutRoute,
+  path: "/personal/employment",
+  component: EmploymentPage,
+})
+
+const personalRentalRoute = createRoute({
+  getParentRoute: () => appLayoutRoute,
+  path: "/personal/rental",
+  component: RentalPage,
+})
+
+const personalDeductionsRoute = createRoute({
+  getParentRoute: () => appLayoutRoute,
+  path: "/personal/deductions",
+  component: DeductionsPage,
+})
+
 // ---------------------------------------------------------------------------
 // Settings layout (has sub-routes)
 // ---------------------------------------------------------------------------
@@ -368,6 +396,10 @@ const appChildren = appLayoutRoute.addChildren([
   wizardDetailRoute,
   wizardCommittedRoute,
   cryptoRoute,
+  personalIndexRoute,
+  personalEmploymentRoute,
+  personalRentalRoute,
+  personalDeductionsRoute,
   settingsChildren,
 ])
 

@@ -1,5 +1,7 @@
 import { getPool } from "@/lib/pg"
 import { cache } from "react"
+import { listIncomeSources, sumPersonalIncome } from "@/models/income-sources"
+import { sumDeductionsForYear } from "@/models/personal-deductions"
 
 // ─── Tax period helpers ───────────────────────────────────────────────────────
 
@@ -392,6 +394,49 @@ export type AhorroBracketBreakdown = {
 }
 
 /**
+ * 2026 "base general" IRPF brackets — combined state + average autonomous
+ * community portion. Used for employment, rental, and autónomo activity.
+ * Individual autonomous communities vary; this is a reasonable default.
+ */
+const BASE_GENERAL_BRACKETS_2026: Array<{ upToCents: number; rate: number }> = [
+  { upToCents: 1245000, rate: 0.19 },
+  { upToCents: 2020000, rate: 0.24 },
+  { upToCents: 3520000, rate: 0.30 },
+  { upToCents: 6000000, rate: 0.37 },
+  { upToCents: 30000000, rate: 0.45 },
+  { upToCents: Infinity, rate: 0.47 },
+]
+
+/**
+ * Apply the base-general progressive brackets to a positive amount (cents).
+ * Same shape as applyBaseAhorroBrackets for consistent downstream use.
+ */
+export function applyBaseGeneralBrackets(
+  baseCents: number,
+  brackets: Array<{ upToCents: number; rate: number }> = BASE_GENERAL_BRACKETS_2026,
+): { breakdown: AhorroBracketBreakdown[]; totalCuotaCents: number } {
+  const breakdown: AhorroBracketBreakdown[] = []
+  let remaining = Math.max(0, Math.round(baseCents))
+  let previousCap = 0
+  let totalCuotaCents = 0
+  for (const b of brackets) {
+    const bandSize = b.upToCents === Infinity ? remaining : Math.max(0, b.upToCents - previousCap)
+    const amountInBracket = Math.min(Math.max(0, remaining), bandSize)
+    const taxInBracket = Math.round(amountInBracket * b.rate)
+    breakdown.push({
+      upToCents: b.upToCents,
+      rate: b.rate,
+      amountInBracketCents: amountInBracket,
+      taxInBracketCents: taxInBracket,
+    })
+    totalCuotaCents += taxInBracket
+    remaining -= amountInBracket
+    previousCap = b.upToCents
+  }
+  return { breakdown, totalCuotaCents }
+}
+
+/**
  * Apply the base-del-ahorro progressive brackets to a positive amount (cents).
  * Returns both the per-bracket breakdown and the total cuota in cents.
  */
@@ -428,12 +473,27 @@ export type Modelo100Result = {
   ingresosActividad: number
   gastosActividad: number
   rendimientoNetoActividad: number
-  // Base del ahorro components (from crypto)
-  gananciasPatrimoniales: number      // net, can be negative (carry-over rule not applied here)
-  rendimientoCapitalMobiliario: number // staking rewards, lending interest (positive)
+  // Personal streams (all in cents)
+  rendimientosTrabajo: number          // salary gross minus standard €2,000
+  retencionesTrabajo: number           // IRPF withheld from payslips (credit)
+  rendimientosCapitalInmobiliario: number  // rental income post 60% reduction
+  // Base del ahorro components
+  gananciasPatrimoniales: number       // realized gains (crypto + stocks combined)
+  rendimientoCapitalMobiliario: number // staking, dividends, interest
   baseImponibleAhorro: number          // max(0, ganancias + rendimiento)
   cuotaAhorro: number
   ahorroBreakdown: AhorroBracketBreakdown[]
+  // Base general components
+  baseImponibleGeneral: number         // employment + rental + activity
+  deduccionBaseCents: number           // pension reductions applied to base general
+  baseLiquidableGeneral: number        // baseImponibleGeneral − deduccionBaseCents
+  cuotaGeneral: number
+  generalBreakdown: AhorroBracketBreakdown[]
+  // Deductions credited against cuota (donations, mortgage, family, regional)
+  deduccionCuotaCents: number
+  // Final liability
+  cuotaTotal: number                   // cuotaGeneral + cuotaAhorro − deduccionCuota
+  cuotaDiferencial: number             // cuotaTotal − retencionesTrabajo
   // Untracked disposals (flagged so the user can fill cost basis)
   untrackedDisposalsCount: number
 }
@@ -500,16 +560,79 @@ export const calcModelo100 = cache(
     )
     const { breakdown, totalCuotaCents } = applyBaseAhorroBrackets(baseImponibleAhorro)
 
+    // Personal streams: employment, rental, and deductions.
+    const [salaryTotals, rentalProperties, deductionsTotals] = await Promise.all([
+      sumPersonalIncome(userId, year, "salary"),
+      listIncomeSources(userId, "rental"),
+      sumDeductionsForYear(userId, year),
+    ])
+
+    // Employment: gross − standard €2,000 gastos deducibles (flat).
+    const rendimientosTrabajo = Math.max(
+      0,
+      salaryTotals.grossCents - 200000,
+    )
+    const retencionesTrabajo = salaryTotals.withheldCents
+
+    // Rental: sum rent deposits per property, apply 60% reduction for long-term.
+    let rendimientosCapitalInmobiliario = 0
+    if (rentalProperties.length > 0) {
+      const propertyIds = rentalProperties.map((p) => p.id)
+      const rentalIncomeResult = await pool.query(
+        `SELECT t.income_source_id AS sid,
+                COALESCE(SUM(t.total), 0) AS gross
+         FROM transactions t
+         WHERE t.user_id = $1
+           AND t.income_source_id = ANY($2::uuid[])
+           AND t.issued_at >= $3 AND t.issued_at <= $4
+         GROUP BY t.income_source_id`,
+        [userId, propertyIds, yearStart, yearEnd],
+      )
+      for (const row of rentalIncomeResult.rows) {
+        const property = rentalProperties.find((p) => p.id === row["sid"])
+        if (!property) continue
+        const rentalType = (property.metadata as { rentalType?: string }).rentalType
+        const gross = Number(row["gross"] ?? 0)
+        const taxable = rentalType === "long" ? Math.round(gross * 0.4) : gross
+        rendimientosCapitalInmobiliario += taxable
+      }
+    }
+
+    const baseImponibleGeneral =
+      rendimientoNetoActividad + rendimientosTrabajo + rendimientosCapitalInmobiliario
+    const baseLiquidableGeneral = Math.max(
+      0,
+      baseImponibleGeneral - deductionsTotals.baseReductionCents,
+    )
+    const generalBrackets = applyBaseGeneralBrackets(baseLiquidableGeneral)
+    const cuotaGeneral = generalBrackets.totalCuotaCents
+    const cuotaTotal = Math.max(
+      0,
+      cuotaGeneral + totalCuotaCents - deductionsTotals.cuotaCreditCents,
+    )
+    const cuotaDiferencial = cuotaTotal - retencionesTrabajo
+
     return {
       year,
       ingresosActividad,
       gastosActividad,
       rendimientoNetoActividad,
+      rendimientosTrabajo,
+      retencionesTrabajo,
+      rendimientosCapitalInmobiliario,
       gananciasPatrimoniales,
       rendimientoCapitalMobiliario,
       baseImponibleAhorro,
       cuotaAhorro: totalCuotaCents,
       ahorroBreakdown: breakdown,
+      baseImponibleGeneral,
+      deduccionBaseCents: deductionsTotals.baseReductionCents,
+      baseLiquidableGeneral,
+      cuotaGeneral,
+      generalBreakdown: generalBrackets.breakdown,
+      deduccionCuotaCents: deductionsTotals.cuotaCreditCents,
+      cuotaTotal,
+      cuotaDiferencial,
       untrackedDisposalsCount: Number(untrackedRes.rows[0]?.["n"] ?? 0),
     }
   },

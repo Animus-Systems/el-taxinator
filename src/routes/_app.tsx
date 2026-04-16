@@ -23,7 +23,9 @@ export function AppLayout() {
   const resumableSessionsCount = resumableSessions?.length ?? 0
   const inboxCount = unsortedFilesCount + resumableSessionsCount
   const untrackedCryptoCount = cryptoSummary?.untrackedDisposalsCount ?? 0
-  const entityName = entities?.find((entity) => entity.id === activeEntityId)?.name
+  const activeEntity = entities?.find((entity) => entity.id === activeEntityId)
+  const entityName = activeEntity?.name
+  const entityType = activeEntity?.type
 
   return (
     <NotificationProvider>
@@ -33,6 +35,7 @@ export function AppLayout() {
             unsortedFilesCount={inboxCount}
             untrackedCryptoCount={untrackedCryptoCount}
             {...(entityName !== undefined ? { entityName } : {})}
+            {...(entityType !== undefined ? { entityType } : {})}
           />
           <SidebarInset>
             <div className="flex flex-1 flex-col overflow-x-hidden p-4 md:py-6 md:pl-1 md:pr-6">

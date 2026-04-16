@@ -190,7 +190,14 @@ const PACK_CHAR_BUDGET = 4000
 
 function pickRelevantPacks(packs: KnowledgePack[], entityType: EntityType | null): KnowledgePack[] {
   if (packs.length === 0) return []
-  const want = entityType === "autonomo" ? "canary-autonomo" : entityType === "sl" ? "canary-sl" : null
+  const want =
+    entityType === "autonomo"
+      ? "canary-autonomo"
+      : entityType === "sl"
+        ? "canary-sl"
+        : entityType === "individual"
+          ? "individual"
+          : null
   const pick = want ? packs.filter((p) => p.slug === want) : []
   // If the entity type doesn't match anything, fall back to the single newest
   // pack so the model has SOME domain grounding rather than none.
@@ -376,6 +383,17 @@ Rules:
 - Airdrops/forks go to categoryCode="crypto_airdrop" with pricePerUnit = fair market value at receipt.
 - When cost basis is unknown, keep status="needs_review" and ask the user to paste it from their exchange records. Never guess.
 - Emit a taxTip citing "Art. 14.1.c LIRPF" (FIFO obligation) the first time a crypto disposal is classified in a session. Also surface Modelo 721 awareness if the user mentions foreign-exchange holdings over €50K at year-end.
+
+## Stocks / ETFs / funds
+A transaction looks broker-related when any of these are true:
+- Merchant/sender matches a known broker: Interactive Brokers, Trade Republic, DeGiro, Vanguard, eToro, Revolut Invest, Renta 4, Indexa, MyInvestor, XTB, Scalable Capital.
+- Description mentions a common ticker (AAPL, MSFT, VWCE, IWDA, SPY, ...) + BUY/SELL/BROKERAGE/DIVIDENDO keywords.
+
+Rules mirror crypto but use the "stock_" prefix: stock_purchase, stock_disposal, stock_dividend. extra.crypto is reused as the payload (asset=ticker, quantity, pricePerUnit, costBasisPerUnit) — asset_class on the ledger row distinguishes them at query time. Stock gains roll into the same ganancias patrimoniales bucket of Modelo 100 as crypto; dividends go to rendimientos del capital mobiliario (savings bracket).
+
+## Personal streams (individual filer or autónomo's personal side)
+Salary deposits from an employer (nómina): don't assign a crypto/stock category — instead set status="personal_income" and link an income_source via the /personal/employment page. The wizard only categorizes and flags these for the user to attach.
+Rental income: same pattern; link to an income_source of kind=rental.
 
 ## Output rules
 Produce a single JSON object with these top-level fields:

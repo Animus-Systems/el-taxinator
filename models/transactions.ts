@@ -36,6 +36,7 @@ export type TransactionData = {
   issuedAt?: Date | string | null
   text?: string | null
   status?: string | null
+  incomeSourceId?: string | null
   [key: string]: unknown
 }
 

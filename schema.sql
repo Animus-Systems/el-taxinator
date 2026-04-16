@@ -112,6 +112,8 @@ CREATE TABLE transactions (
     type text DEFAULT 'expense',
     note text,
     files jsonb DEFAULT '[]' NOT NULL,
+    income_source_id uuid,
+    income_source_id uuid,
     extra jsonb,
     category_code text,
     project_code text,
@@ -153,6 +155,7 @@ CREATE TABLE crypto_lots (
     cost_per_unit_cents bigint NOT NULL,
     fees_cents bigint NOT NULL DEFAULT 0,
     source_transaction_id uuid REFERENCES transactions(id) ON DELETE SET NULL,
+    asset_class text NOT NULL DEFAULT 'crypto',
     created_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updated_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
@@ -165,6 +168,7 @@ CREATE TABLE crypto_disposal_matches (
     disposal_transaction_id uuid NOT NULL REFERENCES transactions(id) ON DELETE CASCADE,
     lot_id uuid NOT NULL REFERENCES crypto_lots(id) ON DELETE RESTRICT,
     asset text NOT NULL,
+    asset_class text NOT NULL DEFAULT 'crypto',
     quantity_consumed numeric(28,12) NOT NULL,
     cost_basis_cents bigint NOT NULL,
     proceeds_cents bigint NOT NULL,
@@ -290,6 +294,35 @@ CREATE TABLE receipt_vendor_aliases (
     UNIQUE (user_id, vendor_pattern, merchant_pattern)
 );
 CREATE INDEX receipt_vendor_aliases_user_idx ON receipt_vendor_aliases (user_id);
+
+-- ─── Personal tax: income sources, deductions ──────────────────────────────
+
+CREATE TABLE income_sources (
+    id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
+    user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    kind text NOT NULL,
+    name text NOT NULL,
+    tax_id text,
+    metadata jsonb NOT NULL DEFAULT '{}',
+    is_active boolean NOT NULL DEFAULT true,
+    created_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+CREATE INDEX income_sources_user_kind_idx ON income_sources (user_id, kind);
+
+CREATE TABLE personal_deductions (
+    id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
+    user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    kind text NOT NULL,
+    tax_year integer NOT NULL,
+    amount_cents bigint NOT NULL,
+    description text,
+    file_id uuid REFERENCES files(id) ON DELETE SET NULL,
+    metadata jsonb NOT NULL DEFAULT '{}',
+    created_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+CREATE INDEX personal_deductions_user_year_idx ON personal_deductions (user_id, tax_year);
 
 -- ─── Accountant Access ───────────────────────────────────────────────────────
 

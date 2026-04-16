@@ -33,19 +33,26 @@ export async function syncCryptoLedger(
   candidate: TransactionCandidate,
 ): Promise<void> {
   if (!transaction.id) return
-  if (!transaction.categoryCode?.startsWith("crypto_")) return
 
-  // Prefer the candidate's in-memory crypto meta since the wizard populates
-  // it per-turn; fall back to whatever was persisted on the transaction.
+  // Either crypto_* or stock_* — both run through the same FIFO ledger.
+  // `asset_class` on the lot row lets downstream UI tell them apart; the tax
+  // calculator treats both as ganancias patrimoniales.
+  const code = transaction.categoryCode ?? ""
+  const isCrypto = code.startsWith("crypto_")
+  const isStock = code.startsWith("stock_")
+  if (!isCrypto && !isStock) return
+
   const meta = pickCryptoMeta(candidate) ?? pickCryptoMeta(transaction)
   if (!meta?.asset || !meta?.quantity) return
 
   const acquiredAt = transaction.issuedAt ?? new Date()
   const qty = meta.quantity
+  const suffix = code.slice(code.indexOf("_") + 1)
 
-  switch (transaction.categoryCode) {
-    case "crypto_purchase":
-    case "crypto_staking_reward":
+  switch (suffix) {
+    case "purchase":
+    case "staking_reward":
+    case "dividend":
       if (typeof meta.pricePerUnit !== "number") return
       await recordPurchase({
         userId,
@@ -56,9 +63,7 @@ export async function syncCryptoLedger(
         acquiredAt,
       })
       break
-    case "crypto_airdrop":
-      // Airdrops have no cash outflow; cost basis defaults to 0 but the user
-      // may override via the edit dialog (FMV at receipt).
+    case "airdrop":
       await recordPurchase({
         userId,
         transactionId: transaction.id,
@@ -68,7 +73,7 @@ export async function syncCryptoLedger(
         acquiredAt,
       })
       break
-    case "crypto_disposal":
+    case "disposal":
       if (typeof meta.pricePerUnit !== "number") return
       await recordDisposal({
         userId,
@@ -80,7 +85,6 @@ export async function syncCryptoLedger(
       })
       break
     default:
-      // crypto_fee — no ledger impact; cost is already baked into lot or proceeds
       break
   }
 }

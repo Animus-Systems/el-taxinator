@@ -15,7 +15,7 @@ import path from "path"
 // 2. Add a migration entry here with the next version number
 // 3. The migration SQL should be idempotent (use IF NOT EXISTS, etc.)
 
-const SCHEMA_VERSION = 14 // bump this when adding a migration
+const SCHEMA_VERSION = 15 // bump this when adding a migration
 
 const migrations: { version: number; description: string; sql: string }[] = [
   {
@@ -348,6 +348,52 @@ const migrations: { version: number; description: string; sql: string }[] = [
       );
       CREATE INDEX IF NOT EXISTS receipt_vendor_aliases_user_idx
         ON receipt_vendor_aliases (user_id);
+    `,
+  },
+  {
+    version: 15,
+    description: "Personal tax: income sources, deductions, transaction→source FK, investment asset_class",
+    sql: `
+      CREATE TABLE IF NOT EXISTS income_sources (
+        id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
+        user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        kind text NOT NULL,
+        name text NOT NULL,
+        tax_id text,
+        metadata jsonb NOT NULL DEFAULT '{}',
+        is_active boolean NOT NULL DEFAULT true,
+        created_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL,
+        updated_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS income_sources_user_kind_idx
+        ON income_sources (user_id, kind);
+
+      CREATE TABLE IF NOT EXISTS personal_deductions (
+        id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
+        user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        kind text NOT NULL,
+        tax_year integer NOT NULL,
+        amount_cents bigint NOT NULL,
+        description text,
+        file_id uuid REFERENCES files(id) ON DELETE SET NULL,
+        metadata jsonb NOT NULL DEFAULT '{}',
+        created_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL,
+        updated_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS personal_deductions_user_year_idx
+        ON personal_deductions (user_id, tax_year);
+
+      ALTER TABLE transactions
+        ADD COLUMN IF NOT EXISTS income_source_id uuid
+          REFERENCES income_sources(id) ON DELETE SET NULL;
+      CREATE INDEX IF NOT EXISTS transactions_income_source_idx
+        ON transactions (income_source_id)
+        WHERE income_source_id IS NOT NULL;
+
+      ALTER TABLE crypto_lots
+        ADD COLUMN IF NOT EXISTS asset_class text NOT NULL DEFAULT 'crypto';
+      ALTER TABLE crypto_disposal_matches
+        ADD COLUMN IF NOT EXISTS asset_class text NOT NULL DEFAULT 'crypto';
     `,
   },
 ]

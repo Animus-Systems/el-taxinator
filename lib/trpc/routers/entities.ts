@@ -30,7 +30,7 @@ import { getOrCreateSelfHostedUser } from "@/models/users"
 const entitySchema = z.object({
   id: z.string(),
   name: z.string(),
-  type: z.enum(["autonomo", "sl"]),
+  type: z.enum(["autonomo", "sl", "individual"]),
   db: z.string().optional(),
   dataDir: z.string().optional(),
 })
@@ -111,7 +111,7 @@ export const entitiesRouter = router({
     .input(
       z.object({
         name: z.string().min(1),
-        type: z.enum(["autonomo", "sl"]),
+        type: z.enum(["autonomo", "sl", "individual"]),
         dataDir: z.string().optional(),
       }),
     )
@@ -166,7 +166,7 @@ export const entitiesRouter = router({
       z.object({
         entityId: z.string(),
         name: z.string().optional(),
-        type: z.enum(["autonomo", "sl"]).optional(),
+        type: z.enum(["autonomo", "sl", "individual"]).optional(),
         db: z.string().optional(),
       }),
     )
@@ -296,7 +296,7 @@ export const entitiesRouter = router({
       scanDir: z.string(),
       profiles: z.array(z.object({
         id: z.string(),
-        type: z.enum(["autonomo", "sl"]),
+        type: z.enum(["autonomo", "sl", "individual"]),
       })),
     }))
     .output(z.object({ success: z.boolean(), adopted: z.number(), error: z.string().optional() }))

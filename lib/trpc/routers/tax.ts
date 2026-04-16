@@ -95,11 +95,22 @@ const modelo100Schema = z.object({
   ingresosActividad: z.number(),
   gastosActividad: z.number(),
   rendimientoNetoActividad: z.number(),
+  rendimientosTrabajo: z.number(),
+  retencionesTrabajo: z.number(),
+  rendimientosCapitalInmobiliario: z.number(),
   gananciasPatrimoniales: z.number(),
   rendimientoCapitalMobiliario: z.number(),
   baseImponibleAhorro: z.number(),
   cuotaAhorro: z.number(),
   ahorroBreakdown: z.array(ahorroBracketBreakdownSchema),
+  baseImponibleGeneral: z.number(),
+  deduccionBaseCents: z.number(),
+  baseLiquidableGeneral: z.number(),
+  cuotaGeneral: z.number(),
+  generalBreakdown: z.array(ahorroBracketBreakdownSchema),
+  deduccionCuotaCents: z.number(),
+  cuotaTotal: z.number(),
+  cuotaDiferencial: z.number(),
   untrackedDisposalsCount: z.number(),
 })
 
@@ -151,7 +162,7 @@ const deadlineSchema = z.object({
 export const taxRouter = router({
   entityType: authedProcedure
     .input(z.object({}))
-    .output(z.object({ type: z.enum(["autonomo", "sl"]) }))
+    .output(z.object({ type: z.enum(["autonomo", "sl", "individual"]) }))
     .query(async () => {
       const entity = await getActiveEntity()
       return { type: entity.type }

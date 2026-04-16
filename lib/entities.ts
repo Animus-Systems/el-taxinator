@@ -13,7 +13,7 @@ import {
 // Types
 // ---------------------------------------------------------------------------
 
-export type EntityType = "autonomo" | "sl"
+export type EntityType = "autonomo" | "sl" | "individual"
 
 export type Entity = {
   id: string

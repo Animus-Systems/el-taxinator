@@ -29,6 +29,7 @@ import {
   Receipt,
   ScrollText,
   Settings,
+  UserRound,
   Users,
 } from "lucide-react"
 import { useTranslation } from "react-i18next"
@@ -77,10 +78,12 @@ export function AppSidebar({
   unsortedFilesCount,
   untrackedCryptoCount = 0,
   entityName,
+  entityType,
 }: {
   unsortedFilesCount: number
   untrackedCryptoCount?: number
   entityName?: string
+  entityType?: "autonomo" | "sl" | "individual"
 }) {
   const { t } = useTranslation("sidebar")
   const { notification } = useNotification()
@@ -149,6 +152,9 @@ export function AppSidebar({
                 <NavItem href="/quotes" icon={ScrollText} label={t("quotes")} />
                 <NavItem href="/clients" icon={Users} label={t("clients")} />
                 <NavItem href="/products" icon={Package} label={t("products")} />
+                {entityType !== "sl" && (
+                  <NavItem href="/personal" icon={UserRound} label={t("personal")} />
+                )}
                 <NavItem href="/tax" icon={Calculator} label={t("tax")} />
                 <NavItem href="/reports" icon={History} label={t("reports")} />
                 <NavItem href="/settings" icon={Settings} label={t("settings")} />

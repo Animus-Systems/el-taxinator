@@ -32,6 +32,7 @@ import { filesRoutes } from "./routes/files"
 import { exportRoutes } from "./routes/export"
 import { invoicesRoutes } from "./routes/invoices"
 import { receiptsRoutes } from "./routes/receipts"
+import { personalRoutes } from "./routes/personal"
 
 // ---------------------------------------------------------------------------
 // State — resolved during boot, used by context factory
@@ -195,6 +196,7 @@ async function main() {
   await app.register(exportRoutes)
   await app.register(invoicesRoutes)
   await app.register(receiptsRoutes)
+  await app.register(personalRoutes)
 
   // 7. Health check endpoint
   app.get("/health", async () => {

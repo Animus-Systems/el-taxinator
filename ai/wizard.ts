@@ -231,8 +231,10 @@ export async function runOnboardingTurn(opts: {
     const entityLine = opts.entityType
       ? opts.entityType === "autonomo"
         ? "I see you're set up as an autónomo in the Canary Islands (IGIC regime)."
-        : "I see you're set up as an SL (Sociedad Limitada)."
-      : "I don't yet know whether you're an autónomo or an SL — could you tell me?"
+        : opts.entityType === "sl"
+          ? "I see you're set up as an SL (Sociedad Limitada)."
+          : "I see this is an individual tax profile — I'll focus on Modelo 100 (employment, rental, gains, deductions)."
+      : "I don't yet know whether you're an autónomo, an SL, or filing as an individual — could you tell me?"
 
     const next = opts.hasFile
       ? "Before we look at the file you uploaded, a couple of quick questions so I categorize things correctly:"
