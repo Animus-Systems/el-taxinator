@@ -48,6 +48,31 @@ export type DetailedTimeSeriesData = {
   totalTransactions: number
 }
 
+export type MerchantBreakdown = {
+  merchant: string
+  expenses: number
+  transactionCount: number
+}
+
+export type ProfitTrendPoint = {
+  period: string
+  profit: number
+  date: Date
+}
+
+export type DashboardAnalytics = {
+  timeSeries: TimeSeriesData[]
+  categoryBreakdown: Array<{
+    code: string
+    name: string
+    color: string
+    expenses: number
+    transactionCount: number
+  }>
+  topMerchants: MerchantBreakdown[]
+  profitTrend: ProfitTrendPoint[]
+}
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -247,6 +272,133 @@ export const getTimeSeriesStats = cache(
       expenses: (row["expenses"] as number | null | undefined) ?? 0,
       date: new Date(row["period_date"] as string | Date),
     }))
+  },
+)
+
+// ---------------------------------------------------------------------------
+// Dashboard analytics
+// ---------------------------------------------------------------------------
+
+export const getDashboardAnalytics = cache(
+  async (
+    userId: string,
+    filters: TransactionFilters = {},
+    defaultCurrency: string = "EUR",
+  ): Promise<DashboardAnalytics> => {
+    const pool = await getPool()
+    const upperCurrency = defaultCurrency.toUpperCase()
+    const { clause, values, nextIdx } = buildTransactionWhere(userId, filters, {
+      alias: "t",
+      extraConditions: ["t.issued_at IS NOT NULL"],
+    })
+
+    const dateFrom = filters.dateFrom ? new Date(filters.dateFrom) : null
+    const dateTo = filters.dateTo ? new Date(filters.dateTo) : null
+    const daysDiff =
+      dateFrom && dateTo
+        ? Math.ceil((dateTo.getTime() - dateFrom.getTime()) / (1000 * 60 * 60 * 24))
+        : Number.POSITIVE_INFINITY
+    const groupByDay = daysDiff <= 50
+
+    const periodExpr = groupByDay
+      ? `TO_CHAR(t.issued_at, 'YYYY-MM-DD')`
+      : `TO_CHAR(t.issued_at, 'YYYY-MM')`
+
+    const currencyIdx = nextIdx
+    const analyticsValues = [...values, upperCurrency]
+
+    const timeSeriesResult = await pool.query(
+      `SELECT
+         ${periodExpr} AS period,
+         MIN(t.issued_at) AS period_date,
+         SUM(CASE WHEN t.type = 'income' THEN
+           CASE
+             WHEN UPPER(t.converted_currency_code) = $${currencyIdx} THEN COALESCE(t.converted_total, 0)
+             WHEN UPPER(t.currency_code) = $${currencyIdx} THEN COALESCE(t.total, 0)
+             ELSE 0
+           END ELSE 0 END)::float AS income,
+         SUM(CASE WHEN t.type = 'expense' THEN
+           CASE
+             WHEN UPPER(t.converted_currency_code) = $${currencyIdx} THEN COALESCE(t.converted_total, 0)
+             WHEN UPPER(t.currency_code) = $${currencyIdx} THEN COALESCE(t.total, 0)
+             ELSE 0
+           END ELSE 0 END)::float AS expenses
+       FROM transactions t
+       ${clause}
+       GROUP BY ${periodExpr}
+       ORDER BY ${periodExpr} ASC`,
+      analyticsValues,
+    )
+
+    const categoryResult = await pool.query(
+      `SELECT
+         COALESCE(c.code, 'other') AS code,
+         COALESCE(c.name, 'Other') AS name,
+         COALESCE(c.color, '#6b7280') AS color,
+         SUM(
+           CASE
+             WHEN UPPER(t.converted_currency_code) = $${currencyIdx} THEN COALESCE(t.converted_total, 0)
+             WHEN UPPER(t.currency_code) = $${currencyIdx} THEN COALESCE(t.total, 0)
+             ELSE 0
+           END
+         )::float AS expenses,
+         COUNT(*)::int AS transaction_count
+       FROM transactions t
+       LEFT JOIN categories c ON c.code = t.category_code AND c.user_id = t.user_id
+       ${clause} AND t.type = 'expense'
+       GROUP BY COALESCE(c.code, 'other'), COALESCE(c.name, 'Other'), COALESCE(c.color, '#6b7280')
+       ORDER BY expenses DESC`,
+      analyticsValues,
+    )
+
+    const merchantResult = await pool.query(
+      `SELECT
+         COALESCE(NULLIF(TRIM(t.merchant), ''), NULLIF(TRIM(t.name), ''), 'Unknown') AS merchant,
+         SUM(
+           CASE
+             WHEN UPPER(t.converted_currency_code) = $${currencyIdx} THEN COALESCE(t.converted_total, 0)
+             WHEN UPPER(t.currency_code) = $${currencyIdx} THEN COALESCE(t.total, 0)
+             ELSE 0
+           END
+         )::float AS expenses,
+         COUNT(*)::int AS transaction_count
+       FROM transactions t
+       ${clause} AND t.type = 'expense'
+       GROUP BY COALESCE(NULLIF(TRIM(t.merchant), ''), NULLIF(TRIM(t.name), ''), 'Unknown')
+       ORDER BY expenses DESC
+       LIMIT 8`,
+      analyticsValues,
+    )
+
+    return {
+      timeSeries: timeSeriesResult.rows.map((row) => ({
+        period: String(row["period"] ?? ""),
+        income: Number(row["income"] ?? 0),
+        expenses: Number(row["expenses"] ?? 0),
+        date: new Date(row["period_date"] as string | Date),
+      })),
+      categoryBreakdown: categoryResult.rows.map((row) => ({
+        code: String(row["code"] ?? "other"),
+        name: String(row["name"] ?? "Other"),
+        color: String(row["color"] ?? "#6b7280"),
+        expenses: Number(row["expenses"] ?? 0),
+        transactionCount: Number(row["transaction_count"] ?? 0),
+      })),
+      topMerchants: merchantResult.rows.map((row) => ({
+        merchant: String(row["merchant"] ?? "Unknown"),
+        expenses: Number(row["expenses"] ?? 0),
+        transactionCount: Number(row["transaction_count"] ?? 0),
+      })),
+      profitTrend: timeSeriesResult.rows.map((row) => {
+        const income = Number(row["income"] ?? 0)
+        const expenses = Number(row["expenses"] ?? 0)
+        return {
+          period: String(row["period"] ?? ""),
+          profit: income - expenses,
+          date: new Date(row["period_date"] as string | Date),
+        }
+      }),
+    }
   },
 )
 
