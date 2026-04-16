@@ -1,5 +1,6 @@
 import fs from "node:fs/promises"
 import path from "node:path"
+import { createHash } from "node:crypto"
 import { requestLLM } from "./providers/llmProvider"
 import type { KnowledgePack } from "@/lib/db-types"
 import { getPack, upsertPack, insertPackIfMissing } from "@/models/knowledge-packs"
@@ -26,7 +27,40 @@ export const SEED_PACKS: SeedPackDef[] = [
     title: "Canary Islands — Sociedad Limitada tax knowledge",
     file: "seed-canary-sl.md",
   },
+  {
+    slug: "personal-tax",
+    title: "Personal tax (IRPF / Modelo 100)",
+    file: "seed-individual.md",
+  },
+  {
+    slug: "property-tax",
+    title: "Property tax (rental, IBI, plusvalía, wealth)",
+    file: "seed-property-tax.md",
+  },
+  {
+    slug: "crypto-tax",
+    title: "Crypto tax (FIFO, Modelo 721, staking)",
+    file: "seed-crypto-tax.md",
+  },
 ]
+
+/**
+ * Topic description fed into the refresh prompt so the LLM knows what the
+ * pack is about, rather than assuming "Canary Islands accounting" for
+ * every slug.
+ */
+const TOPIC_DESC: Record<string, string> = {
+  "canary-autonomo":
+    "Canary Islands autónomo tax (IGIC rates, quarterly IRPF retenciones, Modelo 420/130/425/100 deadlines and content)",
+  "canary-sl":
+    "Canary Islands Sociedad Limitada tax (IGIC + corporate tax, Modelo 420/202/200/111/115/425/190)",
+  "personal-tax":
+    "Spanish personal income tax (IRPF / Modelo 100) — base general and base del ahorro brackets, employment, rental, activity income, deductions, retenciones, filing triggers",
+  "property-tax":
+    "Spanish property tax — rental income rules, 60%/70%/90% reductions, deductible rental expenses, IBI, plusvalía municipal, ITP / AJD, primary-residence exemption, wealth tax (Modelo 714) with Canarias bonificación",
+  "crypto-tax":
+    "Spanish crypto tax — realisation events, mandatory FIFO cost basis, staking/airdrop rendimiento del capital mobiliario, mining as actividad económica, Modelo 721 informativa, wash-sale (norma antiaplicación)",
+}
 
 async function loadSeedContent(file: string): Promise<string> {
   const abs = path.join(process.cwd(), "ai", "knowledge", file)
@@ -75,25 +109,63 @@ export async function readSeedContent(slug: string): Promise<{ title: string; co
 // LLM-driven refresh
 // ---------------------------------------------------------------------------
 
-export const REFRESH_PROMPT = `You are updating a knowledge document about Canary Islands accounting.
+/**
+ * The envelope we ask every provider to return. Passing a schema makes
+ * `.withStructuredOutput` work for API-key providers, and for CLI providers
+ * the schema is appended as an instruction. Returning structured fields
+ * (not a raw string) eliminates the silent-empty-string failure mode.
+ */
+const REFRESH_ENVELOPE_SCHEMA: Record<string, unknown> = {
+  type: "object",
+  properties: {
+    content: {
+      type: "string",
+      description:
+        "The full updated markdown of the knowledge pack. Preserve heading structure. Do not abbreviate. This is the whole pack, not a diff.",
+    },
+    summary: {
+      type: "string",
+      description: "One-sentence summary of what was changed or verified.",
+    },
+    citations: {
+      type: "array",
+      items: { type: "string" },
+      description:
+        "BOE articles, Modelo casilla numbers, or LIRPF/LIS sections cited in the content.",
+    },
+  },
+  required: ["content", "summary"],
+}
 
-Review the current content below for accuracy as of today's date. Add any rate
-or deadline changes you are aware of. Cite BOE articles, Modelo casilla numbers,
-or LIRPF/LIS sections whenever you make a claim. If you are uncertain about a
-specific rate or reference, flag it inline with ⚠ rather than inventing one.
+function buildRefreshPrompt(slug: string, currentContent: string): string {
+  const topic = TOPIC_DESC[slug] ?? "Spanish tax knowledge"
+  return `You are updating a knowledge document about ${topic}.
 
-Preserve the heading structure and the "Last verified" line (update the date).
-Return ONLY the full updated markdown — no JSON, no preamble, no commentary.
+Review the content below for accuracy as of today's date. Correct any
+outdated rates, thresholds, or deadlines. Add rate or deadline changes you
+are aware of. Cite BOE articles, Modelo casilla numbers, or LIRPF/LIS
+sections whenever you make a claim. If uncertain about a specific rate,
+flag it inline with ⚠ rather than inventing one.
+
+Preserve the heading structure and the "Last verified" line (update the
+date to today). Keep roughly the same length — do not abbreviate.
+
+Return your answer in the provided JSON envelope. The "content" field MUST
+contain the FULL updated markdown, not a diff or summary.
 
 ---
 
-`
+${currentContent}`
+}
 
-export type RefreshResult = {
+export type RefreshChanged = {
+  kind: "updated"
   pack: KnowledgePack
   provider: string
   model: string | null
   tokensUsed: number | null
+  summary: string
+  citations: string[]
   diffSummary: {
     sizeBefore: number
     sizeAfter: number
@@ -102,45 +174,157 @@ export type RefreshResult = {
   }
 }
 
+export type RefreshUnchanged = {
+  kind: "unchanged"
+  pack: KnowledgePack
+  provider: string
+  model: string | null
+  tokensUsed: number | null
+  reason: string
+}
+
+export type RefreshResult = RefreshChanged | RefreshUnchanged
+
+export class RefreshError extends Error {
+  readonly code: "no_providers" | "all_providers_failed" | "malformed_output" | "truncated" | "not_found"
+  readonly providerName: string | null
+  readonly modelName: string | null
+  constructor(
+    code: RefreshError["code"],
+    message: string,
+    providerName: string | null = null,
+    modelName: string | null = null,
+  ) {
+    super(message)
+    this.name = "RefreshError"
+    this.code = code
+    this.providerName = providerName
+    this.modelName = modelName
+  }
+}
+
+function sha256(input: string): string {
+  return createHash("sha256").update(input).digest("hex")
+}
+
+function countHeadings(markdown: string): number {
+  const matches = markdown.match(/^#{1,3}\s/gm)
+  return matches ? matches.length : 0
+}
+
+function isProbablyTruncated(content: string): boolean {
+  const trimmed = content.trimEnd()
+  if (trimmed.endsWith("...") || trimmed.endsWith("…")) return true
+  const lastLine = trimmed.split("\n").pop() ?? ""
+  // Unterminated code fence or half-word suffix with no trailing newline is
+  // suspicious. Too aggressive would reject valid lists, so keep this narrow.
+  if (lastLine === "```") return true
+  return false
+}
+
+type Envelope = {
+  content: string
+  summary: string
+  citations?: string[]
+}
+
+function parseEnvelope(output: unknown): Envelope | null {
+  if (!output || typeof output !== "object") return null
+  const obj = output as Record<string, unknown>
+  const content = typeof obj["content"] === "string" ? obj["content"] : null
+  if (!content) return null
+  const summary =
+    typeof obj["summary"] === "string" ? obj["summary"] : "Refreshed"
+  const citationsRaw = obj["citations"]
+  const citations = Array.isArray(citationsRaw)
+    ? citationsRaw.filter((c): c is string => typeof c === "string")
+    : []
+  return { content, summary, citations }
+}
+
 export async function refreshPack(userId: string, slug: string): Promise<RefreshResult> {
   const current = await getPack(userId, slug)
-  if (!current) throw new Error(`Knowledge pack "${slug}" not found`)
+  if (!current) {
+    throw new RefreshError("not_found", `Knowledge pack "${slug}" not found`)
+  }
 
   const settings = await getSettings(userId)
   const llmSettings = getLLMSettings(settings)
   if (llmSettings.providers.length === 0) {
-    throw new Error("No LLM providers configured — add one in Settings → LLM before refreshing knowledge packs.")
+    throw new RefreshError(
+      "no_providers",
+      "No LLM providers configured — add one in Settings → LLM before refreshing knowledge packs.",
+    )
   }
 
-  const prompt = REFRESH_PROMPT + current.content
-  const response = await requestLLM(llmSettings, { prompt })
+  const prompt = buildRefreshPrompt(slug, current.content)
+  const response = await requestLLM(llmSettings, { prompt, schema: REFRESH_ENVELOPE_SCHEMA })
   if (response.error) {
-    throw new Error(`LLM refresh failed: ${response.error}`)
+    throw new RefreshError(
+      "all_providers_failed",
+      response.error,
+      response.provider ?? null,
+      null,
+    )
   }
 
-  const rawContent = extractMarkdown(response.output)
-  if (!rawContent || rawContent.trim().length < 200) {
-    throw new Error("LLM returned no usable content")
+  const envelope = parseEnvelope(response.output)
+  if (!envelope || envelope.content.trim().length < 200) {
+    throw new RefreshError(
+      "malformed_output",
+      "LLM returned no usable content — the provider may not honour the structured output schema.",
+      response.provider ?? null,
+      null,
+    )
   }
+
+  if (isProbablyTruncated(envelope.content)) {
+    throw new RefreshError(
+      "truncated",
+      "LLM response appears truncated — try a provider with a larger output limit.",
+      response.provider ?? null,
+      null,
+    )
+  }
+
+  // If content is byte-for-byte identical, skip marking refreshed so the
+  // sidebar freshness indicator reflects real changes, not no-op refreshes.
+  if (sha256(envelope.content) === sha256(current.content)) {
+    return {
+      kind: "unchanged",
+      pack: current,
+      provider: response.provider,
+      model: null,
+      tokensUsed: response.tokensUsed ?? null,
+      reason: "content identical",
+    }
+  }
+
+  const preserveUnreviewed =
+    current.reviewStatus === "needs_review" ? current.content : null
 
   const updated = await upsertPack({
     userId,
     slug: current.slug,
     title: current.title,
-    content: rawContent,
-    sourcePrompt: REFRESH_PROMPT,
+    content: envelope.content,
+    sourcePrompt: prompt,
     refreshIntervalDays: current.refreshIntervalDays,
     provider: response.provider,
     model: null,
     reviewStatus: "needs_review",
     markRefreshed: true,
+    pendingReviewContent: preserveUnreviewed,
   })
 
   return {
+    kind: "updated",
     pack: updated,
     provider: response.provider,
     model: null,
     tokensUsed: response.tokensUsed ?? null,
+    summary: envelope.summary,
+    citations: envelope.citations ?? [],
     diffSummary: {
       sizeBefore: current.content.length,
       sizeAfter: updated.content.length,
@@ -148,25 +332,4 @@ export async function refreshPack(userId: string, slug: string): Promise<Refresh
       headingCountAfter: countHeadings(updated.content),
     },
   }
-}
-
-function extractMarkdown(output: unknown): string {
-  // `requestLLM` returns structured JSON for providers that honor a schema,
-  // but here we sent no schema — the model should return plain text. For
-  // compatibility we accept either:
-  //   - a string
-  //   - an object with a `content`, `markdown`, or `text` field
-  if (typeof output === "string") return output
-  if (output && typeof output === "object") {
-    const obj = output as Record<string, unknown>
-    if (typeof obj["content"] === "string") return obj["content"]
-    if (typeof obj["markdown"] === "string") return obj["markdown"]
-    if (typeof obj["text"] === "string") return obj["text"]
-  }
-  return ""
-}
-
-function countHeadings(markdown: string): number {
-  const matches = markdown.match(/^#{1,3}\s/gm)
-  return matches ? matches.length : 0
 }

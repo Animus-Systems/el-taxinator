@@ -61,6 +61,22 @@ export function findCommonSubstring(strings: string[]): string | null {
 }
 
 // ---------------------------------------------------------------------------
+// Learn-reason formatting
+// ---------------------------------------------------------------------------
+
+function buildLearnReason(
+  groupSize: number,
+  categoryCode: string | null,
+  projectCode: string | null,
+): string {
+  const parts: string[] = []
+  if (categoryCode) parts.push(`category '${categoryCode}'`)
+  if (projectCode) parts.push(`project '${projectCode}'`)
+  const target = parts.length > 0 ? ` to ${parts.join(" + ")}` : ""
+  return `Learned from ${groupSize} rows you recategorized${target} in this import.`
+}
+
+// ---------------------------------------------------------------------------
 // learnFromImport
 // ---------------------------------------------------------------------------
 
@@ -153,12 +169,15 @@ export async function learnFromImport(
         r.matchValue.toLowerCase() === commonPattern.toLowerCase()
     )
 
+    const reason = buildLearnReason(group.length, categoryCode, projectCode)
+
     if (existingRule) {
       // Update existing learned rule
       await updateRule(existingRule.id, userId, {
         categoryCode,
         projectCode,
         confidence,
+        learnReason: reason,
       })
       rulesAffected++
     } else {
@@ -173,6 +192,7 @@ export async function learnFromImport(
         source: "learned",
         confidence,
         isActive: true,
+        learnReason: reason,
       })
       rulesAffected++
     }

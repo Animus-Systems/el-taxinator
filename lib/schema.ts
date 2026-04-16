@@ -15,7 +15,7 @@ import path from "path"
 // 2. Add a migration entry here with the next version number
 // 3. The migration SQL should be idempotent (use IF NOT EXISTS, etc.)
 
-const SCHEMA_VERSION = 15 // bump this when adding a migration
+const SCHEMA_VERSION = 16 // bump this when adding a migration
 
 const migrations: { version: number; description: string; sql: string }[] = [
   {
@@ -394,6 +394,28 @@ const migrations: { version: number; description: string; sql: string }[] = [
         ADD COLUMN IF NOT EXISTS asset_class text NOT NULL DEFAULT 'crypto';
       ALTER TABLE crypto_disposal_matches
         ADD COLUMN IF NOT EXISTS asset_class text NOT NULL DEFAULT 'crypto';
+    `,
+  },
+  {
+    version: 16,
+    description: "Rules audit trail (hit counts, last_applied, learn_reason) + transaction→rule link + knowledge pending_review preservation",
+    sql: `
+      ALTER TABLE categorization_rules
+        ADD COLUMN IF NOT EXISTS match_count integer NOT NULL DEFAULT 0;
+      ALTER TABLE categorization_rules
+        ADD COLUMN IF NOT EXISTS last_applied_at timestamp(3);
+      ALTER TABLE categorization_rules
+        ADD COLUMN IF NOT EXISTS learn_reason text;
+
+      ALTER TABLE transactions
+        ADD COLUMN IF NOT EXISTS applied_rule_id uuid
+          REFERENCES categorization_rules(id) ON DELETE SET NULL;
+      CREATE INDEX IF NOT EXISTS transactions_applied_rule_idx
+        ON transactions (applied_rule_id)
+        WHERE applied_rule_id IS NOT NULL;
+
+      ALTER TABLE knowledge_packs
+        ADD COLUMN IF NOT EXISTS pending_review_content text;
     `,
   },
 ]

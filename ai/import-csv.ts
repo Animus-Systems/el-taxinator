@@ -51,6 +51,7 @@ export type TransactionCandidate = {
   }
   selected: boolean
   ruleMatched?: boolean
+  matchedRuleId?: string | null
   // `extra.crypto` is populated by the wizard when the AI identifies a crypto
   // disposal/purchase/reward. Phase 1 accepts partial metadata; unknown fields
   // (e.g. missing cost basis) keep the candidate in `needs_review`.

@@ -7,8 +7,9 @@ import {
   updateRule,
   deleteRule,
   toggleRuleActive,
+  getRuleWithMatches,
 } from "@/models/rules"
-import { categorizationRuleSchema } from "@/lib/db-types"
+import { categorizationRuleSchema, transactionSchema } from "@/lib/db-types"
 
 const ruleInputSchema = z.object({
   name: z.string().min(1).max(128),
@@ -96,5 +97,17 @@ export const rulesRouter = router({
     .output(categorizationRuleSchema.nullable())
     .mutation(async ({ ctx, input }) => {
       return toggleRuleActive(input.id, ctx.user.id, input.isActive)
+    }),
+
+  getById: authedProcedure
+    .input(z.object({ id: z.string(), matchLimit: z.number().int().min(1).max(200).default(50) }))
+    .output(
+      z.object({
+        rule: categorizationRuleSchema,
+        matches: z.array(transactionSchema),
+      }).nullable(),
+    )
+    .query(async ({ ctx, input }) => {
+      return getRuleWithMatches(input.id, ctx.user.id, input.matchLimit)
     }),
 })

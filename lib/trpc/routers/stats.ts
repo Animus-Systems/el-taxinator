@@ -1,6 +1,7 @@
 import { z } from "zod"
 import { router, authedProcedure } from "../init"
 import {
+  getDashboardAnalytics,
   getDashboardStats,
   getProjectStats,
   getTimeSeriesStats,
@@ -36,6 +37,33 @@ const timeSeriesDataSchema = z.object({
   date: z.date(),
 })
 
+const analyticsCategoryBreakdownSchema = z.object({
+  code: z.string(),
+  name: z.string(),
+  color: z.string(),
+  expenses: z.number(),
+  transactionCount: z.number(),
+})
+
+const analyticsTopMerchantSchema = z.object({
+  merchant: z.string(),
+  expenses: z.number(),
+  transactionCount: z.number(),
+})
+
+const analyticsProfitTrendSchema = z.object({
+  period: z.string(),
+  profit: z.number(),
+  date: z.date(),
+})
+
+const dashboardAnalyticsSchema = z.object({
+  timeSeries: z.array(timeSeriesDataSchema),
+  categoryBreakdown: z.array(analyticsCategoryBreakdownSchema),
+  topMerchants: z.array(analyticsTopMerchantSchema),
+  profitTrend: z.array(analyticsProfitTrendSchema),
+})
+
 export const statsRouter = router({
   dashboard: authedProcedure
     .meta({ openapi: { method: "GET", path: "/api/v1/stats/dashboard" } })
@@ -69,5 +97,18 @@ export const statsRouter = router({
     .query(async ({ ctx, input }) => {
       const { currency, ...filters } = input
       return getTimeSeriesStats(ctx.user.id, filters as TransactionFilters, currency)
+    }),
+
+  analytics: authedProcedure
+    .meta({ openapi: { method: "GET", path: "/api/v1/stats/analytics" } })
+    .input(
+      statsFiltersSchema.merge(
+        z.object({ currency: z.string().default("EUR") }),
+      ),
+    )
+    .output(dashboardAnalyticsSchema)
+    .query(async ({ ctx, input }) => {
+      const { currency, ...filters } = input
+      return getDashboardAnalytics(ctx.user.id, filters as TransactionFilters, currency)
     }),
 })

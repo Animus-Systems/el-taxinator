@@ -10,7 +10,7 @@ import { getVisibleTransactionFields } from "@/lib/transaction-list-fields"
 import { cn, formatCurrency } from "@/lib/utils"
 import type { Category, Field, Project, Transaction } from "@/lib/db-types"
 import { formatDate } from "date-fns"
-import { AlertTriangle, ArrowDownIcon, ArrowUpIcon, File, Paperclip, Sparkles } from "lucide-react"
+import { AlertTriangle, ArrowDownIcon, ArrowUpIcon, File, Paperclip, Sparkles, Zap } from "lucide-react"
 import { AttachReceiptDialog } from "@/components/transactions/attach-receipt-dialog"
 import { useTranslations } from "next-intl"
 import { useSearchParams } from "next/navigation"
@@ -122,14 +122,27 @@ export const standardFieldRenderers: Record<string, FieldRenderer> = {
     name: "Category",
     code: "categoryCode",
     sortable: true,
-    formatValue: (transaction: TransactionWithRelations) =>
-      transaction.categoryCode ? (
-        <Badge className="whitespace-nowrap" style={{ backgroundColor: transaction.category?.color }}>
-          <L>{transaction.category?.name}</L>
-        </Badge>
-      ) : (
-        "-"
-      ),
+    formatValue: (transaction: TransactionWithRelations) => (
+      <div className="flex items-center gap-1.5">
+        {transaction.categoryCode ? (
+          <Badge className="whitespace-nowrap" style={{ backgroundColor: transaction.category?.color }}>
+            <L>{transaction.category?.name}</L>
+          </Badge>
+        ) : (
+          "-"
+        )}
+        {transaction.appliedRuleId ? (
+          <a
+            href={`/settings/rules/${transaction.appliedRuleId}`}
+            onClick={(e) => e.stopPropagation()}
+            title="Categorized by rule — click to view"
+            className="inline-flex items-center text-muted-foreground hover:text-foreground"
+          >
+            <Zap className="h-3 w-3" />
+          </a>
+        ) : null}
+      </div>
+    ),
   },
   accountName: {
     name: "Account",

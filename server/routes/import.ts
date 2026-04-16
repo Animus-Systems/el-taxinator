@@ -33,7 +33,7 @@ import {
 import type { TransactionCandidate } from "@/ai/import-csv"
 import { suggestNewCategories } from "@/ai/suggest-categories"
 import { detectPDFType, extractPDFTransactions } from "@/ai/import-pdf"
-import { applyRulesToCandidates } from "@/models/rules"
+import { applyRulesToCandidates, recordRuleApplication } from "@/models/rules"
 import { getActiveRules } from "@/models/rules"
 import { learnFromImport } from "@/ai/learn-rules"
 import { getActiveAccounts } from "@/models/accounts"
@@ -629,6 +629,7 @@ export async function importRoutes(app: FastifyInstance) {
 
       // Create transactions
       let created = 0
+      const ruleHitCounts = new Map<string, number>()
       for (const c of candidates) {
         try {
           const extraPayload = c.extra as Record<string, unknown> | undefined
@@ -644,10 +645,18 @@ export async function importRoutes(app: FastifyInstance) {
             issuedAt: c.issuedAt ? new Date(c.issuedAt).toISOString() : null,
             accountId: c.accountId || session.accountId || null,
             status: c.status,
+            appliedRuleId: c.matchedRuleId ?? null,
             // Carry the wizard's extra payload (crypto meta, etc.) through to
             // transactions.extra so /crypto-page queries can find it.
             ...(extraPayload ? { extra: extraPayload } : {}),
           })
+
+          if (c.matchedRuleId) {
+            ruleHitCounts.set(
+              c.matchedRuleId,
+              (ruleHitCounts.get(c.matchedRuleId) ?? 0) + 1,
+            )
+          }
 
           // Hook crypto-tagged transactions into the FIFO ledger so holdings
           // and realised gains stay in sync with committed transactions.
@@ -657,6 +666,14 @@ export async function importRoutes(app: FastifyInstance) {
         } catch (err) {
           console.error(`[import/commit] Failed to create transaction row ${c.rowIndex}:`, err)
         }
+      }
+
+      // Batch-update rule hit counters so 300-row imports produce N UPDATEs
+      // (one per unique rule), not N × 300.
+      try {
+        await recordRuleApplication(user.id, ruleHitCounts)
+      } catch (err) {
+        console.error("[import/commit] recordRuleApplication failed:", err)
       }
 
       // Mark session as committed

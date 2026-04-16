@@ -188,21 +188,36 @@ function formatCategories(categories: Category[]): string {
 // conversation history.
 const PACK_CHAR_BUDGET = 4000
 
-function pickRelevantPacks(packs: KnowledgePack[], entityType: EntityType | null): KnowledgePack[] {
+/**
+ * Pick the ordered list of knowledge packs to feed the LLM, entity-type
+ * pack first, then the always-additive topic packs (personal-tax,
+ * property-tax, crypto-tax). Autónomo filers also get personal-tax
+ * because they file Modelo 100 alongside business rendimiento.
+ *
+ * Exported for tests.
+ */
+export function pickRelevantPacks(packs: KnowledgePack[], entityType: EntityType | null): KnowledgePack[] {
   if (packs.length === 0) return []
-  const want =
-    entityType === "autonomo"
-      ? "canary-autonomo"
-      : entityType === "sl"
-        ? "canary-sl"
-        : entityType === "individual"
-          ? "individual"
-          : null
-  const pick = want ? packs.filter((p) => p.slug === want) : []
-  // If the entity type doesn't match anything, fall back to the single newest
-  // pack so the model has SOME domain grounding rather than none.
-  if (pick.length > 0) return pick
-  return packs.slice(0, 1)
+  const bySlug = (slug: string): KnowledgePack | undefined => packs.find((p) => p.slug === slug)
+
+  const ordered: Array<KnowledgePack | undefined> = []
+  if (entityType === "autonomo") {
+    ordered.push(bySlug("canary-autonomo"), bySlug("personal-tax"))
+  } else if (entityType === "sl") {
+    ordered.push(bySlug("canary-sl"))
+  } else if (entityType === "individual") {
+    ordered.push(bySlug("personal-tax"))
+  }
+  ordered.push(bySlug("property-tax"), bySlug("crypto-tax"))
+
+  const result = ordered.filter((p): p is KnowledgePack => p !== undefined)
+  // Fall back to the first pack if nothing matched — better than feeding an
+  // entity-ignorant prompt with zero domain context.
+  if (result.length === 0) {
+    const first = packs[0]
+    return first ? [first] : []
+  }
+  return result
 }
 
 function formatKnowledgePack(pack: KnowledgePack): string {

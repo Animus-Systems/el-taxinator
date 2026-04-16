@@ -14,7 +14,7 @@ const jsonValueSchema = z.any() as z.ZodType<JsonValue>
 // Zod schemas (used for runtime validation of raw DB rows after camelCase mapping)
 // ---------------------------------------------------------------------------
 
-export const entityTypeSchema = z.enum(["autonomo", "sl"])
+export const entityTypeSchema = z.enum(["autonomo", "sl", "individual"])
 export type EntityType = z.infer<typeof entityTypeSchema>
 
 export const userSchema = z.object({
@@ -162,6 +162,7 @@ export const transactionSchema = z.object({
   deductible: z.boolean().nullable(),
   accountId: z.string().nullable(),
   status: z.string(),
+  appliedRuleId: z.string().nullable(),
 })
 
 export const currencySchema = z.object({
@@ -392,6 +393,7 @@ export const knowledgePackSchema = z.object({
   provider: z.string().nullable(),
   model: z.string().nullable(),
   reviewStatus: z.string(),
+  pendingReviewContent: z.string().nullable(),
   createdAt: z.date(),
   updatedAt: z.date(),
 })
@@ -433,6 +435,9 @@ export const categorizationRuleSchema = z.object({
   source: z.string(),
   confidence: z.number(),
   isActive: z.boolean(),
+  matchCount: z.number(),
+  lastAppliedAt: z.date().nullable(),
+  learnReason: z.string().nullable(),
   createdAt: z.date(),
   updatedAt: z.date(),
 })

@@ -4,9 +4,44 @@ import { trpc } from "~/trpc"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Loader2, RefreshCw, CheckCircle2, RotateCcw, BookOpen } from "lucide-react"
+import { Loader2, RefreshCw, CheckCircle2, RotateCcw, BookOpen, AlertTriangle, Info } from "lucide-react"
 import type { KnowledgePack } from "@/lib/db-types"
 import { useConfirm } from "@/components/ui/confirm-dialog"
+
+type ParsedRefreshError =
+  | { kind: "typed"; code: string; providerName: string | null; modelName: string | null; message: string }
+  | { kind: "plain"; message: string }
+
+function parseRefreshError(raw: string): ParsedRefreshError {
+  try {
+    const obj = JSON.parse(raw) as { refreshError?: { code: string; providerName: string | null; modelName: string | null; message: string } }
+    if (obj.refreshError) {
+      return { kind: "typed", ...obj.refreshError }
+    }
+  } catch {
+    // not JSON
+  }
+  return { kind: "plain", message: raw }
+}
+
+function renderRefreshError(
+  err: ParsedRefreshError,
+  t: (key: string, vars: Record<string, string>) => string,
+): string {
+  if (err.kind === "plain") return err.message
+  const provider = err.providerName ?? "unknown"
+  const model = err.modelName ?? "default"
+  switch (err.code) {
+    case "malformed_output":
+      return t("refreshProviderMismatch", { provider, model })
+    case "truncated":
+      return t("refreshTruncated", { provider, model })
+    case "no_providers":
+      return err.message
+    default:
+      return `${provider}${err.modelName ? ` (${model})` : ""}: ${err.message}`
+  }
+}
 
 export function KnowledgeSettingsPage() {
   const { t } = useTranslation("knowledge")
@@ -14,27 +49,45 @@ export function KnowledgeSettingsPage() {
   const utils = trpc.useUtils()
   const { data: packs = [], isLoading } = trpc.knowledge.list.useQuery()
   const [expandedSlug, setExpandedSlug] = useState<string | null>(null)
+  const [expandedPendingSlug, setExpandedPendingSlug] = useState<string | null>(null)
   const [refreshingSlug, setRefreshingSlug] = useState<string | null>(null)
-  const [refreshError, setRefreshError] = useState<string | null>(null)
-  const [lastDiff, setLastDiff] = useState<{ slug: string; summary: string } | null>(null)
+  const [refreshError, setRefreshError] = useState<ParsedRefreshError | null>(null)
+  const [lastResult, setLastResult] = useState<
+    | { slug: string; kind: "updated"; summary: string; provider: string; model: string | null }
+    | { slug: string; kind: "unchanged"; provider: string; model: string | null }
+    | null
+  >(null)
 
   const refresh = trpc.knowledge.refresh.useMutation({
     onMutate: ({ slug }) => {
       setRefreshingSlug(slug)
       setRefreshError(null)
+      setLastResult(null)
     },
     onSuccess: (result) => {
       setRefreshingSlug(null)
       utils.knowledge.list.invalidate()
       utils.knowledge.hasStale.invalidate()
-      setLastDiff({
-        slug: result.pack.slug,
-        summary: `${result.diffSummary.sizeBefore} → ${result.diffSummary.sizeAfter} chars · ${result.diffSummary.headingCountBefore} → ${result.diffSummary.headingCountAfter} headings · ${result.provider}`,
-      })
+      if (result.kind === "updated") {
+        setLastResult({
+          slug: result.pack.slug,
+          kind: "updated",
+          summary: `${result.summary} · ${result.diffSummary.sizeBefore} → ${result.diffSummary.sizeAfter} chars · ${result.diffSummary.headingCountBefore} → ${result.diffSummary.headingCountAfter} headings`,
+          provider: result.provider,
+          model: result.model,
+        })
+      } else {
+        setLastResult({
+          slug: result.pack.slug,
+          kind: "unchanged",
+          provider: result.provider,
+          model: result.model,
+        })
+      }
     },
     onError: (err) => {
       setRefreshingSlug(null)
-      setRefreshError(err.message)
+      setRefreshError(parseRefreshError(err.message))
     },
   })
 
@@ -69,14 +122,24 @@ export function KnowledgeSettingsPage() {
       </header>
 
       {refreshError ? (
-        <div className="rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
-          {refreshError}
+        <div className="rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive flex items-start gap-2">
+          <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+          <span>{renderRefreshError(refreshError, (k, v) => t(k, v) as unknown as string)}</span>
         </div>
       ) : null}
 
-      {lastDiff ? (
+      {lastResult?.kind === "unchanged" ? (
+        <div className="rounded-md border border-muted bg-muted/40 p-3 text-sm flex items-start gap-2">
+          <Info className="h-4 w-4 mt-0.5 shrink-0" />
+          <span>
+            {t("refreshNoChanges", { provider: lastResult.provider })}
+          </span>
+        </div>
+      ) : null}
+
+      {lastResult?.kind === "updated" ? (
         <div className="rounded-md border border-emerald-300 bg-emerald-50 dark:bg-emerald-950/30 p-3 text-sm">
-          Refreshed <strong>{lastDiff.slug}</strong> — {lastDiff.summary}. Review the new content
+          Refreshed <strong>{lastResult.slug}</strong> — {lastResult.summary}. Review the new content
           below and click <em>Mark verified</em> once you're comfortable.
         </div>
       ) : null}
@@ -94,7 +157,11 @@ export function KnowledgeSettingsPage() {
               key={p.slug}
               pack={p}
               expanded={expandedSlug === p.slug}
+              pendingExpanded={expandedPendingSlug === p.slug}
               onToggle={() => setExpandedSlug((s) => (s === p.slug ? null : p.slug))}
+              onTogglePending={() =>
+                setExpandedPendingSlug((s) => (s === p.slug ? null : p.slug))
+              }
               onRefresh={() => refresh.mutate({ slug: p.slug })}
               onMarkVerified={() => markVerified.mutate({ slug: p.slug })}
               onResetSeed={async () => {
@@ -107,7 +174,6 @@ export function KnowledgeSettingsPage() {
                 if (ok) resetToSeed.mutate({ slug: p.slug })
               }}
               isRefreshing={refreshingSlug === p.slug}
-              t={t}
             />
           ))}
         </div>
@@ -119,22 +185,25 @@ export function KnowledgeSettingsPage() {
 function PackCard({
   pack,
   expanded,
+  pendingExpanded,
   onToggle,
+  onTogglePending,
   onRefresh,
   onMarkVerified,
   onResetSeed,
   isRefreshing,
-  t,
 }: {
   pack: KnowledgePack
   expanded: boolean
+  pendingExpanded: boolean
   onToggle: () => void
+  onTogglePending: () => void
   onRefresh: () => void
   onMarkVerified: () => void
   onResetSeed: () => void
   isRefreshing: boolean
-  t: (k: string) => string
 }) {
+  const { t } = useTranslation("knowledge")
   const days = pack.lastRefreshedAt
     ? Math.floor((Date.now() - new Date(pack.lastRefreshedAt).getTime()) / (1000 * 60 * 60 * 24))
     : null
@@ -150,6 +219,14 @@ function PackCard({
     }
     return <Badge variant="outline">{pack.reviewStatus}</Badge>
   })()
+
+  const refreshedVia = pack.lastRefreshedAt && pack.provider
+    ? t("refreshedVia", {
+        ago: days === 0 ? "today" : days === 1 ? "yesterday" : `${days}d ago`,
+        provider: pack.provider,
+        model: pack.model ?? "",
+      })
+    : null
 
   return (
     <Card>
@@ -170,11 +247,7 @@ function PackCard({
                   : "—"}
                 {days !== null ? ` (${days}d ago)` : ""}
               </span>
-              {pack.provider ? (
-                <span>
-                  {t("provider")}: {pack.provider}
-                </span>
-              ) : null}
+              {refreshedVia ? <span>{refreshedVia}</span> : null}
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -205,6 +278,23 @@ function PackCard({
           <pre className="mt-3 max-h-80 overflow-auto rounded bg-muted p-3 text-xs whitespace-pre-wrap font-mono">
             {pack.content}
           </pre>
+        ) : null}
+        {pack.pendingReviewContent ? (
+          <div className="mt-3 rounded border border-amber-300 bg-amber-50 dark:bg-amber-950/30">
+            <button
+              type="button"
+              onClick={onTogglePending}
+              className="flex w-full items-center justify-between px-3 py-2 text-left text-xs font-medium"
+            >
+              <span>{t("previousUnreviewedVersion")}</span>
+              <span className="text-muted-foreground">{pendingExpanded ? "−" : "+"}</span>
+            </button>
+            {pendingExpanded ? (
+              <pre className="max-h-80 overflow-auto border-t border-amber-200 bg-background/40 p-3 text-xs whitespace-pre-wrap font-mono">
+                {pack.pendingReviewContent}
+              </pre>
+            ) : null}
+          </div>
         ) : null}
       </CardContent>
     </Card>

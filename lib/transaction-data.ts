@@ -21,6 +21,7 @@ const BUILT_IN_TRANSACTION_KEYS = new Set<keyof TransactionData>([
   "deductible",
   "status",
   "incomeSourceId",
+  "appliedRuleId",
 ])
 
 export function splitTransactionDataByFieldDefinitions(

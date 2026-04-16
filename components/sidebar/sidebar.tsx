@@ -36,6 +36,7 @@ import { useTranslation } from "react-i18next"
 import { useTransition } from "react"
 import { Blinker } from "./blinker"
 import { LanguageSwitcher } from "./language-switcher"
+import { KnowledgeFreshnessIndicator } from "./knowledge-freshness"
 import { disconnectAction } from "@/actions/auth"
 
 function NavLink({ href, children, className }: { href: string; children: React.ReactNode; className?: string }) {
@@ -166,6 +167,7 @@ export function AppSidebar({
           <SidebarGroup>
             <SidebarGroupContent>
               <SidebarMenu>
+                <KnowledgeFreshnessIndicator />
                 <SidebarMenuItem>
                   <SidebarMenuButton onClick={toggleSidebar} className="w-full">
                     <PanelLeft className="h-4 w-4" />

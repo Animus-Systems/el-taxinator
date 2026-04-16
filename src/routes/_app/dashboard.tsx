@@ -1,119 +1,186 @@
-/**
- * Dashboard route — SPA equivalent of app/[locale]/(app)/dashboard/page.tsx
- *
- * The original page rendered:
- * 1. DashboardDropZoneWidget (client component — works)
- * 2. DashboardUnsortedWidget (client component — works, needs unsorted files)
- * 3. WelcomeWidget (server component — imports from models, needs SPA rewrite)
- * 4. StatsWidget (server component — imports from models, needs SPA rewrite)
- *
- * For now we render the client components and a placeholder stats section
- * using the stats tRPC endpoint that already exists.
- */
+import { useMemo, useState } from "react"
+import { format, subMonths } from "date-fns"
+import type { DateRange } from "react-day-picker"
+import { useTranslation } from "react-i18next"
+
 import { trpc } from "~/trpc"
-import DashboardDropZoneWidget from "@/components/dashboard/drop-zone-widget"
-import DashboardUnsortedWidget from "@/components/dashboard/unsorted-widget"
-import { Separator } from "@/components/ui/separator"
+import { DateRangePicker } from "@/components/forms/date-range-picker"
+import { DashboardEmptyPanel } from "@/components/dashboard/dashboard-empty-panel"
+import { DashboardExpenseBreakdownChart } from "@/components/dashboard/dashboard-expense-breakdown-chart"
+import { DashboardHeroChart } from "@/components/dashboard/dashboard-hero-chart"
+import { DashboardKpiRow } from "@/components/dashboard/dashboard-kpi-row"
+import { DashboardProfitTrendChart } from "@/components/dashboard/dashboard-profit-trend-chart"
+import { DashboardTopMerchantsChart } from "@/components/dashboard/dashboard-top-merchants-chart"
+import { buildDashboardDrilldownHref } from "@/components/dashboard/dashboard-drilldown"
+import { useRouter } from "@/lib/navigation"
 import { formatCurrency } from "@/lib/utils"
 
-export function DashboardPage() {
-  const { data: unsortedFiles, isLoading: filesLoading } = trpc.files.listUnsorted.useQuery({})
-  const { isLoading: settingsLoading } = trpc.settings.get.useQuery({})
+function formatDateRangeForFilters(range: DateRange | undefined) {
+  return {
+    dateFrom: range?.from ? format(range.from, "yyyy-MM-dd") : undefined,
+    dateTo: range?.to ? format(range.to, "yyyy-MM-dd") : undefined,
+  }
+}
 
-  if (filesLoading || settingsLoading) {
+function formatCurrencyTotals(totals: Record<string, number>, fallbackCurrency: string) {
+  const values = Object.entries(totals).map(([currency, total]) => formatCurrency(total, currency))
+  return values.length > 0 ? values.join(" · ") : formatCurrency(0, fallbackCurrency)
+}
+
+export function DashboardPage() {
+  const { t } = useTranslation("dashboard")
+  const router = useRouter()
+  const [range, setRange] = useState<DateRange | undefined>({
+    from: subMonths(new Date(), 12),
+    to: new Date(),
+  })
+
+  const filters = useMemo(() => formatDateRangeForFilters(range), [range])
+  const settingsQuery = trpc.settings.get.useQuery({})
+  const defaultCurrency = settingsQuery.data?.["default_currency"] ?? "EUR"
+
+  const statsQuery = trpc.stats.dashboard.useQuery(filters)
+  const analyticsQuery = trpc.stats.analytics.useQuery({
+    ...filters,
+    currency: defaultCurrency,
+  })
+
+  if (settingsQuery.isLoading || statsQuery.isLoading || analyticsQuery.isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-[200px]">
-        <div className="text-muted-foreground">Loading...</div>
+      <div className="flex min-h-[260px] items-center justify-center text-muted-foreground">
+        {t("loading")}
       </div>
     )
   }
 
-  return (
-    <div className="flex flex-col gap-5 p-5 w-full max-w-7xl self-center">
-      <div className="flex flex-col sm:flex-row gap-5 items-stretch h-full">
-        <DashboardDropZoneWidget />
-        <DashboardUnsortedWidget files={unsortedFiles ?? []} />
+  if (statsQuery.error || analyticsQuery.error) {
+    return (
+      <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 p-5">
+        <DashboardEmptyPanel
+          title={t("errorTitle")}
+          description={t("errorDescription")}
+        />
       </div>
-
-      {/* WelcomeWidget was a server component — skipped for Phase 2.
-          It will be re-implemented as a client component in a later phase. */}
-
-      <Separator />
-
-      {/* StatsWidget was a server component that called models directly.
-          Using the stats tRPC endpoint instead as a simplified placeholder. */}
-      <DashboardStats />
-    </div>
-  )
-}
-
-/**
- * Simplified stats display using the stats.dashboard tRPC endpoint.
- * Replaces the server-side StatsWidget for the SPA.
- */
-function DashboardStats() {
-  const { data: stats, isLoading } = trpc.stats.dashboard.useQuery({})
-
-  if (isLoading) {
-    return <div className="text-muted-foreground">Loading stats...</div>
+    )
   }
 
-  if (!stats) return null
+  const stats = statsQuery.data
+  const analytics = analyticsQuery.data
+
+  if (!stats || !analytics) {
+    return (
+      <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 p-5">
+        <DashboardEmptyPanel
+          title={t("emptyAnalyticsTitle")}
+          description={t("emptyAnalyticsDescription")}
+        />
+      </div>
+    )
+  }
+
+  const dateFilters = formatDateRangeForFilters(range)
 
   return (
-    <div className="flex flex-col gap-5">
-      <h2 className="text-2xl font-bold">Overview</h2>
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <div className="rounded-lg border bg-gradient-to-br from-white via-green-50/30 to-emerald-50/40 border-green-200/50 p-6">
-          <div className="text-sm font-medium text-muted-foreground">Total Income</div>
-          <div className="mt-2">
-            {Object.entries(stats.totalIncomePerCurrency).map(([currency, total]) => (
-              <div key={currency} className="font-bold text-base first:text-2xl text-green-500">
-                {formatCurrency(total, currency)}
-              </div>
-            ))}
-            {!Object.keys(stats.totalIncomePerCurrency).length && (
-              <div className="text-2xl font-bold">0.00</div>
-            )}
-          </div>
+    <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 p-5">
+      <header className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div className="space-y-2">
+          <h1 className="text-3xl font-bold tracking-tight text-slate-950">{t("title")}</h1>
+          <p className="max-w-3xl text-sm text-slate-600">{t("controlRoomSubtitle")}</p>
         </div>
+        <DateRangePicker
+          defaultRange="last-12-months"
+          {...(range ? { defaultDate: range } : {})}
+          onChange={(nextRange) => setRange(nextRange)}
+        />
+      </header>
 
-        <div className="rounded-lg border bg-gradient-to-br from-white via-red-50/30 to-rose-50/40 border-red-200/50 p-6">
-          <div className="text-sm font-medium text-muted-foreground">Total Expenses</div>
-          <div className="mt-2">
-            {Object.entries(stats.totalExpensesPerCurrency).map(([currency, total]) => (
-              <div key={currency} className="font-bold text-base first:text-2xl text-red-500">
-                {formatCurrency(total, currency)}
-              </div>
-            ))}
-            {!Object.keys(stats.totalExpensesPerCurrency).length && (
-              <div className="text-2xl font-bold">0.00</div>
-            )}
-          </div>
-        </div>
+      <DashboardKpiRow
+        items={[
+          {
+            label: t("totalIncome"),
+            value: formatCurrencyTotals(stats.totalIncomePerCurrency, defaultCurrency),
+            tone: "positive",
+            href: buildDashboardDrilldownHref({ ...dateFilters, type: "income" }),
+          },
+          {
+            label: t("totalExpenses"),
+            value: formatCurrencyTotals(stats.totalExpensesPerCurrency, defaultCurrency),
+            tone: "negative",
+            href: buildDashboardDrilldownHref({ ...dateFilters, type: "expense" }),
+          },
+          {
+            label: t("netProfit"),
+            value: formatCurrencyTotals(stats.profitPerCurrency, defaultCurrency),
+            tone: Object.values(stats.profitPerCurrency).some((total) => total < 0) ? "negative" : "positive",
+            href: buildDashboardDrilldownHref(dateFilters),
+          },
+          {
+            label: t("processedTransactions"),
+            value: String(stats.invoicesProcessed),
+            tone: "neutral",
+            href: buildDashboardDrilldownHref(dateFilters),
+          },
+        ]}
+      />
 
-        <div className="rounded-lg border bg-gradient-to-br from-white via-pink-50/30 to-indigo-50/40 border-pink-200/50 p-6">
-          <div className="text-sm font-medium text-muted-foreground">Net Profit</div>
-          <div className="mt-2">
-            {Object.entries(stats.profitPerCurrency).map(([currency, total]) => (
-              <div
-                key={currency}
-                className={`font-bold text-base first:text-2xl ${total >= 0 ? "text-green-500" : "text-red-500"}`}
-              >
-                {formatCurrency(total, currency)}
-              </div>
-            ))}
-            {!Object.keys(stats.profitPerCurrency).length && (
-              <div className="text-2xl font-bold">0.00</div>
-            )}
-          </div>
-        </div>
+      <DashboardHeroChart
+        data={analytics.timeSeries}
+        defaultCurrency={defaultCurrency}
+        title={t("cashFlowOverTime")}
+        description={t("cashFlowDescription")}
+        onPointClick={(point, series) => {
+          router.push(
+            buildDashboardDrilldownHref({
+              period: point.period,
+              type: series === "income" ? "income" : series === "expenses" ? "expense" : undefined,
+            }),
+          )
+        }}
+      />
 
-        <div className="rounded-lg border bg-gradient-to-br from-white via-blue-50/30 to-indigo-50/40 border-blue-200/50 p-6">
-          <div className="text-sm font-medium text-muted-foreground">Processed Transactions</div>
-          <div className="mt-2">
-            <div className="text-2xl font-bold">{stats.invoicesProcessed}</div>
-          </div>
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)]">
+        <DashboardExpenseBreakdownChart
+          data={analytics.categoryBreakdown}
+          defaultCurrency={defaultCurrency}
+          title={t("expenseBreakdown")}
+          description={t("expenseBreakdownDescription")}
+          onCategoryClick={(category) => {
+            router.push(
+              buildDashboardDrilldownHref({
+                ...dateFilters,
+                categoryCode: category.code,
+                type: "expense",
+              }),
+            )
+          }}
+        />
+
+        <div className="grid gap-6">
+          <DashboardTopMerchantsChart
+            data={analytics.topMerchants}
+            defaultCurrency={defaultCurrency}
+            title={t("topMerchants")}
+            description={t("topMerchantsDescription")}
+            onMerchantClick={(merchant) => {
+              router.push(
+                buildDashboardDrilldownHref({
+                  ...dateFilters,
+                  search: merchant.merchant,
+                  type: "expense",
+                }),
+              )
+            }}
+          />
+
+          <DashboardProfitTrendChart
+            data={analytics.profitTrend}
+            defaultCurrency={defaultCurrency}
+            title={t("monthlyProfitTrend")}
+            description={t("monthlyProfitTrendDescription")}
+            onPointClick={(point) => {
+              router.push(buildDashboardDrilldownHref({ period: point.period }))
+            }}
+          />
         </div>
       </div>
     </div>

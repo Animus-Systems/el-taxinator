@@ -9,13 +9,16 @@ import {
   upsertPack,
   hasStalePack,
 } from "@/models/knowledge-packs"
-import { refreshPack, readSeedContent, seedKnowledgePacksForUser } from "@/ai/knowledge-refresh"
+import { refreshPack, readSeedContent, seedKnowledgePacksForUser, SEED_PACKS, RefreshError } from "@/ai/knowledge-refresh"
 
-const refreshOutputSchema = z.object({
+const refreshChangedSchema = z.object({
+  kind: z.literal("updated"),
   pack: knowledgePackSchema,
   provider: z.string(),
   model: z.string().nullable(),
   tokensUsed: z.number().nullable(),
+  summary: z.string(),
+  citations: z.array(z.string()),
   diffSummary: z.object({
     sizeBefore: z.number(),
     sizeAfter: z.number(),
@@ -24,16 +27,49 @@ const refreshOutputSchema = z.object({
   }),
 })
 
+const refreshUnchangedSchema = z.object({
+  kind: z.literal("unchanged"),
+  pack: knowledgePackSchema,
+  provider: z.string(),
+  model: z.string().nullable(),
+  tokensUsed: z.number().nullable(),
+  reason: z.string(),
+})
+
+const refreshOutputSchema = z.discriminatedUnion("kind", [
+  refreshChangedSchema,
+  refreshUnchangedSchema,
+])
+
+/**
+ * RefreshError details are carried in TRPCError.message as a JSON-serialisable
+ * payload. The knowledge settings page parses this to render a typed message
+ * like "OpenRouter (llama-3.3-70b) returned malformed output" rather than a
+ * generic failure toast.
+ */
+function encodeRefreshError(err: RefreshError): string {
+  return JSON.stringify({
+    refreshError: {
+      code: err.code,
+      providerName: err.providerName,
+      modelName: err.modelName,
+      message: err.message,
+    },
+  })
+}
+
 export const knowledgeRouter = router({
   list: authedProcedure
     .input(z.object({}).optional())
     .output(z.array(knowledgePackSchema))
     .query(async ({ ctx }) => {
-      const packs = await listPacks(ctx.user.id)
-      if (packs.length === 0) {
-        // Lazy-seed for existing users who predate the v7 migration.
+      let packs = await listPacks(ctx.user.id)
+      // Run the seeder when any known slug is missing — picks up legacy
+      // users (0 packs) AND existing users who need the new topic packs
+      // (personal-tax, property-tax, crypto-tax) added.
+      if (packs.length < SEED_PACKS.length) {
         await seedKnowledgePacksForUser(ctx.user.id)
-        return listPacks(ctx.user.id)
+        packs = await listPacks(ctx.user.id)
       }
       return packs
     }),
@@ -52,6 +88,19 @@ export const knowledgeRouter = router({
       try {
         return await refreshPack(ctx.user.id, input.slug)
       } catch (err) {
+        if (err instanceof RefreshError) {
+          const mapped: Record<RefreshError["code"], TRPCError["code"]> = {
+            no_providers: "PRECONDITION_FAILED",
+            all_providers_failed: "INTERNAL_SERVER_ERROR",
+            malformed_output: "UNPROCESSABLE_CONTENT",
+            truncated: "UNPROCESSABLE_CONTENT",
+            not_found: "NOT_FOUND",
+          }
+          throw new TRPCError({
+            code: mapped[err.code],
+            message: encodeRefreshError(err),
+          })
+        }
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: err instanceof Error ? err.message : "refresh failed",
@@ -82,6 +131,7 @@ export const knowledgeRouter = router({
         content: seed.content,
         reviewStatus: "seed",
         refreshIntervalDays: 30,
+        pendingReviewContent: null,
       })
     }),
 

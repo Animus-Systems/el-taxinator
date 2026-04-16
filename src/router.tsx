@@ -38,6 +38,7 @@ import { SettingsLayout } from "./routes/_app/settings"
 import { SettingsIndexPage } from "./routes/_app/settings/index"
 import { CategoriesSettingsPage } from "./routes/_app/settings/categories"
 import { RulesSettingsPage } from "./routes/_app/settings/rules"
+import { RuleDetailPage } from "./routes/_app/settings/rule-detail"
 import { ProjectsSettingsPage } from "./routes/_app/settings/projects"
 import { CurrenciesSettingsPage } from "./routes/_app/settings/currencies"
 import { FieldsSettingsPage } from "./routes/_app/settings/fields"
@@ -274,6 +275,12 @@ const settingsRulesRoute = createRoute({
   component: RulesSettingsPage,
 })
 
+const settingsRuleDetailRoute = createRoute({
+  getParentRoute: () => settingsRoute,
+  path: "/rules/$ruleId",
+  component: RuleDetailPage,
+})
+
 const settingsProjectsRoute = createRoute({
   getParentRoute: () => settingsRoute,
   path: "/projects",
@@ -359,6 +366,7 @@ const settingsChildren = settingsRoute.addChildren([
   settingsIndexRoute,
   settingsCategoriesRoute,
   settingsRulesRoute,
+  settingsRuleDetailRoute,
   settingsProjectsRoute,
   settingsCurrenciesRoute,
   settingsFieldsRoute,

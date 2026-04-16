@@ -59,12 +59,13 @@ describe("getDashboardAnalytics", () => {
     expect(mockQuery.mock.calls[2]?.[0]).not.toContain("issued_at IS NOT NULL")
     expect(mockQuery.mock.calls[3]?.[0]).not.toContain("issued_at IS NOT NULL")
     expect(analytics.timeSeries).toHaveLength(2)
-    expect(analytics.categoryBreakdown[0]).toMatchObject({
+    const firstCategory = analytics.categoryBreakdown[0]
+    expect(firstCategory).toMatchObject({
       code: "software",
       name: "Software",
       expenses: 420,
     })
-    expect(analytics.categoryBreakdown[0].name).toBe("Software")
+    expect(firstCategory?.name).toBe("Software")
     expect(analytics.categoryBreakdown[1]).toMatchObject({ code: "other", name: "Other", expenses: 80 })
     expect(analytics.topMerchants[0]).toMatchObject({ merchant: "Google Workspace", expenses: 210 })
     expect(analytics.profitTrend).toEqual([

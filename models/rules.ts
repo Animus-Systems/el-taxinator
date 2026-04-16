@@ -1,5 +1,5 @@
-import { sql, queryMany, queryOne, buildInsert, buildUpdate } from "@/lib/sql"
-import type { CategorizationRule } from "@/lib/db-types"
+import { sql, queryMany, queryOne, buildInsert, buildUpdate, execute } from "@/lib/sql"
+import type { CategorizationRule, Transaction } from "@/lib/db-types"
 import type { TransactionCandidate } from "@/ai/import-csv"
 import { cache } from "react"
 
@@ -21,6 +21,7 @@ export interface RuleCreateInput {
   source?: string
   confidence?: number
   isActive?: boolean
+  learnReason?: string | null
 }
 
 export interface RuleUpdateInput {
@@ -36,6 +37,7 @@ export interface RuleUpdateInput {
   priority?: number
   confidence?: number
   isActive?: boolean
+  learnReason?: string | null
 }
 
 // ---------------------------------------------------------------------------
@@ -87,6 +89,7 @@ export const createRule = async (userId: string, data: RuleCreateInput): Promise
       source: data.source ?? "manual",
       confidence: data.confidence ?? 1.0,
       isActive: data.isActive ?? true,
+      learnReason: data.learnReason ?? null,
     })
   )
 }
@@ -202,6 +205,13 @@ export function applyRulesToCandidates(
       if (rule.type) candidate.type = rule.type
       if (rule.status) candidate.suggestedStatus = rule.status as TransactionCandidate["suggestedStatus"]
 
+      // Track which rule matched for audit-trail purposes, regardless of
+      // source — the commit step reads this to bump match_count and link
+      // the transaction back to the rule. `ruleMatched` (which the wizard
+      // uses to "never silently override a manual rule") stays restricted
+      // to manual rules so learned rules remain overridable by the AI.
+      candidate.matchedRuleId = rule.id
+
       // Set confidence based on source
       if (rule.source === "manual") {
         candidate.confidence = {
@@ -226,4 +236,54 @@ export function applyRulesToCandidates(
       break
     }
   }
+}
+
+// ---------------------------------------------------------------------------
+// Rule application stats + detail helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Record that a batch of rules matched N transactions each. Called by the
+ * import commit step with a map of ruleId → times matched in this batch, so
+ * 300-row imports produce a single UPDATE rather than 300.
+ */
+export async function recordRuleApplication(
+  userId: string,
+  counts: Map<string, number>,
+): Promise<void> {
+  if (counts.size === 0) return
+  // Simple loop — Postgres doesn't have a clean way to multi-row increment
+  // via VALUES without either CTEs or per-row updates. The UPDATE with a
+  // VALUES table would be ideal but pg's parameterisation of a VALUES
+  // constructor is awkward; per-rule update is acceptable because `counts`
+  // has at most one entry per unique rule hit in a single commit.
+  for (const [ruleId, n] of counts) {
+    await execute(
+      sql`UPDATE categorization_rules
+          SET match_count = match_count + ${n},
+              last_applied_at = CURRENT_TIMESTAMP
+          WHERE id = ${ruleId} AND user_id = ${userId}`,
+    )
+  }
+}
+
+export type RuleWithMatches = {
+  rule: CategorizationRule
+  matches: Transaction[]
+}
+
+export async function getRuleWithMatches(
+  id: string,
+  userId: string,
+  limit = 50,
+): Promise<RuleWithMatches | null> {
+  const rule = await getRuleById(id, userId)
+  if (!rule) return null
+  const matches = await queryMany<Transaction>(
+    sql`SELECT * FROM transactions
+        WHERE applied_rule_id = ${id} AND user_id = ${userId}
+        ORDER BY issued_at DESC NULLS LAST, created_at DESC
+        LIMIT ${limit}`,
+  )
+  return { rule, matches }
 }

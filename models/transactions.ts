@@ -37,6 +37,7 @@ export type TransactionData = {
   text?: string | null
   status?: string | null
   incomeSourceId?: string | null
+  appliedRuleId?: string | null
   [key: string]: unknown
 }
 

@@ -113,7 +113,7 @@ CREATE TABLE transactions (
     note text,
     files jsonb DEFAULT '[]' NOT NULL,
     income_source_id uuid,
-    income_source_id uuid,
+    applied_rule_id uuid,
     extra jsonb,
     category_code text,
     project_code text,
@@ -137,6 +137,7 @@ CREATE INDEX transactions_name_idx ON transactions (name);
 CREATE INDEX transactions_total_idx ON transactions (total);
 CREATE INDEX transactions_account_id_idx ON transactions (account_id);
 CREATE INDEX transactions_crypto_idx ON transactions (user_id) WHERE (extra ? 'crypto');
+CREATE INDEX transactions_applied_rule_idx ON transactions (applied_rule_id) WHERE applied_rule_id IS NOT NULL;
 
 -- ─── Crypto FIFO ledger ─────────────────────────────────────────────────────
 --
@@ -456,12 +457,18 @@ CREATE TABLE categorization_rules (
     source text NOT NULL DEFAULT 'manual',
     confidence double precision DEFAULT 1.0 NOT NULL,
     is_active boolean DEFAULT true NOT NULL,
+    match_count integer NOT NULL DEFAULT 0,
+    last_applied_at timestamp(3),
+    learn_reason text,
     created_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updated_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL,
     FOREIGN KEY (category_code, user_id) REFERENCES categories(code, user_id) ON DELETE SET NULL,
     FOREIGN KEY (project_code, user_id) REFERENCES projects(code, user_id) ON DELETE SET NULL
 );
 CREATE INDEX categorization_rules_user_id_idx ON categorization_rules (user_id);
+ALTER TABLE transactions
+    ADD CONSTRAINT transactions_applied_rule_fk
+    FOREIGN KEY (applied_rule_id) REFERENCES categorization_rules(id) ON DELETE SET NULL;
 
 -- ─── Past Searches ──────────────────────────────────────────────────────────
 
@@ -529,6 +536,7 @@ CREATE TABLE knowledge_packs (
     provider text,
     model text,
     review_status text NOT NULL DEFAULT 'verified',
+    pending_review_content text,
     created_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updated_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL
 );

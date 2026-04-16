@@ -1,6 +1,7 @@
 
-import { useState, useTransition } from "react"
+import { useMemo, useState, useTransition } from "react"
 import { useTranslations } from "next-intl"
+import Link from "next/link"
 import { useConfirm } from "@/components/ui/confirm-dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -10,9 +11,22 @@ import { Switch } from "@/components/ui/switch"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Pencil, Trash2, Plus } from "lucide-react"
+import { Pencil, Trash2, Plus, ExternalLink } from "lucide-react"
 import { addRuleAction, editRuleAction, deleteRuleAction, toggleRuleAction } from "@/actions/rules"
 import type { CategorizationRule, Category, Project } from "@/lib/db-types"
+
+function relativeDays(date: Date | null): string | null {
+  if (!date) return null
+  const days = Math.floor((Date.now() - new Date(date).getTime()) / (1000 * 60 * 60 * 24))
+  if (days === 0) return "today"
+  if (days === 1) return "yesterday"
+  if (days < 30) return `${days}d ago`
+  if (days < 365) return `${Math.floor(days / 30)}mo ago`
+  return `${Math.floor(days / 365)}y ago`
+}
+
+type SourceFilter = "all" | "manual" | "learned"
+type UsageFilter = "all" | "active" | "unused"
 
 interface RulesPageProps {
   rules: CategorizationRule[]
@@ -42,6 +56,17 @@ export function RulesPage({ rules, categories, projects }: RulesPageProps) {
   const [form, setForm] = useState<FormState>(EMPTY_FORM)
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
+  const [sourceFilter, setSourceFilter] = useState<SourceFilter>("all")
+  const [usageFilter, setUsageFilter] = useState<UsageFilter>("all")
+
+  const filteredRules = useMemo(() => {
+    return rules.filter((r) => {
+      if (sourceFilter !== "all" && r.source !== sourceFilter) return false
+      if (usageFilter === "active" && !r.isActive) return false
+      if (usageFilter === "unused" && r.matchCount > 0) return false
+      return true
+    })
+  }, [rules, sourceFilter, usageFilter])
 
   const openAdd = () => {
     setEditingRule(null)
@@ -146,15 +171,54 @@ export function RulesPage({ rules, categories, projects }: RulesPageProps) {
 
   return (
     <div className="w-full">
-      <div className="flex items-center justify-between mb-6">
-        <div />
+      <div className="flex items-center justify-between mb-6 gap-3 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-xs text-muted-foreground">{t("filterLabel")}:</span>
+          <FilterChip
+            active={usageFilter === "all"}
+            onClick={() => setUsageFilter("all")}
+          >
+            {t("filterAll")}
+          </FilterChip>
+          <FilterChip
+            active={usageFilter === "active"}
+            onClick={() => setUsageFilter("active")}
+          >
+            {t("filterActive")}
+          </FilterChip>
+          <FilterChip
+            active={usageFilter === "unused"}
+            onClick={() => setUsageFilter("unused")}
+          >
+            {t("filterUnused")}
+          </FilterChip>
+          <span className="ml-2 text-xs text-muted-foreground">{t("filterSource")}:</span>
+          <FilterChip
+            active={sourceFilter === "all"}
+            onClick={() => setSourceFilter("all")}
+          >
+            {t("filterAll")}
+          </FilterChip>
+          <FilterChip
+            active={sourceFilter === "manual"}
+            onClick={() => setSourceFilter("manual")}
+          >
+            {t("ruleSourceManual")}
+          </FilterChip>
+          <FilterChip
+            active={sourceFilter === "learned"}
+            onClick={() => setSourceFilter("learned")}
+          >
+            {t("ruleSourceLearned")}
+          </FilterChip>
+        </div>
         <Button onClick={openAdd} size="sm">
           <Plus className="h-4 w-4 mr-1" />
           {t("addRule")}
         </Button>
       </div>
 
-      {rules.length === 0 ? (
+      {filteredRules.length === 0 ? (
         <p className="text-sm text-muted-foreground">{t("noRules")}</p>
       ) : (
         <Table>
@@ -166,62 +230,97 @@ export function RulesPage({ rules, categories, projects }: RulesPageProps) {
               <TableHead>{t("projects")}</TableHead>
               <TableHead>{t("type")}</TableHead>
               <TableHead>Source</TableHead>
+              <TableHead className="text-right">{t("hitsColumn")}</TableHead>
+              <TableHead>{t("lastUsedColumn")}</TableHead>
               <TableHead>{t("ruleActive")}</TableHead>
               <TableHead>{t("actions")}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {rules.map(rule => (
-              <TableRow
-                key={rule.id}
-                className={rule.source === "learned" ? "text-muted-foreground" : undefined}
-              >
-                <TableCell className="font-medium">{rule.name}</TableCell>
-                <TableCell className="text-xs font-mono">{formatPattern(rule)}</TableCell>
-                <TableCell>{getCategoryName(rule.categoryCode)}</TableCell>
-                <TableCell>{getProjectName(rule.projectCode)}</TableCell>
-                <TableCell>{rule.type ?? "—"}</TableCell>
-                <TableCell>
-                  {rule.source === "learned" ? (
-                    <Badge variant="secondary" className="bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
-                      {t("ruleSourceLearned")}
-                    </Badge>
-                  ) : (
-                    <Badge variant="secondary" className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
-                      {t("ruleSourceManual")}
-                    </Badge>
-                  )}
-                </TableCell>
-                <TableCell>
-                  <Switch
-                    checked={rule.isActive}
-                    onCheckedChange={checked => handleToggle(rule, checked)}
-                    disabled={isPending}
-                  />
-                </TableCell>
-                <TableCell>
-                  <div className="flex items-center gap-1">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => openEdit(rule)}
-                      title={t("editItem", { name: rule.name })}
+            {filteredRules.map(rule => {
+              const lastUsed = relativeDays(rule.lastAppliedAt)
+              return (
+                <TableRow
+                  key={rule.id}
+                  className={rule.source === "learned" ? "text-muted-foreground" : undefined}
+                >
+                  <TableCell className="font-medium">
+                    <Link
+                      href={`/settings/rules/${rule.id}`}
+                      className="hover:underline"
                     >
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => handleDelete(rule)}
+                      {rule.name}
+                    </Link>
+                  </TableCell>
+                  <TableCell className="text-xs font-mono">{formatPattern(rule)}</TableCell>
+                  <TableCell>{getCategoryName(rule.categoryCode)}</TableCell>
+                  <TableCell>{getProjectName(rule.projectCode)}</TableCell>
+                  <TableCell>{rule.type ?? "—"}</TableCell>
+                  <TableCell>
+                    {rule.source === "learned" ? (
+                      <Badge
+                        variant="secondary"
+                        className="bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200"
+                        title={rule.learnReason ? t("learnedBecause", { reason: rule.learnReason }) : undefined}
+                      >
+                        {t("ruleSourceLearned")}
+                        {rule.source === "learned" ? (
+                          <span className="ml-1 opacity-70">
+                            {Math.round(rule.confidence * 100)}%
+                          </span>
+                        ) : null}
+                      </Badge>
+                    ) : (
+                      <Badge variant="secondary" className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+                        {t("ruleSourceManual")}
+                      </Badge>
+                    )}
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums">{rule.matchCount}</TableCell>
+                  <TableCell className="text-xs text-muted-foreground">
+                    {lastUsed ?? t("neverUsed")}
+                  </TableCell>
+                  <TableCell>
+                    <Switch
+                      checked={rule.isActive}
+                      onCheckedChange={checked => handleToggle(rule, checked)}
                       disabled={isPending}
-                      title={t("deleteItem", { name: rule.name })}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </TableCell>
-              </TableRow>
-            ))}
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        asChild
+                        title={t("viewMatches")}
+                      >
+                        <Link href={`/settings/rules/${rule.id}`}>
+                          <ExternalLink className="h-4 w-4" />
+                        </Link>
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => openEdit(rule)}
+                        title={t("editItem", { name: rule.name })}
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleDelete(rule)}
+                        disabled={isPending}
+                        title={t("deleteItem", { name: rule.name })}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              )
+            })}
           </TableBody>
         </Table>
       )}
@@ -387,5 +486,30 @@ export function RulesPage({ rules, categories, projects }: RulesPageProps) {
         </DialogContent>
       </Dialog>
     </div>
+  )
+}
+
+function FilterChip({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean
+  onClick: () => void
+  children: React.ReactNode
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={
+        "rounded-full border px-2.5 py-0.5 text-xs transition-colors " +
+        (active
+          ? "border-primary bg-primary text-primary-foreground"
+          : "border-border bg-background text-muted-foreground hover:bg-muted")
+      }
+    >
+      {children}
+    </button>
   )
 }
