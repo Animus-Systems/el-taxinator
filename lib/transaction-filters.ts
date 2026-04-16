@@ -1,7 +1,7 @@
 import type { TransactionFilters } from "@/models/transactions"
 import { format } from "date-fns"
 
-const filterKeys = ["search", "dateFrom", "dateTo", "ordering", "categoryCode", "projectCode", "accountId", "type"]
+const filterKeys = ["search", "dateFrom", "dateTo", "ordering", "categoryCode", "projectCode", "accountId", "type", "hasReceipts"]
 
 export function searchParamsToFilters(searchParams: URLSearchParams) {
   return filterKeys.reduce((acc, filter) => {
@@ -69,6 +69,12 @@ export function filtersToSearchParams(
     searchParams.set("type", filters.type)
   } else {
     searchParams.delete("type")
+  }
+
+  if (filters.hasReceipts) {
+    searchParams.set("hasReceipts", filters.hasReceipts)
+  } else {
+    searchParams.delete("hasReceipts")
   }
 
   return searchParams

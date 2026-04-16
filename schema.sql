@@ -276,6 +276,21 @@ CREATE INDEX invoice_payments_user_idx ON invoice_payments (user_id);
 CREATE INDEX invoice_payments_invoice_idx ON invoice_payments (invoice_id);
 CREATE INDEX invoice_payments_transaction_idx ON invoice_payments (transaction_id);
 
+-- ─── Receipt vendor aliases (AI learns vendor→merchant pairings) ────────────
+
+CREATE TABLE receipt_vendor_aliases (
+    id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
+    user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    vendor_pattern text NOT NULL,
+    merchant_pattern text NOT NULL,
+    usage_count integer DEFAULT 1 NOT NULL,
+    source text DEFAULT 'accept' NOT NULL,
+    created_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    UNIQUE (user_id, vendor_pattern, merchant_pattern)
+);
+CREATE INDEX receipt_vendor_aliases_user_idx ON receipt_vendor_aliases (user_id);
+
 -- ─── Accountant Access ───────────────────────────────────────────────────────
 
 CREATE TABLE accountant_invites (

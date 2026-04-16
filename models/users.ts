@@ -12,9 +12,22 @@ export const SELF_HOSTED_USER = {
 }
 
 export async function getSelfHostedUser() {
-  return await queryOne<User>(
+  const user = await queryOne<User>(
     sql`SELECT * FROM users WHERE email = ${SELF_HOSTED_USER.email}`
   )
+  return normalizeUserOutput(user)
+}
+
+export function normalizeUserOutput(user: User | null): User | null {
+  if (!user) return null
+
+  const normalized = { ...user } as User & { isEmailVerified?: boolean }
+  const { isEmailVerified, ...rest } = normalized
+
+  return {
+    ...rest,
+    emailVerified: normalized.emailVerified ?? isEmailVerified ?? false,
+  }
 }
 
 export async function getOrCreateSelfHostedUser(): Promise<User> {
@@ -27,10 +40,11 @@ export async function getOrCreateSelfHostedUser(): Promise<User> {
         DO UPDATE SET name = ${SELF_HOSTED_USER.name}, membership_plan = ${SELF_HOSTED_USER.membershipPlan}, updated_at = ${now}
         RETURNING *`
   )
-  if (user && await isDatabaseEmpty(user.id)) {
-    await createUserDefaults(user.id)
+  const normalizedUser = normalizeUserOutput(user)
+  if (normalizedUser && await isDatabaseEmpty(normalizedUser.id)) {
+    await createUserDefaults(normalizedUser.id)
   }
-  return user!
+  return normalizedUser!
 }
 
 export async function getOrCreateCloudUser(_email: string, data: Record<string, unknown>): Promise<User> {
@@ -63,38 +77,41 @@ export async function getOrCreateCloudUser(_email: string, data: Record<string, 
   const result = await pool.query(text, values)
   const firstRow = result.rows[0]
   if (!firstRow) throw new Error("Failed to create user")
-  const user = mapRow<User>(firstRow)
+  const user = normalizeUserOutput(mapRow<User>(firstRow))
 
-  if (await isDatabaseEmpty(user.id)) {
+  if (user && await isDatabaseEmpty(user.id)) {
     await createUserDefaults(user.id)
   }
 
-  return user
+  return user!
 }
 
 export const getUserById = cache(async (id: string) => {
-  return await queryOne<User>(
+  const user = await queryOne<User>(
     sql`SELECT * FROM users WHERE id = ${id}`
   )
+  return normalizeUserOutput(user)
 })
 
 export const getUserByEmail = cache(async (email: string) => {
-  return await queryOne<User>(
+  const user = await queryOne<User>(
     sql`SELECT * FROM users WHERE email = ${email.toLowerCase()}`
   )
+  return normalizeUserOutput(user)
 })
 
 export const getUserByStripeCustomerId = cache(async (customerId: string) => {
-  return await queryOne<User>(
+  const user = await queryOne<User>(
     sql`SELECT * FROM users WHERE stripe_customer_id = ${customerId}`
   )
+  return normalizeUserOutput(user)
 })
 
 /**
  * Updates a user by ID. Supports plain values and
  * `{ increment: n }` / `{ decrement: n }` operators for numeric columns.
  */
-export function updateUser(userId: string, data: Record<string, unknown>) {
+export async function updateUser(userId: string, data: Record<string, unknown>) {
   const setClauses: string[] = []
   const values: unknown[] = []
 
@@ -126,5 +143,6 @@ export function updateUser(userId: string, data: Record<string, unknown>) {
 
   values.push(userId)
   const text = `UPDATE users SET ${setClauses.join(", ")} WHERE id = $${values.length} RETURNING *`
-  return queryOne<User>({ text, values })
+  const user = await queryOne<User>({ text, values })
+  return normalizeUserOutput(user)
 }

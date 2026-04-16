@@ -19,7 +19,7 @@ export async function WelcomeWidget() {
 
   return (
     <Card className="flex flex-col lg:flex-row items-start gap-10 p-10 w-full">
-      <Image src="/logo/logo.webp" alt="Logo" width={256} height={256} className="w-64 h-64 shrink-0" />
+      <Image src="/logo/logo.webp" alt="Logo" width={512} height={512} className="w-[32rem] h-[32rem] shrink-0" />
       <div className="flex flex-col">
         <CardTitle className="flex items-center justify-between">
           <span className="text-2xl font-bold">

@@ -9,7 +9,7 @@ import { DEFAULT_FIELDS } from "@/models/defaults"
 describe("transaction filter URL helpers", () => {
   it("preserves all supported filters from the URL", () => {
     const params = new URLSearchParams(
-      "search=spotify&dateFrom=2026-01-01&dateTo=2026-03-31&ordering=-issuedAt&categoryCode=software&projectCode=client-a&accountId=acc-1&type=expense",
+      "search=spotify&dateFrom=2026-01-01&dateTo=2026-03-31&ordering=-issuedAt&categoryCode=software&projectCode=client-a&accountId=acc-1&type=expense&hasReceipts=missing",
     )
 
     expect(searchParamsToFilters(params)).toEqual({
@@ -21,7 +21,24 @@ describe("transaction filter URL helpers", () => {
       projectCode: "client-a",
       accountId: "acc-1",
       type: "expense",
+      hasReceipts: "missing",
     })
+  })
+
+  it("round-trips the hasReceipts filter", () => {
+    const params = new URLSearchParams()
+    const serialized = filtersToSearchParams({ hasReceipts: "missing" }, params)
+    expect(serialized.get("hasReceipts")).toBe("missing")
+
+    const parsed = searchParamsToFilters(serialized)
+    expect(parsed.hasReceipts).toBe("missing")
+  })
+
+  it("drops hasReceipts when empty or sentinel", () => {
+    const params = new URLSearchParams("hasReceipts=attached&page=2")
+    const cleared = filtersToSearchParams({ hasReceipts: "" }, params)
+    expect(cleared.has("hasReceipts")).toBe(false)
+    expect(cleared.get("page")).toBe("2")
   })
 
   it("keeps non-filter params while serializing account and type filters", () => {
@@ -66,7 +83,7 @@ describe("transaction filter URL helpers", () => {
 
   it("drops only supported filter keys when clearing filters", () => {
     const params = new URLSearchParams(
-      "page=2&tab=all&search=coffee&accountId=acc-1&type=expense&ordering=-issuedAt",
+      "page=2&tab=all&search=coffee&accountId=acc-1&type=expense&ordering=-issuedAt&hasReceipts=missing",
     )
 
     const result = filtersToSearchParams({}, params)
@@ -77,6 +94,7 @@ describe("transaction filter URL helpers", () => {
     expect(result.has("accountId")).toBe(false)
     expect(result.has("type")).toBe(false)
     expect(result.has("ordering")).toBe(false)
+    expect(result.has("hasReceipts")).toBe(false)
   })
 })
 

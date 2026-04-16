@@ -10,7 +10,9 @@ import { getVisibleTransactionFields } from "@/lib/transaction-list-fields"
 import { cn, formatCurrency } from "@/lib/utils"
 import type { Category, Field, Project, Transaction } from "@/lib/db-types"
 import { formatDate } from "date-fns"
-import { ArrowDownIcon, ArrowUpIcon, File, Sparkles } from "lucide-react"
+import { AlertTriangle, ArrowDownIcon, ArrowUpIcon, File, Paperclip, Sparkles } from "lucide-react"
+import { AttachReceiptDialog } from "@/components/transactions/attach-receipt-dialog"
+import { useTranslations } from "next-intl"
 import { useSearchParams } from "next/navigation"
 import { useRouter } from "@/lib/navigation"
 import { useEffect, useMemo, useState } from "react"
@@ -34,6 +36,52 @@ type FieldWithRenderer = Field & {
 type TransactionWithRelations = Transaction & {
   category?: Category | null
   project?: Project | null
+}
+
+function FilesCell({ transaction }: { transaction: Transaction }) {
+  const t = useTranslations("transactions")
+  const [open, setOpen] = useState(false)
+  const count = (transaction.files as string[]).length
+  const missing =
+    transaction.type === "expense" &&
+    transaction.status === "business" &&
+    count === 0
+
+  return (
+    <div
+      className="flex items-center gap-2 text-sm"
+      onClick={(event) => event.stopPropagation()}
+    >
+      <File className="w-4 h-4" />
+      <span>{count}</span>
+      {missing && (
+        <Badge
+          variant="outline"
+          className="border-amber-300 text-amber-700 gap-1"
+        >
+          <AlertTriangle className="h-3 w-3" />
+          <span className="whitespace-nowrap">{t("receipts.missingReceipt")}</span>
+        </Badge>
+      )}
+      {transaction.type === "expense" && (
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="h-6 w-6 text-muted-foreground hover:text-foreground"
+          title={t("receipts.attach")}
+          onClick={() => setOpen(true)}
+        >
+          <Paperclip className="h-3.5 w-3.5" />
+        </Button>
+      )}
+      <AttachReceiptDialog
+        open={open}
+        onOpenChange={setOpen}
+        transactionId={transaction.id}
+      />
+    </div>
+  )
 }
 
 export const standardFieldRenderers: Record<string, FieldRenderer> = {
@@ -100,12 +148,7 @@ export const standardFieldRenderers: Record<string, FieldRenderer> = {
     name: "Files",
     code: "files",
     sortable: false,
-    formatValue: (transaction: Transaction) => (
-      <div className="flex items-center gap-2 text-sm">
-        <File className="w-4 h-4" />
-        {(transaction.files as string[]).length}
-      </div>
-    ),
+    formatValue: (transaction: Transaction) => <FilesCell transaction={transaction} />,
   },
   total: {
     name: "Total",

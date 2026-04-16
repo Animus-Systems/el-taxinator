@@ -15,7 +15,7 @@ import path from "path"
 // 2. Add a migration entry here with the next version number
 // 3. The migration SQL should be idempotent (use IF NOT EXISTS, etc.)
 
-const SCHEMA_VERSION = 13 // bump this when adding a migration
+const SCHEMA_VERSION = 14 // bump this when adding a migration
 
 const migrations: { version: number; description: string; sql: string }[] = [
   {
@@ -329,6 +329,25 @@ const migrations: { version: number; description: string; sql: string }[] = [
         ON invoice_payments (invoice_id);
       CREATE INDEX IF NOT EXISTS invoice_payments_transaction_idx
         ON invoice_payments (transaction_id);
+    `,
+  },
+  {
+    version: 14,
+    description: "Receipt vendor aliases (AI learns vendor→merchant pairings)",
+    sql: `
+      CREATE TABLE IF NOT EXISTS receipt_vendor_aliases (
+        id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
+        user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        vendor_pattern text NOT NULL,
+        merchant_pattern text NOT NULL,
+        usage_count integer NOT NULL DEFAULT 1,
+        source text NOT NULL DEFAULT 'accept',
+        created_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL,
+        updated_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL,
+        UNIQUE (user_id, vendor_pattern, merchant_pattern)
+      );
+      CREATE INDEX IF NOT EXISTS receipt_vendor_aliases_user_idx
+        ON receipt_vendor_aliases (user_id);
     `,
   },
 ]

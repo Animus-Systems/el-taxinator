@@ -169,10 +169,10 @@ export function EntityPicker({ entities }: Props) {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-violet-50 via-white to-indigo-50 p-4">
       <div className="w-full max-w-lg space-y-6">
         {/* Header */}
-        <div className="text-center space-y-3">
-          <Image src="/logo/logo.webp" alt="Taxinator" width={80} height={80} className="mx-auto rounded-2xl" />
-          <h1 className="text-3xl font-bold tracking-tight">Taxinator</h1>
-          <p className="text-muted-foreground">{"Choose a company to get started"}</p>
+        <div className="text-center">
+          <Image src="/logo/logo.webp" alt="Taxinator" width={160} height={160} className="mx-auto rounded-2xl" />
+          <h1 className="-mt-2 text-3xl font-bold tracking-tight">Taxinator</h1>
+          <p className="mt-2 text-muted-foreground">{"Choose a company to get started"}</p>
         </div>
 
         {/* Folder browser (triggered by "Open Folder" button) */}

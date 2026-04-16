@@ -48,6 +48,7 @@ export type TransactionFilters = {
   accountId?: string
   projectCode?: string
   type?: string
+  hasReceipts?: "missing" | "attached" | ""
   page?: number
 }
 
@@ -131,6 +132,16 @@ export function buildTransactionWhere(
       conditions.push(`${col("account_id")} = $${idx}`)
       values.push(filters.accountId)
       idx++
+    }
+
+    if (filters.hasReceipts === "missing") {
+      conditions.push(
+        `${col("type")} = 'expense' AND ${col("status")} = 'business' AND jsonb_array_length(COALESCE(${col("files")}, '[]'::jsonb)) = 0`,
+      )
+    } else if (filters.hasReceipts === "attached") {
+      conditions.push(
+        `jsonb_array_length(COALESCE(${col("files")}, '[]'::jsonb)) > 0`,
+      )
     }
   }
 

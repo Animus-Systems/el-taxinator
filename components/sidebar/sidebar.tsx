@@ -11,7 +11,7 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-  SidebarRail,
+  useSidebar,
 } from "@/components/ui/sidebar"
 import config from "@/lib/config"
 import Link from "next/link"
@@ -24,6 +24,7 @@ import {
   History,
   House,
   LogOut,
+  PanelLeft,
   Package,
   Receipt,
   ScrollText,
@@ -32,7 +33,6 @@ import {
 } from "lucide-react"
 import { useTranslation } from "react-i18next"
 import { useTransition } from "react"
-import { ColoredText } from "../ui/colored-text"
 import { Blinker } from "./blinker"
 import { LanguageSwitcher } from "./language-switcher"
 import { disconnectAction } from "@/actions/auth"
@@ -85,6 +85,7 @@ export function AppSidebar({
   const { t } = useTranslation("sidebar")
   const { notification } = useNotification()
   const [isDisconnecting, startDisconnectTransition] = useTransition()
+  const { toggleSidebar } = useSidebar()
 
   const handleDisconnect = () => {
     startDisconnectTransition(async () => {
@@ -98,14 +99,25 @@ export function AppSidebar({
     <>
       <Sidebar variant="inset" collapsible="icon">
         <SidebarHeader>
-          <NavLink href="/dashboard" className="flex items-center gap-2">
-            <img src="/logo/logo.webp" alt="Logo" className="h-10 w-10 rounded-lg" width={40} height={40} />
-            <div className="grid flex-1 text-left leading-tight">
-              <span className="truncate font-semibold text-lg">
-                <ColoredText>{config.app.title}</ColoredText>
+          <NavLink
+            href="/dashboard"
+            className="flex flex-col items-center text-center leading-tight"
+          >
+            <img
+              src="/logo/logo.webp"
+              alt="Logo"
+              className="h-[7.5rem] w-[7.5rem] rounded-lg group-data-[collapsible=icon]:h-8 group-data-[collapsible=icon]:w-8"
+              width={120}
+              height={120}
+            />
+            <span className="-mt-2 font-semibold text-lg text-sidebar-foreground group-data-[collapsible=icon]:hidden">
+              {config.app.title}
+            </span>
+            {entityName && (
+              <span className="mt-0.5 truncate max-w-full text-xs text-sidebar-foreground/70 group-data-[collapsible=icon]:hidden">
+                {entityName}
               </span>
-              {entityName && <span className="truncate text-xs text-sidebar-foreground/70">{entityName}</span>}
-            </div>
+            )}
           </NavLink>
         </SidebarHeader>
         <SidebarContent>
@@ -144,11 +156,16 @@ export function AppSidebar({
             </SidebarGroupContent>
           </SidebarGroup>
         </SidebarContent>
-        <SidebarRail />
         <SidebarFooter>
           <SidebarGroup>
             <SidebarGroupContent>
               <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton onClick={toggleSidebar} className="w-full">
+                    <PanelLeft className="h-4 w-4" />
+                    <span>{t("foldSidebar")}</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
                 <SidebarMenuItem>
                   <LanguageSwitcher />
                 </SidebarMenuItem>

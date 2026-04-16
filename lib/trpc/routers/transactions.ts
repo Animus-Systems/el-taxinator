@@ -10,6 +10,8 @@ import {
   bulkDeleteTransactions,
 } from "@/models/transactions"
 import type { TransactionData, TransactionFilters } from "@/models/transactions"
+import { attachFileToTransaction, getFileById } from "@/models/files"
+import { TRPCError } from "@trpc/server"
 import {
   transactionSchema,
   categorySchema,
@@ -32,6 +34,7 @@ const transactionFiltersSchema = z.object({
   categoryCode: z.string().optional(),
   projectCode: z.string().optional(),
   type: z.string().optional(),
+  hasReceipts: z.enum(["missing", "attached", ""]).optional(),
   page: z.number().int().optional(),
   limit: z.number().int().optional(),
 })
@@ -75,6 +78,7 @@ export const transactionsRouter = router({
         ...(input.categoryCode !== undefined && { categoryCode: input.categoryCode }),
         ...(input.projectCode !== undefined && { projectCode: input.projectCode }),
         ...(input.type !== undefined && { type: input.type }),
+        ...(input.hasReceipts !== undefined && { hasReceipts: input.hasReceipts }),
         ...(input.page !== undefined && { page: input.page }),
       }
       const limit = input.limit ?? 50
@@ -132,5 +136,29 @@ export const transactionsRouter = router({
     .mutation(async ({ ctx, input }) => {
       const entityId = await getActiveEntityId()
       return bulkDeleteTransactions(input.ids, ctx.user.id, entityId)
+    }),
+
+  /**
+   * Attach an already-stored file (e.g. an orphan receipt) to this
+   * transaction's `files` jsonb array. Both rows must belong to the
+   * current user.
+   */
+  attachFile: authedProcedure
+    .input(z.object({ transactionId: z.string(), fileId: z.string() }))
+    .output(z.object({ ok: z.boolean() }))
+    .mutation(async ({ ctx, input }) => {
+      const file = await getFileById(input.fileId, ctx.user.id)
+      if (!file) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "File not found" })
+      }
+      const ok = await attachFileToTransaction(
+        ctx.user.id,
+        input.transactionId,
+        input.fileId,
+      )
+      if (!ok) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Transaction not found" })
+      }
+      return { ok: true }
     }),
 })

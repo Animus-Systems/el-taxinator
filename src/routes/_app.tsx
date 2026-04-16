@@ -35,7 +35,7 @@ export function AppLayout() {
             {...(entityName !== undefined ? { entityName } : {})}
           />
           <SidebarInset>
-            <div className="flex flex-1 flex-col p-4 md:p-6 overflow-x-hidden">
+            <div className="flex flex-1 flex-col overflow-x-hidden p-4 md:py-6 md:pl-1 md:pr-6">
               <Outlet />
             </div>
           </SidebarInset>

@@ -243,6 +243,31 @@ export const updateFile = async (id: string, userId: string, data: FileUpdateDat
   return result!
 }
 
+/**
+ * Append a file id to a transaction's `files` jsonb array (idempotent — a no-op
+ * if the file is already referenced). Scoped by user_id so callers can't touch
+ * other users' rows. Returns `true` if the row existed (even if no change).
+ */
+export async function attachFileToTransaction(
+  userId: string,
+  transactionId: string,
+  fileId: string,
+): Promise<boolean> {
+  const pool = await getPool()
+  const result = await pool.query(
+    `UPDATE transactions
+        SET files = CASE
+          WHEN files ? $3 THEN files
+          ELSE COALESCE(files, '[]'::jsonb) || to_jsonb($3::text)
+        END,
+            updated_at = now()
+      WHERE id = $1 AND user_id = $2
+      RETURNING id`,
+    [transactionId, userId, fileId],
+  )
+  return (result.rowCount ?? 0) > 0
+}
+
 export const deleteFile = async (id: string, userId: string, entityId: string) => {
   const pool = await getPool()
   const result = await pool.query(

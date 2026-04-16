@@ -35,6 +35,7 @@ import { suggestNewCategories } from "@/ai/suggest-categories"
 import { detectPDFType, extractPDFTransactions } from "@/ai/import-pdf"
 import { applyRulesToCandidates } from "@/models/rules"
 import { getActiveRules } from "@/models/rules"
+import { learnFromImport } from "@/ai/learn-rules"
 import { getActiveAccounts } from "@/models/accounts"
 import { persistUploadedFile } from "@/models/files"
 import { getActiveEntityId } from "@/lib/entities"
@@ -486,6 +487,21 @@ export async function importRoutes(app: FastifyInstance) {
       // Run AI categorization
       await categorizeTransactions(candidates, user.id)
 
+      // Snapshot AI's first-pass suggestions so we can learn from the user's
+      // later corrections at commit time. Only set if not already captured
+      // (recategorize calls keep the original snapshot).
+      for (const candidate of candidates) {
+        if (candidate.suggestedCategoryCode === undefined) {
+          candidate.suggestedCategoryCode = candidate.categoryCode
+        }
+        if (candidate.suggestedProjectCode === undefined) {
+          candidate.suggestedProjectCode = candidate.projectCode
+        }
+        if (candidate.suggestedType === undefined) {
+          candidate.suggestedType = candidate.type
+        }
+      }
+
       // Suggest new categories
       const suggestedCategories = await suggestNewCategories(candidates, user.id)
 
@@ -646,7 +662,28 @@ export async function importRoutes(app: FastifyInstance) {
       // Mark session as committed
       await updateImportSession(request.params.id, user.id, { status: "committed" })
 
-      return reply.send({ success: true, created })
+      // Learn from the user's corrections — if they consistently re-
+      // categorized several transactions the same way, turn that into a
+      // "learned" rule that will pre-match similar rows on the next import.
+      let rulesLearned = 0
+      try {
+        const originalSuggestions = reviewedCandidates
+          .filter((c) => c.suggestedCategoryCode !== undefined || c.suggestedProjectCode !== undefined || c.suggestedType !== undefined)
+          .map((c) => ({
+            rowIndex: c.rowIndex,
+            categoryCode: c.suggestedCategoryCode ?? null,
+            projectCode: c.suggestedProjectCode ?? null,
+            type: c.suggestedType ?? null,
+          }))
+        if (originalSuggestions.length > 0) {
+          rulesLearned = await learnFromImport(user.id, originalSuggestions, candidates)
+        }
+      } catch (err) {
+        // Learning is best-effort; never fail a commit over it.
+        console.error("[import/commit] learnFromImport failed:", err)
+      }
+
+      return reply.send({ success: true, created, rulesLearned })
     } catch (error) {
       console.error("[import/commit] Error:", error)
       return reply.send({

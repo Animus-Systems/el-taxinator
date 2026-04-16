@@ -93,6 +93,25 @@ export function TransactionSearchAndFilters({
           </Select>
         )}
 
+        <Select
+          value={filters.hasReceipts || "-"}
+          onValueChange={(value) =>
+            handleFilterChange(
+              "hasReceipts",
+              value === "-" ? "" : (value as "missing" | "attached"),
+            )
+          }
+        >
+          <SelectTrigger className="w-[180px]">
+            <SelectValue placeholder={t("receipts.filterAll")} />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="-">{t("receipts.filterAll")}</SelectItem>
+            <SelectItem value="missing">{t("receipts.filterMissing")}</SelectItem>
+            <SelectItem value="attached">{t("receipts.filterAttached")}</SelectItem>
+          </SelectContent>
+        </Select>
+
         {projects.length > 1 && (
           <Select value={filters.projectCode || "-"} onValueChange={(value) => handleFilterChange("projectCode", value)}>
             <SelectTrigger className="w-[180px]">

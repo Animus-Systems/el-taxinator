@@ -36,6 +36,13 @@ export type TransactionCandidate = {
   issuedAt: string | null // ISO date string
   status: TransactionReviewStatus
   suggestedStatus: TransactionReviewStatus | null
+  // Snapshot of the AI's initial categorization (captured once, after the
+  // first categorize pass). Compared against the user's final choice at
+  // commit time to auto-learn recurring corrections into
+  // `categorization_rules`. Undefined means "never captured".
+  suggestedCategoryCode?: string | null
+  suggestedProjectCode?: string | null
+  suggestedType?: string | null
   confidence: {
     category: number
     type: number
