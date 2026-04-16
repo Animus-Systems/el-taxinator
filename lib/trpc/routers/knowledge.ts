@@ -9,37 +9,13 @@ import {
   upsertPack,
   hasStalePack,
 } from "@/models/knowledge-packs"
-import { refreshPack, readSeedContent, seedKnowledgePacksForUser, SEED_PACKS, RefreshError } from "@/ai/knowledge-refresh"
+import { readSeedContent, seedKnowledgePacksForUser, SEED_PACKS, RefreshError } from "@/ai/knowledge-refresh"
+import { enqueueKnowledgeRefresh } from "@/ai/knowledge-refresh-jobs"
 
-const refreshChangedSchema = z.object({
-  kind: z.literal("updated"),
+const refreshQueueSchema = z.object({
+  accepted: z.boolean(),
   pack: knowledgePackSchema,
-  provider: z.string(),
-  model: z.string().nullable(),
-  tokensUsed: z.number().nullable(),
-  summary: z.string(),
-  citations: z.array(z.string()),
-  diffSummary: z.object({
-    sizeBefore: z.number(),
-    sizeAfter: z.number(),
-    headingCountBefore: z.number(),
-    headingCountAfter: z.number(),
-  }),
 })
-
-const refreshUnchangedSchema = z.object({
-  kind: z.literal("unchanged"),
-  pack: knowledgePackSchema,
-  provider: z.string(),
-  model: z.string().nullable(),
-  tokensUsed: z.number().nullable(),
-  reason: z.string(),
-})
-
-const refreshOutputSchema = z.discriminatedUnion("kind", [
-  refreshChangedSchema,
-  refreshUnchangedSchema,
-])
 
 /**
  * RefreshError details are carried in TRPCError.message as a JSON-serialisable
@@ -83,10 +59,10 @@ export const knowledgeRouter = router({
 
   refresh: authedProcedure
     .input(z.object({ slug: z.string() }))
-    .output(refreshOutputSchema)
+    .output(refreshQueueSchema)
     .mutation(async ({ ctx, input }) => {
       try {
-        return await refreshPack(ctx.user.id, input.slug)
+        return await enqueueKnowledgeRefresh(ctx.user.id, input.slug)
       } catch (err) {
         if (err instanceof RefreshError) {
           const mapped: Record<RefreshError["code"], TRPCError["code"]> = {

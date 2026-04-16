@@ -15,7 +15,7 @@ import path from "path"
 // 2. Add a migration entry here with the next version number
 // 3. The migration SQL should be idempotent (use IF NOT EXISTS, etc.)
 
-const SCHEMA_VERSION = 16 // bump this when adding a migration
+export const SCHEMA_VERSION = 17 // bump this when adding a migration
 
 const migrations: { version: number; description: string; sql: string }[] = [
   {
@@ -207,6 +207,11 @@ const migrations: { version: number; description: string; sql: string }[] = [
         provider text,
         model text,
         review_status text NOT NULL DEFAULT 'verified',
+        refresh_state text NOT NULL DEFAULT 'idle',
+        refresh_message text,
+        refresh_started_at timestamp(3),
+        refresh_finished_at timestamp(3),
+        refresh_heartbeat_at timestamp(3),
         created_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL,
         updated_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL
       );
@@ -416,6 +421,22 @@ const migrations: { version: number; description: string; sql: string }[] = [
 
       ALTER TABLE knowledge_packs
         ADD COLUMN IF NOT EXISTS pending_review_content text;
+    `,
+  },
+  {
+    version: 17,
+    description: "Knowledge refresh job state and observability columns",
+    sql: `
+      ALTER TABLE knowledge_packs
+        ADD COLUMN IF NOT EXISTS refresh_state text NOT NULL DEFAULT 'idle';
+      ALTER TABLE knowledge_packs
+        ADD COLUMN IF NOT EXISTS refresh_message text;
+      ALTER TABLE knowledge_packs
+        ADD COLUMN IF NOT EXISTS refresh_started_at timestamp(3);
+      ALTER TABLE knowledge_packs
+        ADD COLUMN IF NOT EXISTS refresh_finished_at timestamp(3);
+      ALTER TABLE knowledge_packs
+        ADD COLUMN IF NOT EXISTS refresh_heartbeat_at timestamp(3);
     `,
   },
 ]

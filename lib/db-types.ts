@@ -380,6 +380,13 @@ export const importSessionSchema = z.object({
 export type ImportSession = z.infer<typeof importSessionSchema>
 
 export const knowledgePackReviewStatusSchema = z.enum(["verified", "needs_review", "seed"])
+export const knowledgePackRefreshStateSchema = z.enum([
+  "idle",
+  "queued",
+  "running",
+  "succeeded",
+  "failed",
+])
 
 export const knowledgePackSchema = z.object({
   id: z.string(),
@@ -393,6 +400,11 @@ export const knowledgePackSchema = z.object({
   provider: z.string().nullable(),
   model: z.string().nullable(),
   reviewStatus: z.string(),
+  refreshState: knowledgePackRefreshStateSchema,
+  refreshMessage: z.string().nullable(),
+  refreshStartedAt: z.date().nullable(),
+  refreshFinishedAt: z.date().nullable(),
+  refreshHeartbeatAt: z.date().nullable(),
   pendingReviewContent: z.string().nullable(),
   createdAt: z.date(),
   updatedAt: z.date(),

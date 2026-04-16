@@ -11,7 +11,6 @@
 import Fastify from "fastify"
 import cors from "@fastify/cors"
 import fastifyStatic from "@fastify/static"
-import { fastifyTRPCPlugin } from "@trpc/server/adapters/fastify"
 import type { CreateFastifyContextOptions } from "@trpc/server/adapters/fastify"
 import fs from "fs"
 import path from "path"
@@ -33,6 +32,7 @@ import { exportRoutes } from "./routes/export"
 import { invoicesRoutes } from "./routes/invoices"
 import { receiptsRoutes } from "./routes/receipts"
 import { personalRoutes } from "./routes/personal"
+import { registerFastifyTrpcRoutes } from "./trpc-fastify"
 
 // ---------------------------------------------------------------------------
 // State — resolved during boot, used by context factory
@@ -181,13 +181,12 @@ async function main() {
     console.log("[server] No client build found under dist/ - API-only mode")
   }
 
-  // 5. Mount tRPC
-  await app.register(fastifyTRPCPlugin, {
+  // 5. Mount tRPC. Use a wildcard route so comma-joined batch URLs from
+  // httpBatchLink resolve correctly under Fastify.
+  await registerFastifyTrpcRoutes(app, {
     prefix: "/api/trpc",
-    trpcOptions: {
-      router: appRouter,
-      createContext: createFastifyContext,
-    },
+    router: appRouter,
+    createContext: createFastifyContext,
   })
 
   // 6. Mount import routes (file upload + AI import pipeline)

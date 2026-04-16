@@ -2,7 +2,7 @@ import { ChatOpenAI } from "@langchain/openai"
 import { ChatGoogleGenerativeAI } from "@langchain/google-genai"
 import { ChatMistralAI } from "@langchain/mistralai"
 import { HumanMessage } from "@langchain/core/messages"
-import { execFileSync } from "node:child_process"
+import { spawn } from "node:child_process"
 import { writeFileSync, unlinkSync, mkdtempSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
@@ -44,6 +44,16 @@ export interface LLMResponse {
   error?: string
 }
 
+export type LLMProgressEvent =
+  | { type: "provider_attempt"; provider: LLMProvider; attempt: number; total: number }
+  | { type: "provider_waiting"; provider: LLMProvider; elapsedMs: number; timeoutMs: number }
+  | { type: "provider_failed"; provider: LLMProvider; error: string }
+  | { type: "provider_succeeded"; provider: LLMProvider; durationMs: number }
+
+export interface LLMRequestOptions {
+  onEvent?: (event: LLMProgressEvent) => void | Promise<void>
+}
+
 const subscriptionProviders = new Set(
   PROVIDERS.filter((p) => p.isSubscription).map((p) => p.key)
 )
@@ -80,7 +90,19 @@ const CLI_SPECS: Record<string, CLISpec> = {
   },
 }
 
-async function requestCLI(config: LLMConfig, req: LLMRequest, timeoutMs?: number): Promise<LLMResponse> {
+async function emitProgress(
+  options: LLMRequestOptions | undefined,
+  event: LLMProgressEvent,
+): Promise<void> {
+  await options?.onEvent?.(event)
+}
+
+async function requestCLI(
+  config: LLMConfig,
+  req: LLMRequest,
+  timeoutMs?: number,
+  options?: LLMRequestOptions,
+): Promise<LLMResponse> {
   const spec = CLI_SPECS[config.provider]
   if (!spec) {
     return { output: {}, provider: config.provider, error: `No CLI spec for provider: ${config.provider}` }
@@ -137,11 +159,82 @@ async function requestCLI(config: LLMConfig, req: LLMRequest, timeoutMs?: number
     )
 
     const startedAt = Date.now()
-    const result = execFileSync(spec.binary, args, {
-      timeout: effectiveTimeout,
-      encoding: "utf-8",
-      env: process.env as NodeJS.ProcessEnv,
-      input: spec.useStdin ? fullPrompt : undefined,
+    const result = await new Promise<string>((resolve, reject) => {
+      const child = spawn(spec.binary, args, {
+        env: process.env as NodeJS.ProcessEnv,
+        stdio: ["pipe", "pipe", "pipe"],
+      })
+
+      let stdout = ""
+      let stderr = ""
+      let settled = false
+      let timedOut = false
+
+      const heartbeat = setInterval(() => {
+        const elapsedMs = Date.now() - startedAt
+        console.info(`[llm] ${spec.binary} still running (${Math.round(elapsedMs / 1000)}s elapsed)`)
+        void emitProgress(options, {
+          type: "provider_waiting",
+          provider: config.provider,
+          elapsedMs,
+          timeoutMs: effectiveTimeout,
+        })
+      }, 15_000)
+
+      const timeout = setTimeout(() => {
+        timedOut = true
+        child.kill("SIGTERM")
+        setTimeout(() => {
+          try {
+            child.kill("SIGKILL")
+          } catch {
+            // ignore best-effort kill
+          }
+        }, 5_000).unref()
+      }, effectiveTimeout)
+
+      const cleanup = () => {
+        clearInterval(heartbeat)
+        clearTimeout(timeout)
+      }
+
+      child.on("error", (error) => {
+        if (settled) return
+        settled = true
+        cleanup()
+        reject(error)
+      })
+
+      child.stdout.setEncoding("utf-8")
+      child.stdout.on("data", (chunk: string) => {
+        stdout += chunk
+      })
+
+      child.stderr.setEncoding("utf-8")
+      child.stderr.on("data", (chunk: string) => {
+        stderr += chunk
+      })
+
+      child.on("close", (code, signal) => {
+        if (settled) return
+        settled = true
+        cleanup()
+        if (timedOut) {
+          reject(new Error(`${spec.binary} CLI timed out after ${Math.round(effectiveTimeout / 1000)}s`))
+          return
+        }
+        if (code !== 0) {
+          const detail = stderr.trim() || `exit code ${code ?? "unknown"}${signal ? ` (${signal})` : ""}`
+          reject(new Error(`${spec.binary} CLI failed: ${detail}`))
+          return
+        }
+        resolve(stdout)
+      })
+
+      if (spec.useStdin) {
+        child.stdin.write(fullPrompt)
+      }
+      child.stdin.end()
     })
     const durationMs = Date.now() - startedAt
 
@@ -173,6 +266,11 @@ async function requestCLI(config: LLMConfig, req: LLMRequest, timeoutMs?: number
     console.info(
       `[llm] ${spec.binary} ok in ${durationMs}ms → ${Object.keys(parsed).length} keys`,
     )
+    await emitProgress(options, {
+      type: "provider_succeeded",
+      provider: config.provider,
+      durationMs,
+    })
     return { output: parsed, provider: config.provider }
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : `${spec.binary} CLI failed`
@@ -185,10 +283,15 @@ async function requestCLI(config: LLMConfig, req: LLMRequest, timeoutMs?: number
   }
 }
 
-async function requestLLMUnified(config: LLMConfig, req: LLMRequest, timeoutMs?: number): Promise<LLMResponse> {
+async function requestLLMUnified(
+  config: LLMConfig,
+  req: LLMRequest,
+  timeoutMs?: number,
+  options?: LLMRequestOptions,
+): Promise<LLMResponse> {
   try {
     if (subscriptionProviders.has(config.provider)) {
-      return await requestCLI(config, req, timeoutMs)
+      return await requestCLI(config, req, timeoutMs, options)
     }
 
     let model: ReturnType<typeof ChatOpenAI.prototype.withStructuredOutput> extends infer T ? T : never
@@ -243,7 +346,12 @@ async function requestLLMUnified(config: LLMConfig, req: LLMRequest, timeoutMs?:
   }
 }
 
-export async function requestLLM(settings: LLMSettings, req: LLMRequest, timeoutMs?: number): Promise<LLMResponse> {
+export async function requestLLM(
+  settings: LLMSettings,
+  req: LLMRequest,
+  timeoutMs?: number,
+  options?: LLMRequestOptions,
+): Promise<LLMResponse> {
   const eligibleCount = settings.providers.filter(
     (p) => p.model && (subscriptionProviders.has(p.provider) || p.apiKey),
   ).length
@@ -264,13 +372,24 @@ export async function requestLLM(settings: LLMSettings, req: LLMRequest, timeout
     console.info(
       `[llm] try ${config.provider} (${isSubscription ? "subscription" : "API key"}) — attempt ${tried}/${eligibleCount}`,
     )
+    await emitProgress(options, {
+      type: "provider_attempt",
+      provider: config.provider,
+      attempt: tried,
+      total: eligibleCount,
+    })
 
-    const response = await requestLLMUnified(config, req, timeoutMs)
+    const response = await requestLLMUnified(config, req, timeoutMs, options)
     if (!response.error) {
       console.info(`[llm] ✓ ${config.provider} succeeded`)
       return response
     }
     console.error(`[llm] ✗ ${config.provider} failed: ${response.error}`)
+    await emitProgress(options, {
+      type: "provider_failed",
+      provider: config.provider,
+      error: response.error,
+    })
   }
 
   return {

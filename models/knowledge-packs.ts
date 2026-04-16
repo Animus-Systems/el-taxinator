@@ -1,6 +1,8 @@
 import { sql, queryMany, queryOne, execute } from "@/lib/sql"
 import type { KnowledgePack } from "@/lib/db-types"
 
+export type KnowledgePackRefreshState = "idle" | "queued" | "running" | "succeeded" | "failed"
+
 export async function listPacks(userId: string): Promise<KnowledgePack[]> {
   return queryMany<KnowledgePack>(
     sql`SELECT * FROM knowledge_packs WHERE user_id = ${userId} ORDER BY slug ASC LIMIT 20`,
@@ -30,6 +32,11 @@ export type UpsertKnowledgePackInput = {
    * `pending_review_content` so the user doesn't lose the diff.
    */
   pendingReviewContent?: string | null
+  refreshState?: KnowledgePackRefreshState
+  refreshMessage?: string | null
+  refreshStartedAt?: Date | null
+  refreshFinishedAt?: Date | null
+  refreshHeartbeatAt?: Date | null
 }
 
 export async function upsertPack(input: UpsertKnowledgePackInput): Promise<KnowledgePack> {
@@ -38,11 +45,18 @@ export async function upsertPack(input: UpsertKnowledgePackInput): Promise<Knowl
   const lastRefreshedAt = input.markRefreshed ? new Date() : null
   const pendingReviewContent =
     input.pendingReviewContent === undefined ? null : input.pendingReviewContent
+  const refreshState = input.refreshState ?? "idle"
+  const refreshMessage = input.refreshMessage === undefined ? null : input.refreshMessage
+  const refreshStartedAt = input.refreshStartedAt === undefined ? null : input.refreshStartedAt
+  const refreshFinishedAt = input.refreshFinishedAt === undefined ? null : input.refreshFinishedAt
+  const refreshHeartbeatAt = input.refreshHeartbeatAt === undefined ? null : input.refreshHeartbeatAt
 
   const row = await queryOne<KnowledgePack>(
     sql`INSERT INTO knowledge_packs (
           user_id, slug, title, content, source_prompt,
           last_refreshed_at, refresh_interval_days, provider, model, review_status,
+          refresh_state, refresh_message, refresh_started_at, refresh_finished_at,
+          refresh_heartbeat_at,
           pending_review_content
         )
         VALUES (
@@ -50,6 +64,10 @@ export async function upsertPack(input: UpsertKnowledgePackInput): Promise<Knowl
           ${input.sourcePrompt ?? null},
           ${lastRefreshedAt ? lastRefreshedAt.toISOString() : null},
           ${refreshInterval}, ${input.provider ?? null}, ${input.model ?? null}, ${reviewStatus},
+          ${refreshState}, ${refreshMessage},
+          ${refreshStartedAt ? refreshStartedAt.toISOString() : null},
+          ${refreshFinishedAt ? refreshFinishedAt.toISOString() : null},
+          ${refreshHeartbeatAt ? refreshHeartbeatAt.toISOString() : null},
           ${pendingReviewContent}
         )
         ON CONFLICT (user_id, slug) DO UPDATE
@@ -61,6 +79,11 @@ export async function upsertPack(input: UpsertKnowledgePackInput): Promise<Knowl
               provider = EXCLUDED.provider,
               model = EXCLUDED.model,
               review_status = EXCLUDED.review_status,
+              refresh_state = EXCLUDED.refresh_state,
+              refresh_message = EXCLUDED.refresh_message,
+              refresh_started_at = COALESCE(EXCLUDED.refresh_started_at, knowledge_packs.refresh_started_at),
+              refresh_finished_at = EXCLUDED.refresh_finished_at,
+              refresh_heartbeat_at = COALESCE(EXCLUDED.refresh_heartbeat_at, knowledge_packs.refresh_heartbeat_at),
               pending_review_content = EXCLUDED.pending_review_content,
               updated_at = now()
         RETURNING *`,
@@ -94,6 +117,37 @@ export async function setReviewStatus(
             updated_at = now()
         WHERE user_id = ${userId} AND slug = ${slug}`,
   )
+}
+
+export type KnowledgePackRefreshPatch = {
+  refreshState: KnowledgePackRefreshState
+  refreshMessage?: string | null
+  refreshStartedAt?: Date | null
+  refreshFinishedAt?: Date | null
+  refreshHeartbeatAt?: Date | null
+}
+
+export async function updatePackRefreshState(
+  userId: string,
+  slug: string,
+  patch: KnowledgePackRefreshPatch,
+): Promise<KnowledgePack> {
+  const row = await queryOne<KnowledgePack>(
+    sql`UPDATE knowledge_packs
+        SET refresh_state = ${patch.refreshState},
+            refresh_message = ${patch.refreshMessage ?? null},
+            refresh_started_at = COALESCE(
+              ${patch.refreshStartedAt ? patch.refreshStartedAt.toISOString() : null},
+              refresh_started_at
+            ),
+            refresh_finished_at = ${patch.refreshFinishedAt ? patch.refreshFinishedAt.toISOString() : null},
+            refresh_heartbeat_at = ${patch.refreshHeartbeatAt ? patch.refreshHeartbeatAt.toISOString() : null},
+            updated_at = now()
+        WHERE user_id = ${userId} AND slug = ${slug}
+        RETURNING *`,
+  )
+  if (!row) throw new Error(`updatePackRefreshState: pack "${slug}" not found`)
+  return row
 }
 
 export async function deletePack(userId: string, slug: string): Promise<void> {

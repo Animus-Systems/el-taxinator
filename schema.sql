@@ -536,6 +536,11 @@ CREATE TABLE knowledge_packs (
     provider text,
     model text,
     review_status text NOT NULL DEFAULT 'verified',
+    refresh_state text NOT NULL DEFAULT 'idle',
+    refresh_message text,
+    refresh_started_at timestamp(3),
+    refresh_finished_at timestamp(3),
+    refresh_heartbeat_at timestamp(3),
     pending_review_content text,
     created_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updated_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL

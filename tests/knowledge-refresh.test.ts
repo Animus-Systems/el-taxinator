@@ -38,6 +38,11 @@ const basePack = {
   provider: null,
   model: null,
   reviewStatus: "seed",
+  refreshState: "idle",
+  refreshMessage: null,
+  refreshStartedAt: null,
+  refreshFinishedAt: null,
+  refreshHeartbeatAt: null,
   pendingReviewContent: null,
   createdAt: new Date(),
   updatedAt: new Date(),
@@ -79,6 +84,14 @@ describe("refreshPack", () => {
     expect(result.summary).toBe("Verified 2026 rates")
     expect(result.citations).toContain("LIRPF art. 63")
     expect(upsertPackMock).toHaveBeenCalled()
+    expect(requestLLMMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        schema: expect.any(Object),
+      }),
+      600_000,
+      expect.any(Object),
+    )
   })
 
   it("throws RefreshError('malformed_output') when provider returns no content field", async () => {
@@ -109,17 +122,47 @@ describe("refreshPack", () => {
     expect(upsertPackMock).not.toHaveBeenCalled()
   })
 
-  it("returns 'unchanged' and does NOT mark refreshed when content is byte-identical", async () => {
+  it("returns 'unchanged' and still marks the pack as freshly checked when content is byte-identical", async () => {
     requestLLMMock.mockResolvedValue({
       output: { content: LONG_CONTENT, summary: "no changes" },
       provider: "openai",
     })
+    upsertPackMock.mockImplementationOnce(
+      async (input: {
+        content: string
+        provider: string | null
+        markRefreshed: boolean
+        reviewStatus: string
+        pendingReviewContent: string | null
+      }) => ({
+        ...basePack,
+        content: input.content,
+        provider: input.provider,
+        lastRefreshedAt: new Date("2026-04-16T12:00:00.000Z"),
+        reviewStatus: input.reviewStatus,
+        pendingReviewContent: input.pendingReviewContent,
+        refreshState: "succeeded",
+        refreshMessage: "content identical",
+        refreshFinishedAt: new Date("2026-04-16T12:00:00.000Z"),
+        refreshHeartbeatAt: new Date("2026-04-16T12:00:00.000Z"),
+      }),
+    )
 
     const result = await refreshPack("u-1", "canary-autonomo")
     expect(result.kind).toBe("unchanged")
     if (result.kind !== "unchanged") return
     expect(result.reason).toBe("content identical")
-    expect(upsertPackMock).not.toHaveBeenCalled()
+    expect(upsertPackMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: "u-1",
+        slug: "canary-autonomo",
+        content: LONG_CONTENT,
+        provider: "openai",
+        reviewStatus: "seed",
+        markRefreshed: true,
+      }),
+    )
+    expect(result.pack.lastRefreshedAt).toEqual(new Date("2026-04-16T12:00:00.000Z"))
   })
 
   it("preserves pending-review content when a second refresh lands while pack is needs_review", async () => {

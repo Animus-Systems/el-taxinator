@@ -4,7 +4,7 @@ import { trpc } from "~/trpc"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Loader2, RefreshCw, CheckCircle2, RotateCcw, BookOpen, AlertTriangle, Info } from "lucide-react"
+import { Loader2, RefreshCw, CheckCircle2, RotateCcw, BookOpen, AlertTriangle } from "lucide-react"
 import type { KnowledgePack } from "@/lib/db-types"
 import { useConfirm } from "@/components/ui/confirm-dialog"
 
@@ -47,56 +47,49 @@ export function KnowledgeSettingsPage() {
   const { t } = useTranslation("knowledge")
   const confirm = useConfirm()
   const utils = trpc.useUtils()
-  const { data: packs = [], isLoading } = trpc.knowledge.list.useQuery()
+  const { data: packs = [], isLoading } = trpc.knowledge.list.useQuery(undefined, {
+    refetchInterval: (query) => {
+      const next = query.state.data ?? []
+      return next.some((pack) => pack.refreshState === "queued" || pack.refreshState === "running")
+        ? 2000
+        : false
+    },
+  })
   const [expandedSlug, setExpandedSlug] = useState<string | null>(null)
   const [expandedPendingSlug, setExpandedPendingSlug] = useState<string | null>(null)
-  const [refreshingSlug, setRefreshingSlug] = useState<string | null>(null)
   const [refreshError, setRefreshError] = useState<ParsedRefreshError | null>(null)
-  const [lastResult, setLastResult] = useState<
-    | { slug: string; kind: "updated"; summary: string; provider: string; model: string | null }
-    | { slug: string; kind: "unchanged"; provider: string; model: string | null }
-    | null
-  >(null)
 
   const refresh = trpc.knowledge.refresh.useMutation({
-    onMutate: ({ slug }) => {
-      setRefreshingSlug(slug)
+    onMutate: () => {
       setRefreshError(null)
-      setLastResult(null)
     },
-    onSuccess: (result) => {
-      setRefreshingSlug(null)
-      utils.knowledge.list.invalidate()
-      utils.knowledge.hasStale.invalidate()
-      if (result.kind === "updated") {
-        setLastResult({
-          slug: result.pack.slug,
-          kind: "updated",
-          summary: `${result.summary} · ${result.diffSummary.sizeBefore} → ${result.diffSummary.sizeAfter} chars · ${result.diffSummary.headingCountBefore} → ${result.diffSummary.headingCountAfter} headings`,
-          provider: result.provider,
-          model: result.model,
-        })
-      } else {
-        setLastResult({
-          slug: result.pack.slug,
-          kind: "unchanged",
-          provider: result.provider,
-          model: result.model,
-        })
-      }
+    onSuccess: async () => {
+      await Promise.all([
+        utils.knowledge.list.invalidate(),
+        utils.knowledge.hasStale.invalidate(),
+      ])
     },
     onError: (err) => {
-      setRefreshingSlug(null)
       setRefreshError(parseRefreshError(err.message))
     },
   })
 
   const markVerified = trpc.knowledge.markVerified.useMutation({
-    onSuccess: () => utils.knowledge.list.invalidate(),
+    onSuccess: async () => {
+      await Promise.all([
+        utils.knowledge.list.invalidate(),
+        utils.knowledge.hasStale.invalidate(),
+      ])
+    },
   })
 
   const resetToSeed = trpc.knowledge.resetToSeed.useMutation({
-    onSuccess: () => utils.knowledge.list.invalidate(),
+    onSuccess: async () => {
+      await Promise.all([
+        utils.knowledge.list.invalidate(),
+        utils.knowledge.hasStale.invalidate(),
+      ])
+    },
   })
 
   if (isLoading) {
@@ -116,8 +109,8 @@ export function KnowledgeSettingsPage() {
         </h2>
         <p className="text-sm text-muted-foreground mt-1">
           Curated knowledge the AI accountant consults during wizard sessions. Refresh each pack
-          periodically so tax rates and deadlines stay current — refresh uses your configured
-          LLM (same as the wizard).
+          periodically so tax rates and deadlines stay current. Refresh now runs in the background
+          and this page will update while the provider is working.
         </p>
       </header>
 
@@ -125,22 +118,6 @@ export function KnowledgeSettingsPage() {
         <div className="rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive flex items-start gap-2">
           <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
           <span>{renderRefreshError(refreshError, (k, v) => t(k, v) as unknown as string)}</span>
-        </div>
-      ) : null}
-
-      {lastResult?.kind === "unchanged" ? (
-        <div className="rounded-md border border-muted bg-muted/40 p-3 text-sm flex items-start gap-2">
-          <Info className="h-4 w-4 mt-0.5 shrink-0" />
-          <span>
-            {t("refreshNoChanges", { provider: lastResult.provider })}
-          </span>
-        </div>
-      ) : null}
-
-      {lastResult?.kind === "updated" ? (
-        <div className="rounded-md border border-emerald-300 bg-emerald-50 dark:bg-emerald-950/30 p-3 text-sm">
-          Refreshed <strong>{lastResult.slug}</strong> — {lastResult.summary}. Review the new content
-          below and click <em>Mark verified</em> once you're comfortable.
         </div>
       ) : null}
 
@@ -173,7 +150,6 @@ export function KnowledgeSettingsPage() {
                 })
                 if (ok) resetToSeed.mutate({ slug: p.slug })
               }}
-              isRefreshing={refreshingSlug === p.slug}
             />
           ))}
         </div>
@@ -191,7 +167,6 @@ function PackCard({
   onRefresh,
   onMarkVerified,
   onResetSeed,
-  isRefreshing,
 }: {
   pack: KnowledgePack
   expanded: boolean
@@ -201,13 +176,13 @@ function PackCard({
   onRefresh: () => void
   onMarkVerified: () => void
   onResetSeed: () => void
-  isRefreshing: boolean
 }) {
   const { t } = useTranslation("knowledge")
   const days = pack.lastRefreshedAt
     ? Math.floor((Date.now() - new Date(pack.lastRefreshedAt).getTime()) / (1000 * 60 * 60 * 24))
     : null
   const stale = days === null || days >= pack.refreshIntervalDays
+  const isRefreshing = pack.refreshState === "queued" || pack.refreshState === "running"
 
   const statusBadge = (() => {
     if (pack.reviewStatus === "seed") return <Badge variant="outline">{t("seedBadge")}</Badge>
@@ -220,6 +195,14 @@ function PackCard({
     return <Badge variant="outline">{pack.reviewStatus}</Badge>
   })()
 
+  const refreshBadge = (() => {
+    if (pack.refreshState === "queued") return <Badge variant="secondary">{t("refreshQueued")}</Badge>
+    if (pack.refreshState === "running") return <Badge variant="secondary">{t("refreshRunning")}</Badge>
+    if (pack.refreshState === "failed") return <Badge variant="destructive">{t("refreshFailed")}</Badge>
+    if (pack.refreshState === "succeeded") return <Badge variant="outline">{t("refreshSucceeded")}</Badge>
+    return null
+  })()
+
   const refreshedVia = pack.lastRefreshedAt && pack.provider
     ? t("refreshedVia", {
         ago: days === 0 ? "today" : days === 1 ? "yesterday" : `${days}d ago`,
@@ -227,6 +210,13 @@ function PackCard({
         model: pack.model ?? "",
       })
     : null
+
+  const refreshDetailTone =
+    pack.refreshState === "failed"
+      ? "text-destructive"
+      : pack.refreshState === "queued" || pack.refreshState === "running"
+        ? "text-amber-700 dark:text-amber-300"
+        : "text-muted-foreground"
 
   return (
     <Card>
@@ -236,6 +226,7 @@ function PackCard({
             <div className="flex items-center gap-2 flex-wrap">
               <h3 className="font-medium">{pack.title}</h3>
               {statusBadge}
+              {refreshBadge}
               {stale ? <Badge variant="destructive">{t("staleBadge")}</Badge> : null}
             </div>
             <div className="text-xs text-muted-foreground mt-1 flex flex-wrap gap-3">
@@ -249,6 +240,11 @@ function PackCard({
               </span>
               {refreshedVia ? <span>{refreshedVia}</span> : null}
             </div>
+            {pack.refreshMessage ? (
+              <div className={`mt-2 text-xs ${refreshDetailTone}`}>
+                {pack.refreshMessage}
+              </div>
+            ) : null}
           </div>
           <div className="flex items-center gap-2">
             <Button variant="outline" size="sm" onClick={onRefresh} disabled={isRefreshing}>
@@ -257,10 +253,14 @@ function PackCard({
               ) : (
                 <RefreshCw className="h-3.5 w-3.5 mr-1" />
               )}
-              {isRefreshing ? t("refreshing") : t("refreshNow")}
+              {pack.refreshState === "running"
+                ? t("refreshRunning")
+                : pack.refreshState === "queued"
+                  ? t("refreshQueued")
+                  : t("refreshNow")}
             </Button>
             {pack.reviewStatus === "needs_review" ? (
-              <Button variant="outline" size="sm" onClick={onMarkVerified}>
+              <Button variant="default" size="sm" onClick={onMarkVerified}>
                 <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
                 {t("markVerified")}
               </Button>
@@ -269,32 +269,30 @@ function PackCard({
               <RotateCcw className="h-3.5 w-3.5 mr-1" />
               {t("resetSeed")}
             </Button>
-            <Button variant="ghost" size="sm" onClick={onToggle}>
-              {expanded ? "Hide" : "Preview"}
-            </Button>
           </div>
         </div>
+
+        <div className="mt-3 flex flex-wrap gap-2">
+          <Button variant="secondary" size="sm" onClick={onToggle}>
+            {expanded ? "Hide content" : "Show content"}
+          </Button>
+          {pack.pendingReviewContent ? (
+            <Button variant="secondary" size="sm" onClick={onTogglePending}>
+              {pendingExpanded ? "Hide previous version" : t("previousUnreviewedVersion")}
+            </Button>
+          ) : null}
+        </div>
+
         {expanded ? (
-          <pre className="mt-3 max-h-80 overflow-auto rounded bg-muted p-3 text-xs whitespace-pre-wrap font-mono">
+          <pre className="mt-3 max-h-[500px] overflow-auto rounded-md bg-muted/40 p-3 text-xs whitespace-pre-wrap">
             {pack.content}
           </pre>
         ) : null}
-        {pack.pendingReviewContent ? (
-          <div className="mt-3 rounded border border-amber-300 bg-amber-50 dark:bg-amber-950/30">
-            <button
-              type="button"
-              onClick={onTogglePending}
-              className="flex w-full items-center justify-between px-3 py-2 text-left text-xs font-medium"
-            >
-              <span>{t("previousUnreviewedVersion")}</span>
-              <span className="text-muted-foreground">{pendingExpanded ? "−" : "+"}</span>
-            </button>
-            {pendingExpanded ? (
-              <pre className="max-h-80 overflow-auto border-t border-amber-200 bg-background/40 p-3 text-xs whitespace-pre-wrap font-mono">
-                {pack.pendingReviewContent}
-              </pre>
-            ) : null}
-          </div>
+
+        {pendingExpanded && pack.pendingReviewContent ? (
+          <pre className="mt-3 max-h-[360px] overflow-auto rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-950/20 p-3 text-xs whitespace-pre-wrap">
+            {pack.pendingReviewContent}
+          </pre>
         ) : null}
       </CardContent>
     </Card>

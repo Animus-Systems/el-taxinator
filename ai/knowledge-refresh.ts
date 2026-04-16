@@ -137,6 +137,8 @@ const REFRESH_ENVELOPE_SCHEMA: Record<string, unknown> = {
   required: ["content", "summary"],
 }
 
+const KNOWLEDGE_REFRESH_TIMEOUT_MS = 600_000
+
 function buildRefreshPrompt(slug: string, currentContent: string): string {
   const topic = TOPIC_DESC[slug] ?? "Spanish tax knowledge"
   return `You are updating a knowledge document about ${topic}.
@@ -184,6 +186,8 @@ export type RefreshUnchanged = {
 }
 
 export type RefreshResult = RefreshChanged | RefreshUnchanged
+
+export type RefreshProgressCallback = (message: string) => void | Promise<void>
 
 export class RefreshError extends Error {
   readonly code: "no_providers" | "all_providers_failed" | "malformed_output" | "truncated" | "not_found"
@@ -242,7 +246,29 @@ function parseEnvelope(output: unknown): Envelope | null {
   return { content, summary, citations }
 }
 
-export async function refreshPack(userId: string, slug: string): Promise<RefreshResult> {
+function formatProviderProgressEvent(event: { type: string; provider: string; attempt?: number; total?: number; elapsedMs?: number; error?: string }): string | null {
+  if (event.type === "provider_attempt") {
+    return `Trying ${event.provider} (${event.attempt}/${event.total})…`
+  }
+  if (event.type === "provider_waiting" && typeof event.elapsedMs === "number") {
+    return `Waiting on ${event.provider}… ${Math.max(1, Math.round(event.elapsedMs / 1000))}s elapsed`
+  }
+  if (event.type === "provider_failed" && event.error) {
+    return `${event.provider} failed: ${event.error}`
+  }
+  if (event.type === "provider_succeeded") {
+    return `${event.provider} responded`
+  }
+  return null
+}
+
+export async function refreshPack(
+  userId: string,
+  slug: string,
+  options?: {
+    onProgress?: RefreshProgressCallback
+  },
+): Promise<RefreshResult> {
   const current = await getPack(userId, slug)
   if (!current) {
     throw new RefreshError("not_found", `Knowledge pack "${slug}" not found`)
@@ -258,7 +284,20 @@ export async function refreshPack(userId: string, slug: string): Promise<Refresh
   }
 
   const prompt = buildRefreshPrompt(slug, current.content)
-  const response = await requestLLM(llmSettings, { prompt, schema: REFRESH_ENVELOPE_SCHEMA })
+  await options?.onProgress?.("Preparing refresh request…")
+  const response = await requestLLM(
+    llmSettings,
+    { prompt, schema: REFRESH_ENVELOPE_SCHEMA },
+    KNOWLEDGE_REFRESH_TIMEOUT_MS,
+    {
+      onEvent: async (event) => {
+        const message = formatProviderProgressEvent(event)
+        if (message) {
+          await options?.onProgress?.(message)
+        }
+      },
+    },
+  )
   if (response.error) {
     throw new RefreshError(
       "all_providers_failed",
@@ -287,12 +326,31 @@ export async function refreshPack(userId: string, slug: string): Promise<Refresh
     )
   }
 
-  // If content is byte-for-byte identical, skip marking refreshed so the
-  // sidebar freshness indicator reflects real changes, not no-op refreshes.
+  // If content is byte-for-byte identical, still mark the pack as freshly
+  // checked. Otherwise a successful refresh can remain permanently stale in
+  // the sidebar and settings screen even though the content was just verified.
   if (sha256(envelope.content) === sha256(current.content)) {
+    const refreshed = await upsertPack({
+      userId,
+      slug: current.slug,
+      title: current.title,
+      content: current.content,
+      sourcePrompt: prompt,
+      refreshIntervalDays: current.refreshIntervalDays,
+      provider: response.provider,
+      model: current.model,
+      reviewStatus: current.reviewStatus as "verified" | "needs_review" | "seed",
+      markRefreshed: true,
+      refreshState: "succeeded",
+      refreshMessage: "content identical",
+      refreshFinishedAt: new Date(),
+      refreshHeartbeatAt: new Date(),
+      pendingReviewContent: current.pendingReviewContent,
+    })
+
     return {
       kind: "unchanged",
-      pack: current,
+      pack: refreshed,
       provider: response.provider,
       model: null,
       tokensUsed: response.tokensUsed ?? null,
@@ -314,6 +372,10 @@ export async function refreshPack(userId: string, slug: string): Promise<Refresh
     model: null,
     reviewStatus: "needs_review",
     markRefreshed: true,
+    refreshState: "succeeded",
+    refreshMessage: envelope.summary,
+    refreshFinishedAt: new Date(),
+    refreshHeartbeatAt: new Date(),
     pendingReviewContent: preserveUnreviewed,
   })
 
