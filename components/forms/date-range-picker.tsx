@@ -118,7 +118,7 @@ export function DateRangePicker({
           ))}
         </div>
         <Calendar
-          initialFocus
+          autoFocus
           mode="range"
           {...(dateRange?.from !== undefined ? { defaultMonth: dateRange.from } : {})}
           {...(dateRange !== undefined ? { selected: dateRange } : {})}

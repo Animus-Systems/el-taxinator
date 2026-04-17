@@ -319,6 +319,12 @@
     "confirmDeletePermanentTitle": "Delete transaction permanently?",
     "confirmDeletePermanent": "Are you sure? This will delete the transaction with all the files permanently",
     "type": "Type",
+    "editDescription": "Edit or delete this transaction",
+    "types": {
+      "income": "Income",
+      "expense": "Expense",
+      "other": "Other"
+    },
     "description": "Description",
     "note": "Note",
     "selectColumns": "Select table columns",
@@ -667,6 +673,12 @@
     "amountToPayATC": "Amount to pay to Agencia Tributaria Canaria",
     "amountToCompensate": "Amount to compensate / return",
     "irpfQuarterlyPayment": "Modelo 130 — Quarterly IRPF payment (autónomos)",
+    "modelo202Cumulative": "Modelo 202 amounts are cumulative from January 1 to the end of the quarter, per AEAT instructions.",
+    "corporateQuarterlyPayment": "Modelo 202 — Quarterly corporate tax payment",
+    "corporateTaxQuota": "Full tax quota",
+    "paymentsOnAccount": "Previous payments on account",
+    "corporateNoPaymentDue": "Previous quarterly payments cover the current installment. No amount to pay.",
+    "corporateLegalDisclaimerText": "These figures are indicative and calculated automatically from invoices and expenses recorded. Always verify amounts before filing declarations with the Agencia Tributaria Canaria (Modelo 420) and AEAT (Modelo 202). IGIC on expenses is estimated and may differ from reality.",
     "cumulativeDataFrom": "Cumulative data from Jan 1 to",
     "periodIncome": "Income for the period (cumulative)",
     "periodExpenses": "Expenses for the period (cumulative)",
@@ -807,6 +819,37 @@
         "descriptionPlaceholder": "e.g. Plan de pensiones BBVA",
         "save": "Save"
       }
+    }
+  },
+  "chat": {
+    "title": "Assistant",
+    "placeholder": "Ask me anything…",
+    "send": "Send",
+    "clearHistory": "Clear history",
+    "clearConfirmTitle": "Clear chat history?",
+    "clearConfirmBody": "This removes all messages. The agent keeps business facts you've shared.",
+    "retry": "Retry",
+    "applied": "Applied",
+    "dismissed": "Dismissed",
+    "apply": "Apply",
+    "dismiss": "Dismiss",
+    "noProviderTitle": "No LLM provider configured",
+    "noProviderBody": "Configure an LLM provider in Settings → LLM to use the assistant.",
+    "noProviderCta": "Go to settings",
+    "proposalRuleTitle": "Create rule",
+    "proposalUpdateTitle": "Update transaction",
+    "actions": {
+      "applyRuleToExistingTitle": "Apply rule to existing",
+      "bulkUpdateTitle": "Bulk update",
+      "createCategoryTitle": "Create category",
+      "createProjectTitle": "Create project",
+      "deleteTransactionTitle": "Delete transaction",
+      "deleteRuleTitle": "Delete rule",
+      "willAffectCount": "Will affect {count} transactions",
+      "confirmBulkBody": "Update {count} transactions? This can't be undone.",
+      "confirmDeleteTransactionBody": "Delete this transaction permanently?",
+      "confirmDeleteRuleBody": "Delete this rule? Historic matches remain.",
+      "tooManyMatches": "Too many matches ({count}). Narrow the filter."
     }
   },
   "unsorted": {

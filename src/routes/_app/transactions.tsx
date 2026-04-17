@@ -38,6 +38,8 @@ export function TransactionsPage() {
     limit: TRANSACTIONS_PER_PAGE,
   })
 
+  const { data: dateRange } = trpc.transactions.dateRange.useQuery(queryFilters)
+
   const { data: categories } = trpc.categories.list.useQuery({})
   const { data: projects } = trpc.projects.list.useQuery({})
   const { data: fields } = trpc.fields.list.useQuery({})
@@ -69,9 +71,19 @@ export function TransactionsPage() {
   return (
     <>
       <header className="flex flex-wrap items-center justify-between gap-2 mb-8">
-        <h2 className="flex flex-row gap-3 md:gap-5">
+        <h2 className="flex flex-row items-baseline gap-3 md:gap-5">
           <span className="text-3xl font-bold tracking-tight">{t("title")}</span>
           <span className="text-3xl tracking-tight opacity-20">{total}</span>
+          {dateRange?.earliest && dateRange?.latest && (
+            <span
+              className="text-sm text-muted-foreground font-normal"
+              title={`First transaction: ${dateRange.earliest}\nLast transaction: ${dateRange.latest}`}
+            >
+              {dateRange.earliest === dateRange.latest
+                ? dateRange.earliest
+                : `${dateRange.earliest} → ${dateRange.latest}`}
+            </span>
+          )}
         </h2>
         <TransactionsToolbar
           accounts={accounts ?? []}

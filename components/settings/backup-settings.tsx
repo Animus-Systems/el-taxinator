@@ -82,17 +82,20 @@ export function BackupSettings({
   const handleSaveSettings = async () => {
     setSavingSettings(true)
     try {
-      // Save via tRPC settings update
-      await fetch("/api/trpc/settings.update", {
+      const response = await fetch("/api/settings/backup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          backup_frequency: frequency,
-          backup_retention: retention,
+          backupFrequency: frequency,
+          backupRetention: retention,
         }),
       })
-    } catch {}
-    setSavingSettings(false)
+      if (!response.ok) throw new Error("Failed to save backup settings")
+    } catch {
+      setBackupResult(t("failedToSave"))
+    } finally {
+      setSavingSettings(false)
+    }
   }
 
   const t = useTranslations("settings")

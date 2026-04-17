@@ -15,9 +15,9 @@ import path from "path"
 // 2. Add a migration entry here with the next version number
 // 3. The migration SQL should be idempotent (use IF NOT EXISTS, etc.)
 
-export const SCHEMA_VERSION = 17 // bump this when adding a migration
+export const SCHEMA_VERSION = 19 // bump this when adding a migration
 
-const migrations: { version: number; description: string; sql: string }[] = [
+export const migrations: { version: number; description: string; sql: string }[] = [
   {
     version: 2,
     description: "Add accounts, import_sessions tables and account_id on transactions",
@@ -437,6 +437,33 @@ const migrations: { version: number; description: string; sql: string }[] = [
         ADD COLUMN IF NOT EXISTS refresh_finished_at timestamp(3);
       ALTER TABLE knowledge_packs
         ADD COLUMN IF NOT EXISTS refresh_heartbeat_at timestamp(3);
+    `,
+  },
+  {
+    version: 18,
+    description: "Show transaction type column by default for existing users",
+    sql: `
+      UPDATE fields SET is_visible_in_list = true WHERE code = 'type';
+    `,
+  },
+  {
+    version: 19,
+    description: "Chat messages table with rolling summary support",
+    sql: `
+      CREATE TABLE IF NOT EXISTS chat_messages (
+        id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
+        user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        role text NOT NULL,
+        content text NOT NULL,
+        metadata jsonb,
+        status text NOT NULL DEFAULT 'sent',
+        applied_at timestamp(3),
+        created_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS chat_messages_user_created_idx
+        ON chat_messages (user_id, created_at);
+      CREATE UNIQUE INDEX IF NOT EXISTS chat_messages_user_summary_idx
+        ON chat_messages (user_id) WHERE role = 'system';
     `,
   },
 ]

@@ -19,6 +19,18 @@ const fieldInputSchema = z.object({
   isExtra: z.boolean().optional(),
 })
 
+const fieldUpdateSchema = z.object({
+  code: z.string(),
+  name: z.string().max(128).optional(),
+  type: z.string().max(128).optional(),
+  llmPrompt: z.string().max(512).nullish(),
+  options: z.any().nullish(),
+  isVisibleInList: z.boolean().optional(),
+  isVisibleInAnalysis: z.boolean().optional(),
+  isRequired: z.boolean().optional(),
+  isExtra: z.boolean().optional(),
+})
+
 export const fieldsRouter = router({
   list: authedProcedure
     .meta({ openapi: { method: "GET", path: "/api/v1/fields" } })
@@ -38,7 +50,7 @@ export const fieldsRouter = router({
 
   update: authedProcedure
     .meta({ openapi: { method: "PUT", path: "/api/v1/fields/{code}" } })
-    .input(z.object({ code: z.string() }).merge(fieldInputSchema))
+    .input(fieldUpdateSchema)
     .output(fieldSchema.nullable())
     .mutation(async ({ ctx, input }) => {
       const { code, ...data } = input

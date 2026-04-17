@@ -400,6 +400,79 @@ export async function requestLLM(
 }
 
 // ---------------------------------------------------------------------------
+// Connection test
+// ---------------------------------------------------------------------------
+
+export interface LLMTestResult {
+  success: boolean
+  error?: string
+  responseTime?: number
+}
+
+/**
+ * Minimal provider reachability check. Used by settings UI to validate
+ * keys/CLI availability without running a full structured-output request.
+ */
+export async function testLLMProvider(config: LLMConfig): Promise<LLMTestResult> {
+  const startedAt = Date.now()
+  try {
+    if (subscriptionProviders.has(config.provider)) {
+      const spec = CLI_SPECS[config.provider]
+      if (!spec) {
+        return { success: false, error: `No CLI spec for ${config.provider}` }
+      }
+      await new Promise<void>((resolve, reject) => {
+        const child = spawn(spec.binary, ["--version"], { stdio: ["ignore", "pipe", "pipe"] })
+        let stderr = ""
+        child.stderr.on("data", (c) => { stderr += String(c) })
+        child.on("error", (err) => reject(new Error(`${spec.binary} not found: ${err.message}`)))
+        child.on("close", (code) => {
+          if (code === 0) resolve()
+          else reject(new Error(stderr.trim() || `${spec.binary} --version exited ${code}`))
+        })
+      })
+      return { success: true, responseTime: Date.now() - startedAt }
+    }
+
+    let model: { invoke: (messages: HumanMessage[]) => Promise<unknown> }
+    const temperature = 0
+    if (config.provider === "openai") {
+      model = new ChatOpenAI({ apiKey: config.apiKey, model: config.model, temperature })
+    } else if (config.provider === "openrouter") {
+      model = new ChatOpenAI({
+        apiKey: config.apiKey,
+        model: config.model,
+        temperature,
+        configuration: { baseURL: "https://openrouter.ai/api/v1" },
+      })
+    } else if (config.provider === "custom") {
+      if (!config.baseUrl) return { success: false, error: "Custom provider requires a base URL" }
+      model = new ChatOpenAI({
+        apiKey: config.apiKey,
+        model: config.model,
+        temperature,
+        configuration: { baseURL: config.baseUrl },
+      })
+    } else if (config.provider === "google") {
+      model = new ChatGoogleGenerativeAI({ apiKey: config.apiKey, model: config.model, temperature })
+    } else if (config.provider === "mistral") {
+      model = new ChatMistralAI({ apiKey: config.apiKey, model: config.model, temperature })
+    } else {
+      return { success: false, error: `Unknown provider: ${config.provider}` }
+    }
+
+    await model.invoke([new HumanMessage({ content: "Reply with the single word: OK" })])
+    return { success: true, responseTime: Date.now() - startedAt }
+  } catch (error: unknown) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+      responseTime: Date.now() - startedAt,
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 

@@ -61,14 +61,24 @@ export async function saveProfileAction(
   }
 }
 
-export async function testProviderAction(_data: {
+export async function testProviderAction(data: {
   provider: string
   apiKey: string
   model: string
   thinking?: string
   baseUrl?: string
-}) {
-  return { success: false as const, error: "testProviderAction is not yet implemented in SPA mode" }
+}): Promise<{ success: boolean; error?: string; responseTime?: number }> {
+  try {
+    return await trpcMutate<{ success: boolean; error?: string; responseTime?: number }>(
+      "settings.testProvider",
+      data,
+    )
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to test provider",
+    }
+  }
 }
 
 export async function addProjectAction(data: Record<string, unknown>) {

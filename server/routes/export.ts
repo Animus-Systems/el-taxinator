@@ -14,10 +14,11 @@ import type { FastifyInstance } from "fastify"
 import { readFile } from "node:fs/promises"
 import JSZip from "jszip"
 
+import { createBundle } from "@/lib/bundle"
+import { getActiveEntity, getActiveEntityId } from "@/lib/entities"
 import { getOrCreateSelfHostedUser } from "@/models/users"
 import { getTransactions } from "@/models/transactions"
 import { getFilesByIds } from "@/models/files"
-import { getActiveEntityId } from "@/lib/entities"
 import { fullPathForFile } from "@/lib/files"
 import type { TransactionFilters } from "@/models/transactions"
 
@@ -78,6 +79,34 @@ function sanitizeFilename(raw: string): string {
 }
 
 export async function exportRoutes(app: FastifyInstance) {
+  app.get("/api/export/bundle", async (_request, reply) => {
+    try {
+      const user = await getOrCreateSelfHostedUser()
+      if (!user) return reply.code(401).send({ error: "Not authenticated" })
+
+      const entity = await getActiveEntity()
+      const bundle = await createBundle(entity)
+      const safeEntityName = entity.name
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "") || "backup"
+
+      reply.header("Content-Type", "application/zip")
+      reply.header("Content-Length", String(bundle.length))
+      reply.header(
+        "Content-Disposition",
+        `attachment; filename="${safeEntityName}-${new Date().toISOString().slice(0, 10)}.taxinator.zip"`,
+      )
+      return reply.send(bundle)
+    } catch (error) {
+      console.error("[export/bundle] Error:", error)
+      return reply.code(500).send({
+        error: error instanceof Error ? error.message : "Bundle export failed",
+      })
+    }
+  })
+
   app.get("/export/transactions", async (request, reply) => {
     try {
       const user = await getOrCreateSelfHostedUser()

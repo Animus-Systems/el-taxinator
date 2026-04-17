@@ -548,6 +548,21 @@ CREATE TABLE knowledge_packs (
 CREATE UNIQUE INDEX knowledge_packs_user_slug_key ON knowledge_packs (user_id, slug);
 CREATE INDEX knowledge_packs_user_idx ON knowledge_packs (user_id);
 
+-- ─── Chat ────────────────────────────────────────────────────────────────────
+
+CREATE TABLE chat_messages (
+    id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
+    user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    role text NOT NULL,
+    content text NOT NULL,
+    metadata jsonb,
+    status text NOT NULL DEFAULT 'sent',
+    applied_at timestamp(3),
+    created_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+CREATE INDEX chat_messages_user_created_idx ON chat_messages (user_id, created_at);
+CREATE UNIQUE INDEX chat_messages_user_summary_idx ON chat_messages (user_id) WHERE role = 'system';
+
 -- ─── Schema Version ─────────────────────────────────────────────────────────
 
 CREATE TABLE schema_version (

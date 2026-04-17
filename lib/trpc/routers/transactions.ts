@@ -8,6 +8,7 @@ import {
   updateTransactionFiles,
   deleteTransaction,
   bulkDeleteTransactions,
+  getTransactionDateRange,
 } from "@/models/transactions"
 import type { TransactionData, TransactionFilters } from "@/models/transactions"
 import { attachFileToTransaction, getFileById } from "@/models/files"
@@ -85,6 +86,26 @@ export const transactionsRouter = router({
       const page = input.page ?? 1
       const pagination = { limit, offset: (page - 1) * limit }
       return getTransactions(ctx.user.id, filters, pagination)
+    }),
+
+  dateRange: authedProcedure
+    .input(transactionFiltersSchema)
+    .output(z.object({
+      earliest: z.string().nullable(),
+      latest: z.string().nullable(),
+    }))
+    .query(async ({ ctx, input }) => {
+      const filters: TransactionFilters = {
+        ...(input.search !== undefined && { search: input.search }),
+        ...(input.dateFrom !== undefined && { dateFrom: input.dateFrom }),
+        ...(input.dateTo !== undefined && { dateTo: input.dateTo }),
+        ...(input.accountId !== undefined && { accountId: input.accountId }),
+        ...(input.categoryCode !== undefined && { categoryCode: input.categoryCode }),
+        ...(input.projectCode !== undefined && { projectCode: input.projectCode }),
+        ...(input.type !== undefined && { type: input.type }),
+        ...(input.hasReceipts !== undefined && { hasReceipts: input.hasReceipts }),
+      }
+      return getTransactionDateRange(ctx.user.id, filters)
     }),
 
   getById: authedProcedure

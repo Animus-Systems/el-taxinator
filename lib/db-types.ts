@@ -331,6 +331,190 @@ export const businessFactSchema = z.object({
 })
 export type BusinessFact = z.infer<typeof businessFactSchema>
 
+// ─── Chat ───────────────────────────────────────────────────────────────────
+
+export const chatMessageRoleSchema = z.enum(["user", "assistant", "system"])
+export type ChatMessageRole = z.infer<typeof chatMessageRoleSchema>
+
+export const chatMessageStatusSchema = z.enum(["sent", "pending", "error"])
+export type ChatMessageStatus = z.infer<typeof chatMessageStatusSchema>
+
+export const proposedRuleSchema = z.object({
+  name: z.string().min(1).max(128),
+  matchType: z.enum(["contains", "starts_with", "exact", "regex"]),
+  matchField: z.enum(["name", "merchant", "description"]),
+  matchValue: z.string().min(1).max(512),
+  categoryCode: z.string().max(128).nullable().optional(),
+  projectCode: z.string().max(128).nullable().optional(),
+  type: z.enum(["income", "expense", "other"]).nullable().optional(),
+  priority: z.number().int().optional(),
+  reason: z.string().max(512),
+})
+export type ProposedRule = z.infer<typeof proposedRuleSchema>
+
+export const proposedUpdateSchema = z.object({
+  transactionId: z.string().uuid(),
+  patch: z.object({
+    name: z.string().optional(),
+    merchant: z.string().optional(),
+    description: z.string().optional(),
+    note: z.string().optional(),
+    categoryCode: z.string().nullable().optional(),
+    projectCode: z.string().nullable().optional(),
+    type: z.string().optional(),
+  }),
+  reason: z.string().max(512),
+})
+export type ProposedUpdate = z.infer<typeof proposedUpdateSchema>
+
+export const extractedFactSchema = z.object({
+  key: z.string().min(1).max(128),
+  value: z.unknown(),
+})
+export type ExtractedFact = z.infer<typeof extractedFactSchema>
+
+// ─── Chat proposed actions ──────────────────────────────────────────────────
+
+const ruleSpecFields = {
+  name: z.string().min(1).max(128),
+  matchType: z.enum(["contains", "starts_with", "exact", "regex"]),
+  matchField: z.enum(["name", "merchant", "description"]),
+  matchValue: z.string().min(1).max(512),
+  categoryCode: z.string().max(128).nullable().optional(),
+  projectCode: z.string().max(128).nullable().optional(),
+  type: z.enum(["income", "expense", "other"]).nullable().optional(),
+  priority: z.number().int().optional(),
+}
+
+export const createRuleActionSchema = z.object({
+  kind: z.literal("createRule"),
+  ...ruleSpecFields,
+  reason: z.string().max(512),
+})
+export type CreateRuleAction = z.infer<typeof createRuleActionSchema>
+
+export const updateTransactionActionSchema = z.object({
+  kind: z.literal("updateTransaction"),
+  transactionId: z.string().uuid(),
+  patch: z.object({
+    name: z.string().optional(),
+    merchant: z.string().optional(),
+    description: z.string().optional(),
+    note: z.string().optional(),
+    categoryCode: z.string().nullable().optional(),
+    projectCode: z.string().nullable().optional(),
+    type: z.string().optional(),
+  }),
+  reason: z.string().max(512),
+})
+export type UpdateTransactionAction = z.infer<typeof updateTransactionActionSchema>
+
+export const ruleSpecSchema = z.object(ruleSpecFields)
+export type RuleSpec = z.infer<typeof ruleSpecSchema>
+
+export const applyRuleToExistingActionSchema = z.object({
+  kind: z.literal("applyRuleToExisting"),
+  ruleSpec: ruleSpecSchema,
+  alsoCreate: z.boolean(),
+  reason: z.string().max(512),
+})
+export type ApplyRuleToExistingAction = z.infer<typeof applyRuleToExistingActionSchema>
+
+export const bulkUpdateFilterSchema = z.object({
+  search: z.string().optional(),
+  merchant: z.string().optional(),
+  categoryCode: z.string().optional(),
+  projectCode: z.string().optional(),
+  type: z.string().optional(),
+  dateFrom: z.string().optional(),
+  dateTo: z.string().optional(),
+  accountId: z.string().optional(),
+}).strict()
+export type BulkUpdateFilter = z.infer<typeof bulkUpdateFilterSchema>
+
+export const bulkUpdatePatchSchema = z.object({
+  categoryCode: z.string().nullable().optional(),
+  projectCode: z.string().nullable().optional(),
+  type: z.string().optional(),
+  note: z.string().optional(),
+}).strict()
+export type BulkUpdatePatch = z.infer<typeof bulkUpdatePatchSchema>
+
+export const bulkUpdateActionSchema = z.object({
+  kind: z.literal("bulkUpdate"),
+  filter: bulkUpdateFilterSchema,
+  patch: bulkUpdatePatchSchema,
+  reason: z.string().max(512),
+})
+export type BulkUpdateAction = z.infer<typeof bulkUpdateActionSchema>
+
+export const createCategoryActionSchema = z.object({
+  kind: z.literal("createCategory"),
+  name: z.string().min(1).max(128),
+  color: z.string().max(32).optional(),
+  llmPrompt: z.string().max(512).optional(),
+  reason: z.string().max(512),
+})
+export type CreateCategoryAction = z.infer<typeof createCategoryActionSchema>
+
+export const createProjectActionSchema = z.object({
+  kind: z.literal("createProject"),
+  name: z.string().min(1).max(128),
+  color: z.string().max(32).optional(),
+  llmPrompt: z.string().max(512).optional(),
+  reason: z.string().max(512),
+})
+export type CreateProjectAction = z.infer<typeof createProjectActionSchema>
+
+export const deleteTransactionActionSchema = z.object({
+  kind: z.literal("deleteTransaction"),
+  transactionId: z.string().uuid(),
+  reason: z.string().max(512),
+})
+export type DeleteTransactionAction = z.infer<typeof deleteTransactionActionSchema>
+
+export const deleteRuleActionSchema = z.object({
+  kind: z.literal("deleteRule"),
+  ruleId: z.string().uuid(),
+  reason: z.string().max(512),
+})
+export type DeleteRuleAction = z.infer<typeof deleteRuleActionSchema>
+
+export const proposedActionSchema = z.discriminatedUnion("kind", [
+  createRuleActionSchema,
+  updateTransactionActionSchema,
+  applyRuleToExistingActionSchema,
+  bulkUpdateActionSchema,
+  createCategoryActionSchema,
+  createProjectActionSchema,
+  deleteTransactionActionSchema,
+  deleteRuleActionSchema,
+])
+export type ProposedAction = z.infer<typeof proposedActionSchema>
+
+export const chatMessageMetadataSchema = z.object({
+  contextTransactionId: z.string().uuid().optional(),
+  proposedRule: proposedRuleSchema.optional(),
+  proposedUpdate: proposedUpdateSchema.optional(),
+  proposedAction: proposedActionSchema.optional(),
+  extractedFacts: z.array(extractedFactSchema).optional(),
+  errorMessage: z.string().optional(),
+  summaryOfCount: z.number().int().optional(),
+})
+export type ChatMessageMetadata = z.infer<typeof chatMessageMetadataSchema>
+
+export const chatMessageSchema = z.object({
+  id: z.string(),
+  userId: z.string(),
+  role: chatMessageRoleSchema,
+  content: z.string(),
+  metadata: chatMessageMetadataSchema.nullable(),
+  status: chatMessageStatusSchema,
+  appliedAt: z.date().nullable(),
+  createdAt: z.date(),
+})
+export type ChatMessage = z.infer<typeof chatMessageSchema>
+
 export const wizardAssistantReplySchema = z.object({
   assistantMessage: z.string(),
   candidateUpdates: z.array(candidateUpdateSchema).default([]),

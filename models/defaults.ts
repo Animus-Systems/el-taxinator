@@ -394,7 +394,7 @@ export const DEFAULT_FIELDS = [
     name: i18n("Type", "Tipo"),
     type: "string",
     llmPrompt: "",
-    isVisibleInList: false,
+    isVisibleInList: true,
     isVisibleInAnalysis: true,
     isRequired: false,
     isExtra: false,

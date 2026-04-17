@@ -22,6 +22,7 @@ import { entitiesRouter } from "./routers/entities"
 import { pastSearchesRouter } from "./routers/past-searches"
 import { wizardRouter } from "./routers/wizard"
 import { knowledgeRouter } from "./routers/knowledge"
+import { chatRouter } from "./routers/chat"
 import { cryptoRouter } from "./routers/crypto"
 import { receiptsRouter } from "./routers/receipts"
 import { incomeSourcesRouter } from "./routers/income-sources"
@@ -51,6 +52,7 @@ export const appRouter = router({
   pastSearches: pastSearchesRouter,
   wizard: wizardRouter,
   knowledge: knowledgeRouter,
+  chat: chatRouter,
   crypto: cryptoRouter,
   receipts: receiptsRouter,
   incomeSources: incomeSourcesRouter,

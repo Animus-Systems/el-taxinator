@@ -220,7 +220,7 @@ export async function bulkDeleteTransactionsAction(transactionIds: string[]) {
 
 export async function updateFieldVisibilityAction(fieldCode: string, isVisible: boolean) {
   try {
-    await trpcMutate("fields.update", { code: fieldCode, isVisible })
+    await trpcMutate("fields.update", { code: fieldCode, isVisibleInList: isVisible })
     return { success: true as const }
   } catch (error) {
     return {

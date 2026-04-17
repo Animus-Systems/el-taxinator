@@ -26,6 +26,7 @@ export default function TransactionEditForm({
   currencies,
   fields,
   settings,
+  onDone,
 }: {
   transaction: Transaction
   categories: Category[]
@@ -33,6 +34,7 @@ export default function TransactionEditForm({
   currencies: Currency[]
   fields: Field[]
   settings: Record<string, string>
+  onDone?: () => void
 }) {
   const router = useRouter()
   const t = useTranslations("transactions")
@@ -93,15 +95,17 @@ export default function TransactionEditForm({
     if (!ok) return
     startTransition(async () => {
       await deleteAction(transaction.id)
-      router.back()
+      if (onDone) onDone()
+      else router.back()
     })
   }
 
   useEffect(() => {
     if (saveState?.success) {
-      router.back()
+      if (onDone) onDone()
+      else router.back()
     }
-  }, [saveState, router])
+  }, [saveState, router, onDone])
 
   return (
     <form action={saveAction} className="space-y-4">

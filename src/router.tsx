@@ -23,6 +23,8 @@ import { QuotesPage } from "./routes/_app/quotes"
 import { NewQuotePage } from "./routes/_app/quotes-new"
 import { QuoteDetailPage } from "./routes/_app/quote-detail"
 import { TaxPage } from "./routes/_app/tax"
+import { TaxYearPage } from "./routes/_app/tax-year"
+import { TaxQuarterPage } from "./routes/_app/tax-quarter"
 import { AppsPage } from "./routes/_app/apps"
 import { WizardNewPage } from "./routes/_app/wizard-new"
 import { WizardDetailPage } from "./routes/_app/wizard-detail"
@@ -192,6 +194,18 @@ const taxRoute = createRoute({
   getParentRoute: () => appLayoutRoute,
   path: "/tax",
   component: TaxPage,
+})
+
+const taxYearRoute = createRoute({
+  getParentRoute: () => appLayoutRoute,
+  path: "/tax/$year",
+  component: TaxYearPage,
+})
+
+const taxQuarterRoute = createRoute({
+  getParentRoute: () => appLayoutRoute,
+  path: "/tax/$year/$quarter",
+  component: TaxQuarterPage,
 })
 
 const appsRoute = createRoute({
@@ -399,6 +413,8 @@ const appChildren = appLayoutRoute.addChildren([
   quotesNewRoute,
   quoteDetailRoute,
   taxRoute,
+  taxYearRoute,
+  taxQuarterRoute,
   appsRoute,
   wizardNewRoute,
   wizardDetailRoute,

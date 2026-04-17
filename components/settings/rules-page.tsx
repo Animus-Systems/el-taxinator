@@ -14,6 +14,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Pencil, Trash2, Plus, ExternalLink } from "lucide-react"
 import { addRuleAction, editRuleAction, deleteRuleAction, toggleRuleAction } from "@/actions/rules"
 import type { CategorizationRule, Category, Project } from "@/lib/db-types"
+import { trpc } from "~/trpc"
 
 function relativeDays(date: Date | null): string | null {
   if (!date) return null
@@ -51,6 +52,8 @@ type FormState = typeof EMPTY_FORM
 export function RulesPage({ rules, categories, projects }: RulesPageProps) {
   const t = useTranslations("settings")
   const confirm = useConfirm()
+  const utils = trpc.useUtils()
+  const invalidateRules = () => void utils.rules.list.invalidate()
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingRule, setEditingRule] = useState<CategorizationRule | null>(null)
   const [form, setForm] = useState<FormState>(EMPTY_FORM)
@@ -116,6 +119,7 @@ export function RulesPage({ rules, categories, projects }: RulesPageProps) {
 
       if (result.success) {
         setDialogOpen(false)
+        invalidateRules()
       } else {
         setError(result.error ?? "An error occurred")
       }
@@ -132,12 +136,14 @@ export function RulesPage({ rules, categories, projects }: RulesPageProps) {
     if (!ok) return
     startTransition(async () => {
       await deleteRuleAction(rule.id)
+      invalidateRules()
     })
   }
 
   const handleToggle = (rule: CategorizationRule, checked: boolean) => {
     startTransition(async () => {
       await toggleRuleAction(rule.id, checked)
+      invalidateRules()
     })
   }
 

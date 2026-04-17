@@ -3,6 +3,8 @@ import { router, authedProcedure } from "../init"
 import { getSettings, updateSettings, getLLMSettings } from "@/models/settings"
 import { settingSchema, type Setting } from "@/lib/db-types"
 import { PROVIDERS } from "@/lib/llm-providers"
+import { testLLMProvider } from "@/ai/providers/llmProvider"
+import type { LLMProvider } from "@/ai/providers/llmProvider"
 
 const llmProviderSchema = z.object({
   provider: z.string(),
@@ -63,6 +65,29 @@ export const settingsRouter = router({
           ...(p.thinking !== undefined && { thinking: p.thinking }),
         })),
       }
+    }),
+
+  testProvider: authedProcedure
+    .input(z.object({
+      provider: z.string(),
+      apiKey: z.string(),
+      model: z.string(),
+      thinking: z.string().optional(),
+      baseUrl: z.string().optional(),
+    }))
+    .output(z.object({
+      success: z.boolean(),
+      error: z.string().optional(),
+      responseTime: z.number().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      return testLLMProvider({
+        provider: input.provider as LLMProvider,
+        apiKey: input.apiKey,
+        model: input.model,
+        ...(input.thinking !== undefined && { thinking: input.thinking }),
+        ...(input.baseUrl !== undefined && { baseUrl: input.baseUrl }),
+      })
     }),
 
   getActiveLLMHint: authedProcedure

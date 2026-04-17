@@ -319,6 +319,12 @@
     "confirmDeletePermanentTitle": "¿Eliminar transacción permanentemente?",
     "confirmDeletePermanent": "¿Estás seguro? Esto eliminará la transacción con todos los archivos permanentemente",
     "type": "Tipo",
+    "editDescription": "Editar o eliminar esta transacción",
+    "types": {
+      "income": "Ingreso",
+      "expense": "Gasto",
+      "other": "Otro"
+    },
     "description": "Descripción",
     "note": "Nota",
     "selectColumns": "Seleccionar columnas",
@@ -667,6 +673,12 @@
     "amountToPayATC": "Cantidad a ingresar a la Agencia Tributaria Canaria",
     "amountToCompensate": "Cantidad a compensar / devolver",
     "irpfQuarterlyPayment": "Modelo 130 — Pago fraccionado IRPF (autónomos)",
+    "modelo202Cumulative": "Los importes del Modelo 202 son acumulativos desde el 1 de enero hasta el fin del trimestre, según las instrucciones de la Agencia Tributaria.",
+    "corporateQuarterlyPayment": "Modelo 202 — Pago fraccionado del Impuesto sobre Sociedades",
+    "corporateTaxQuota": "Cuota íntegra",
+    "paymentsOnAccount": "Pagos a cuenta previos",
+    "corporateNoPaymentDue": "Los pagos fraccionados anteriores cubren el importe actual. No hay cantidad a ingresar.",
+    "corporateLegalDisclaimerText": "Estos datos son orientativos y se calculan automáticamente a partir de las facturas y gastos registrados. Verifica siempre los importes antes de presentar las declaraciones en la sede electrónica de la Agencia Tributaria Canaria (Modelo 420) y AEAT (Modelo 202). El IGIC soportado en gastos se estima y puede diferir de la realidad.",
     "cumulativeDataFrom": "Datos acumulados del 1 Ene al",
     "periodIncome": "Ingresos del período (acumulado)",
     "periodExpenses": "Gastos del período (acumulado)",
@@ -807,6 +819,37 @@
         "descriptionPlaceholder": "p.ej. Plan de pensiones BBVA",
         "save": "Guardar"
       }
+    }
+  },
+  "chat": {
+    "title": "Asistente",
+    "placeholder": "Pregúntame lo que sea…",
+    "send": "Enviar",
+    "clearHistory": "Borrar historial",
+    "clearConfirmTitle": "¿Borrar el historial de chat?",
+    "clearConfirmBody": "Se eliminan todos los mensajes. El asistente conserva los hechos del negocio que hayas compartido.",
+    "retry": "Reintentar",
+    "applied": "Aplicado",
+    "dismissed": "Descartado",
+    "apply": "Aplicar",
+    "dismiss": "Descartar",
+    "noProviderTitle": "Sin proveedor LLM configurado",
+    "noProviderBody": "Configura un proveedor LLM en Ajustes → LLM para usar el asistente.",
+    "noProviderCta": "Ir a ajustes",
+    "proposalRuleTitle": "Crear regla",
+    "proposalUpdateTitle": "Actualizar transacción",
+    "actions": {
+      "applyRuleToExistingTitle": "Aplicar regla a existentes",
+      "bulkUpdateTitle": "Actualización masiva",
+      "createCategoryTitle": "Crear categoría",
+      "createProjectTitle": "Crear proyecto",
+      "deleteTransactionTitle": "Eliminar transacción",
+      "deleteRuleTitle": "Eliminar regla",
+      "willAffectCount": "Afectará a {count} transacciones",
+      "confirmBulkBody": "¿Actualizar {count} transacciones? No se puede deshacer.",
+      "confirmDeleteTransactionBody": "¿Eliminar esta transacción permanentemente?",
+      "confirmDeleteRuleBody": "¿Eliminar esta regla? Las coincidencias históricas se mantienen.",
+      "tooManyMatches": "Demasiadas coincidencias ({count}). Ajusta el filtro."
     }
   },
   "unsorted": {

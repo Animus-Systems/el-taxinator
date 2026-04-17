@@ -1,5 +1,5 @@
 import { sql, queryMany, queryOne, buildInsert, buildUpdate, execute } from "@/lib/sql"
-import type { CategorizationRule, Transaction } from "@/lib/db-types"
+import type { CategorizationRule, Transaction, RuleSpec } from "@/lib/db-types"
 import type { TransactionCandidate } from "@/ai/import-csv"
 import { cache } from "react"
 
@@ -286,4 +286,86 @@ export async function getRuleWithMatches(
         LIMIT ${limit}`,
   )
   return { rule, matches }
+}
+
+// ---------------------------------------------------------------------------
+// Bulk-apply a rule spec to already-existing transactions
+// ---------------------------------------------------------------------------
+
+export type ApplyRuleResult = {
+  matchCount: number
+  sampleIds: string[]
+  updated: number
+}
+
+export async function applyRuleToExistingTransactions(
+  userId: string,
+  ruleSpec: Pick<RuleSpec, "matchType" | "matchField" | "matchValue"> & {
+    categoryCode?: string | null
+    projectCode?: string | null
+    type?: string | null
+  },
+  opts: { dryRun?: boolean } = {},
+): Promise<ApplyRuleResult> {
+  const rows = await queryMany<{
+    id: string
+    merchant: string | null
+    name: string | null
+    description: string | null
+    categoryCode: string | null
+    projectCode: string | null
+    type: string | null
+  }>(
+    sql`SELECT id, merchant, name, description, category_code, project_code, type
+        FROM transactions
+        WHERE user_id = ${userId}
+        LIMIT 5000`,
+  )
+
+  const matchIds: string[] = []
+  for (const row of rows) {
+    let fieldValue: string | null = null
+    if (ruleSpec.matchField === "merchant") fieldValue = row.merchant
+    else if (ruleSpec.matchField === "name") fieldValue = row.name
+    else if (ruleSpec.matchField === "description") fieldValue = row.description
+    if (!matchRule(ruleSpec.matchType, ruleSpec.matchValue, fieldValue)) continue
+
+    const wouldChange =
+      (ruleSpec.categoryCode !== undefined && ruleSpec.categoryCode !== null && row.categoryCode !== ruleSpec.categoryCode) ||
+      (ruleSpec.projectCode !== undefined && ruleSpec.projectCode !== null && row.projectCode !== ruleSpec.projectCode) ||
+      (ruleSpec.type !== undefined && ruleSpec.type !== null && row.type !== ruleSpec.type)
+    if (wouldChange) matchIds.push(row.id)
+  }
+
+  const matchCount = matchIds.length
+  const sampleIds = matchIds.slice(0, 10)
+
+  if (opts.dryRun === true || matchCount === 0) {
+    return { matchCount, sampleIds, updated: 0 }
+  }
+
+  const sets: string[] = []
+  const values: unknown[] = []
+  if (ruleSpec.categoryCode !== undefined && ruleSpec.categoryCode !== null) {
+    values.push(ruleSpec.categoryCode)
+    sets.push(`category_code = $${values.length}`)
+  }
+  if (ruleSpec.projectCode !== undefined && ruleSpec.projectCode !== null) {
+    values.push(ruleSpec.projectCode)
+    sets.push(`project_code = $${values.length}`)
+  }
+  if (ruleSpec.type !== undefined && ruleSpec.type !== null) {
+    values.push(ruleSpec.type)
+    sets.push(`type = $${values.length}`)
+  }
+  if (sets.length === 0) return { matchCount, sampleIds, updated: 0 }
+
+  values.push(userId)
+  const userIdParam = `$${values.length}`
+  values.push(matchIds)
+  const idsParam = `$${values.length}`
+  const text = `UPDATE transactions SET ${sets.join(", ")} WHERE user_id = ${userIdParam} AND id = ANY(${idsParam})`
+  await execute({ text, values })
+
+  return { matchCount, sampleIds, updated: matchIds.length }
 }

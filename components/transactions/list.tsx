@@ -10,8 +10,9 @@ import { getVisibleTransactionFields } from "@/lib/transaction-list-fields"
 import { cn, formatCurrency } from "@/lib/utils"
 import type { Category, Field, Project, Transaction } from "@/lib/db-types"
 import { formatDate } from "date-fns"
-import { AlertTriangle, ArrowDownIcon, ArrowUpIcon, File, Paperclip, Sparkles, Zap } from "lucide-react"
+import { AlertTriangle, ArrowDownIcon, ArrowLeftRight, ArrowUpIcon, File, Paperclip, Sparkles, TrendingDown, TrendingUp, Zap } from "lucide-react"
 import { AttachReceiptDialog } from "@/components/transactions/attach-receipt-dialog"
+import { EditTransactionDialog } from "@/components/transactions/edit-dialog"
 import { useTranslations } from "next-intl"
 import { useSearchParams } from "next/navigation"
 import { useRouter } from "@/lib/navigation"
@@ -81,6 +82,23 @@ function FilesCell({ transaction }: { transaction: Transaction }) {
         transactionId={transaction.id}
       />
     </div>
+  )
+}
+
+function TypeCell({ transaction }: { transaction: Transaction }) {
+  const t = useTranslations("transactions.types")
+  const type: "income" | "expense" | "other" =
+    transaction.type === "income" || transaction.type === "expense" ? transaction.type : "other"
+  const label = t(type)
+
+  const Icon = type === "income" ? TrendingUp : type === "expense" ? TrendingDown : ArrowLeftRight
+  const color =
+    type === "income" ? "text-green-500" : type === "expense" ? "text-red-500" : "text-muted-foreground"
+
+  return (
+    <span title={label} aria-label={label} className="inline-flex">
+      <Icon className={cn("h-4 w-4", color)} />
+    </span>
   )
 }
 
@@ -244,6 +262,13 @@ export const standardFieldRenderers: Record<string, FieldRenderer> = {
     classes: "text-right",
     sortable: true,
   },
+  type: {
+    name: "Type",
+    code: "type",
+    classes: "w-10 text-center",
+    sortable: true,
+    formatValue: (transaction: Transaction) => <TypeCell transaction={transaction} />,
+  },
 }
 
 const getFieldRenderer = (field: Field): FieldRenderer => {
@@ -303,8 +328,19 @@ export function TransactionList({ transactions, fields = [] }: { transactions: T
     }
   }
 
+  const editingId = searchParams.get("tx")
+
   const handleRowClick = (id: string) => {
-    router.push(`/transactions/${id}`)
+    const params = new URLSearchParams(searchKey)
+    params.set("tx", id)
+    router.push(`/transactions?${params.toString()}`)
+  }
+
+  const handleCloseDialog = () => {
+    const params = new URLSearchParams(searchKey)
+    params.delete("tx")
+    const next = params.toString()
+    router.replace(next ? `/transactions?${next}` : "/transactions")
   }
 
   const handleSort = (field: string) => {
@@ -432,6 +468,9 @@ export function TransactionList({ transactions, fields = [] }: { transactions: T
             </ReanalyzeDialog>
           </div>
         </>
+      )}
+      {editingId && (
+        <EditTransactionDialog transactionId={editingId} onClose={handleCloseDialog} />
       )}
     </div>
   )

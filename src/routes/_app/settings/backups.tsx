@@ -34,7 +34,7 @@ export function BackupsSettingsPage() {
       <BackupSettings
         isGoogleDriveConnected={!!s["google_drive_refresh_token"]}
         isGoogleDriveConfigured={isGoogleDriveConfigured}
-        googleAuthUrl={null}
+        googleAuthUrl={isGoogleDriveConfigured ? "/api/auth/google-drive" : null}
         googleClientId={(s["google_drive_client_id"] as string) || ""}
         googleClientSecret={s["google_drive_client_secret"] ? "--------" : ""}
         backupFrequency={(s["backup_frequency"] as string) || "weekly"}

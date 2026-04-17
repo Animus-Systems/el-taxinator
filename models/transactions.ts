@@ -12,7 +12,7 @@ import {
 } from "@/lib/sql"
 import { getPool } from "@/lib/pg"
 import { splitTransactionDataByFieldDefinitions } from "@/lib/transaction-data"
-import type { Transaction, Category, Project } from "@/lib/db-types"
+import type { Transaction, Category, Project, BulkUpdateFilter, BulkUpdatePatch } from "@/lib/db-types"
 import { cache } from "react"
 import { getFields } from "./fields"
 import { deleteFile } from "./files"
@@ -218,6 +218,23 @@ const SELECT_WITH_JOINS = `
   LEFT JOIN accounts   a ON a.id = t.account_id AND a.user_id = t.user_id
 `
 
+export async function getTransactionDateRange(
+  userId: string,
+  filters?: TransactionFilters,
+): Promise<{ earliest: string | null; latest: string | null }> {
+  const pool = await getPool()
+  const { clause, values } = buildTransactionWhere(userId, filters)
+  const result = await pool.query(
+    `SELECT MIN(t.issued_at) AS earliest, MAX(t.issued_at) AS latest FROM transactions t ${clause}`,
+    values,
+  )
+  const row = result.rows[0] as { earliest?: Date | string | null; latest?: Date | string | null } | undefined
+  return {
+    earliest: row?.earliest ? new Date(row.earliest).toISOString().slice(0, 10) : null,
+    latest: row?.latest ? new Date(row.latest).toISOString().slice(0, 10) : null,
+  }
+}
+
 export const getTransactions = cache(
   async (
     userId: string,
@@ -280,6 +297,21 @@ export const getTransactionsByFileId = cache(
     )
   },
 )
+
+export async function findSimilarByMerchant(
+  userId: string,
+  merchant: string,
+  limit: number,
+  excludeId: string,
+): Promise<Transaction[]> {
+  return queryMany<Transaction>(
+    sql`SELECT * FROM transactions
+        WHERE user_id = ${userId} AND id <> ${excludeId}
+          AND merchant ILIKE ${"%" + merchant + "%"}
+        ORDER BY issued_at DESC NULLS LAST, created_at DESC
+        LIMIT ${limit}`,
+  )
+}
 
 export const createTransaction = async (
   userId: string,
@@ -394,4 +426,110 @@ const splitTransactionDataExtraFields = async (
 ): Promise<{ standard: TransactionData; extra: Record<string, unknown> }> => {
   const fields = await getFields(userId)
   return splitTransactionDataByFieldDefinitions(data, fields)
+}
+
+export type BulkUpdateResult = {
+  matchCount: number
+  sampleIds: string[]
+  updated: number
+}
+
+const BULK_UPDATE_CAP = 1000
+
+export async function bulkUpdateTransactions(
+  userId: string,
+  filter: BulkUpdateFilter,
+  patch: BulkUpdatePatch,
+  opts: { dryRun?: boolean } = {},
+): Promise<BulkUpdateResult> {
+  const whereParts: string[] = ["user_id = $1"]
+  const values: unknown[] = [userId]
+
+  if (filter.search) {
+    values.push(`%${filter.search}%`)
+    const p = `$${values.length}`
+    whereParts.push(`(name ILIKE ${p} OR merchant ILIKE ${p} OR description ILIKE ${p} OR note ILIKE ${p})`)
+  }
+  if (filter.merchant) {
+    values.push(`%${filter.merchant}%`)
+    whereParts.push(`merchant ILIKE $${values.length}`)
+  }
+  if (filter.categoryCode) {
+    values.push(filter.categoryCode)
+    whereParts.push(`category_code = $${values.length}`)
+  }
+  if (filter.projectCode) {
+    values.push(filter.projectCode)
+    whereParts.push(`project_code = $${values.length}`)
+  }
+  if (filter.type) {
+    values.push(filter.type)
+    whereParts.push(`type = $${values.length}`)
+  }
+  if (filter.accountId) {
+    values.push(filter.accountId)
+    whereParts.push(`account_id = $${values.length}`)
+  }
+  if (filter.dateFrom) {
+    values.push(filter.dateFrom)
+    whereParts.push(`issued_at >= $${values.length}`)
+  }
+  if (filter.dateTo) {
+    values.push(filter.dateTo)
+    whereParts.push(`issued_at <= $${values.length}`)
+  }
+
+  const whereClause = whereParts.join(" AND ")
+
+  const pool = await getPool()
+
+  const countResult = await pool.query(
+    `SELECT COUNT(*)::int AS count FROM transactions WHERE ${whereClause} LIMIT 5000`,
+    values,
+  )
+  const matchCount = (countResult.rows[0]?.["count"] as number | undefined) ?? 0
+
+  const sampleResult = await pool.query(
+    `SELECT id FROM transactions WHERE ${whereClause} ORDER BY created_at DESC LIMIT 10`,
+    values,
+  )
+  const sampleIds = sampleResult.rows.map((r) => r["id"] as string)
+
+  if (opts.dryRun === true) {
+    return { matchCount, sampleIds, updated: 0 }
+  }
+
+  if (matchCount > BULK_UPDATE_CAP) {
+    throw new Error(`Too many matches (${matchCount}). Narrow the filter to under ${BULK_UPDATE_CAP}.`)
+  }
+
+  if (matchCount === 0) {
+    return { matchCount, sampleIds, updated: 0 }
+  }
+
+  const setParts: string[] = []
+  const patchValues: unknown[] = [...values]
+  if (patch.categoryCode !== undefined) {
+    patchValues.push(patch.categoryCode)
+    setParts.push(`category_code = $${patchValues.length}`)
+  }
+  if (patch.projectCode !== undefined) {
+    patchValues.push(patch.projectCode)
+    setParts.push(`project_code = $${patchValues.length}`)
+  }
+  if (patch.type !== undefined) {
+    patchValues.push(patch.type)
+    setParts.push(`type = $${patchValues.length}`)
+  }
+  if (patch.note !== undefined) {
+    patchValues.push(patch.note)
+    setParts.push(`note = $${patchValues.length}`)
+  }
+
+  if (setParts.length === 0) return { matchCount, sampleIds, updated: 0 }
+
+  const updateText = `UPDATE transactions SET ${setParts.join(", ")} WHERE ${whereClause}`
+  const updateResult = await pool.query(updateText, patchValues)
+
+  return { matchCount, sampleIds, updated: updateResult.rowCount ?? 0 }
 }

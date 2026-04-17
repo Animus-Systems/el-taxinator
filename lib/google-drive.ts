@@ -2,6 +2,7 @@ import { google } from "googleapis"
 
 const SCOPES = ["https://www.googleapis.com/auth/drive.file"]
 const FOLDER_NAME = "Taxinator Backups"
+type GoogleDriveSettings = Record<string, string>
 
 /**
  * Create OAuth2 client. Reads credentials from provided params, env vars, or throws.
@@ -21,7 +22,7 @@ function getOAuth2Client(clientId?: string, clientSecret?: string) {
 /**
  * Check if Google Drive credentials are available (from env or settings).
  */
-export function isGoogleDriveConfigured(settings?: Record<string, string>): boolean {
+export function isGoogleDriveConfigured(settings?: GoogleDriveSettings): boolean {
   const fromEnv = !!(process.env["GOOGLE_DRIVE_CLIENT_ID"] && process.env["GOOGLE_DRIVE_CLIENT_SECRET"])
   const fromSettings = !!(settings?.["google_drive_client_id"] && settings?.["google_drive_client_secret"])
   return fromEnv || fromSettings
@@ -30,7 +31,7 @@ export function isGoogleDriveConfigured(settings?: Record<string, string>): bool
 /**
  * Get the Google OAuth2 authorization URL for Drive access.
  */
-export function getAuthUrl(settings?: Record<string, string>): string {
+export function getAuthUrl(settings?: GoogleDriveSettings): string {
   const oauth2Client = getOAuth2Client(settings?.["google_drive_client_id"], settings?.["google_drive_client_secret"])
   return oauth2Client.generateAuthUrl({
     access_type: "offline",
@@ -42,7 +43,7 @@ export function getAuthUrl(settings?: Record<string, string>): string {
 /**
  * Exchange an authorization code for tokens.
  */
-export async function getTokensFromCode(code: string, settings?: Record<string, string>) {
+export async function getTokensFromCode(code: string, settings?: GoogleDriveSettings) {
   const oauth2Client = getOAuth2Client(settings?.["google_drive_client_id"], settings?.["google_drive_client_secret"])
   const { tokens } = await oauth2Client.getToken(code)
   return tokens
@@ -51,8 +52,11 @@ export async function getTokensFromCode(code: string, settings?: Record<string, 
 /**
  * Create an authenticated Drive client from a refresh token.
  */
-function getDriveClient(refreshToken: string) {
-  const oauth2Client = getOAuth2Client()
+function getDriveClient(refreshToken: string, settings?: GoogleDriveSettings) {
+  const oauth2Client = getOAuth2Client(
+    settings?.["google_drive_client_id"],
+    settings?.["google_drive_client_secret"],
+  )
   oauth2Client.setCredentials({ refresh_token: refreshToken })
   return google.drive({ version: "v3", auth: oauth2Client })
 }
@@ -60,8 +64,8 @@ function getDriveClient(refreshToken: string) {
 /**
  * Get or create the Taxinator Backups folder in Google Drive.
  */
-async function getOrCreateFolder(refreshToken: string): Promise<string> {
-  const drive = getDriveClient(refreshToken)
+async function getOrCreateFolder(refreshToken: string, settings?: GoogleDriveSettings): Promise<string> {
+  const drive = getDriveClient(refreshToken, settings)
 
   // Check if folder already exists
   const existing = await drive.files.list({
@@ -95,9 +99,10 @@ export async function uploadToGoogleDrive(
   fileName: string,
   content: Buffer,
   mimeType: string = "application/zip",
+  settings?: GoogleDriveSettings,
 ): Promise<{ fileId: string; webViewLink?: string }> {
-  const drive = getDriveClient(refreshToken)
-  const folderId = await getOrCreateFolder(refreshToken)
+  const drive = getDriveClient(refreshToken, settings)
+  const folderId = await getOrCreateFolder(refreshToken, settings)
 
   const { Readable } = await import("stream")
   const stream = new Readable()
@@ -130,14 +135,14 @@ export async function uploadToGoogleDrive(
 /**
  * List backup files in the Taxinator Backups folder.
  */
-export async function listBackups(refreshToken: string): Promise<{
+export async function listBackups(refreshToken: string, settings?: GoogleDriveSettings): Promise<{
   id: string
   name: string
   size: string
   createdTime: string
 }[]> {
-  const drive = getDriveClient(refreshToken)
-  const folderId = await getOrCreateFolder(refreshToken)
+  const drive = getDriveClient(refreshToken, settings)
+  const folderId = await getOrCreateFolder(refreshToken, settings)
 
   const response = await drive.files.list({
     q: `'${folderId}' in parents and trashed=false and name contains '.taxinator.zip'`,
@@ -164,8 +169,9 @@ export async function listBackups(refreshToken: string): Promise<{
 export async function downloadFromGoogleDrive(
   refreshToken: string,
   fileId: string,
+  settings?: GoogleDriveSettings,
 ): Promise<Buffer> {
-  const drive = getDriveClient(refreshToken)
+  const drive = getDriveClient(refreshToken, settings)
 
   const response = await drive.files.get(
     { fileId, alt: "media" },
@@ -181,8 +187,9 @@ export async function downloadFromGoogleDrive(
 export async function deleteFromGoogleDrive(
   refreshToken: string,
   fileId: string,
+  settings?: GoogleDriveSettings,
 ): Promise<void> {
-  const drive = getDriveClient(refreshToken)
+  const drive = getDriveClient(refreshToken, settings)
   await drive.files.delete({ fileId })
 }
 
@@ -192,14 +199,15 @@ export async function deleteFromGoogleDrive(
 export async function pruneOldBackups(
   refreshToken: string,
   maxBackups: number = 5,
+  settings?: GoogleDriveSettings,
 ): Promise<number> {
-  const backups = await listBackups(refreshToken)
+  const backups = await listBackups(refreshToken, settings)
   let deleted = 0
 
   if (backups.length > maxBackups) {
     const toDelete = backups.slice(maxBackups)
     for (const backup of toDelete) {
-      await deleteFromGoogleDrive(refreshToken, backup.id)
+      await deleteFromGoogleDrive(refreshToken, backup.id, settings)
       deleted++
     }
   }

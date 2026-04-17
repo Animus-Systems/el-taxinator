@@ -27,11 +27,13 @@ import { getOrCreateSelfHostedUser } from "@/models/users"
 import type { User } from "@/lib/db-types"
 import type { TRPCContext } from "@/lib/trpc/context"
 import { importRoutes } from "./routes/import"
+import { bundleRoutes } from "./routes/bundle"
 import { filesRoutes } from "./routes/files"
 import { exportRoutes } from "./routes/export"
 import { invoicesRoutes } from "./routes/invoices"
 import { receiptsRoutes } from "./routes/receipts"
 import { personalRoutes } from "./routes/personal"
+import { backupRoutes } from "./routes/backups"
 import { registerFastifyTrpcRoutes } from "./trpc-fastify"
 
 // ---------------------------------------------------------------------------
@@ -189,15 +191,20 @@ async function main() {
     createContext: createFastifyContext,
   })
 
-  // 6. Mount import routes (file upload + AI import pipeline)
+  // 6. Mount bundle routes first so multipart gets a large enough file limit
+  // for portable backup restores before the smaller import/file routes attach.
+  await app.register(bundleRoutes)
+
+  // 7. Mount import routes (file upload + AI import pipeline)
   await app.register(importRoutes)
   await app.register(filesRoutes)
   await app.register(exportRoutes)
   await app.register(invoicesRoutes)
   await app.register(receiptsRoutes)
   await app.register(personalRoutes)
+  await app.register(backupRoutes)
 
-  // 7. Health check endpoint
+  // 8. Health check endpoint
   app.get("/health", async () => {
     return { status: "ok", timestamp: new Date().toISOString() }
   })
@@ -220,7 +227,7 @@ async function main() {
     })
   }
 
-  // 7. Listen
+  // 9. Listen
   await app.listen({ port: PORT, host: "0.0.0.0" })
   console.log(`[server] Listening on http://localhost:${PORT}`)
   console.log(`[server] tRPC endpoint: http://localhost:${PORT}/api/trpc`)

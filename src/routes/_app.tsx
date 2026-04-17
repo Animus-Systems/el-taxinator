@@ -10,6 +10,7 @@ import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 import { NotificationProvider } from "@/lib/context"
 import { WizardDockProvider } from "@/lib/wizard-dock-context"
 import { WizardDock } from "@/components/wizard/wizard-dock"
+import { ChatFloatingButton } from "@/components/chat/chat-floating-button"
 import { trpc } from "~/trpc"
 
 export function AppLayout() {
@@ -44,6 +45,7 @@ export function AppLayout() {
           </SidebarInset>
         </SidebarProvider>
         <WizardDock />
+        <ChatFloatingButton />
       </WizardDockProvider>
     </NotificationProvider>
   )

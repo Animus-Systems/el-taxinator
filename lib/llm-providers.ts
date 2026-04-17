@@ -40,7 +40,7 @@ export const PROVIDERS: ProviderConfig[] = [
     defaultModelName: "claude-sonnet-4-6",
     models: [
       { id: "claude-sonnet-4-6", name: "Sonnet 4.6 (fast, recommended)" },
-      { id: "claude-opus-4-6", name: "Opus 4.6 (most powerful)" },
+      { id: "claude-opus-4-7", name: "Opus 4.7 (most powerful)" },
       { id: "claude-haiku-4-5", name: "Haiku 4.5 (cheapest)" },
       { id: "claude-sonnet-4-5", name: "Sonnet 4.5 (balanced)" },
     ],

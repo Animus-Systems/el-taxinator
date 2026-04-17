@@ -1,15 +1,14 @@
 
 import { fieldsToJsonSchema } from "@/ai/schema"
-import { saveSettingsAction } from "@/actions/settings"
 import { FormError } from "@/components/forms/error"
 import { FormTextarea } from "@/components/forms/simple"
 import { Button } from "@/components/ui/button"
 import { Card, CardTitle } from "@/components/ui/card"
 import type { Field } from "@/lib/db-types"
-import { testProviderAction } from "@/actions/settings"
+import { saveSettingsAction, testProviderAction } from "@/actions/settings"
 import { CircleCheckBig, Edit, GripVertical, Loader2, Star, Zap } from "lucide-react"
 import { Link } from "@/lib/navigation"
-import { useState, useActionState } from "react"
+import { useState } from "react"
 import {
   DndContext,
   closestCenter,
@@ -45,7 +44,9 @@ export default function LLMSettingsForm({
   fields: Field[]
 }) {
   const t = useTranslations("settings")
-  const [saveState, saveAction, pending] = useActionState(saveSettingsAction, null)
+  const [saveState, setSaveState] = useState<{ success?: boolean; error?: string } | null>(null)
+  const [pending, setPending] = useState(false)
+  const [prompt, setPrompt] = useState(settings["prompt_analyse_new_file"] ?? "")
   const [providerOrder, setProviderOrder] = useState<string[]>(getInitialProviderOrder(settings))
   const [primaryProvider, setPrimaryProvider] = useState(settings["llm_primary_provider"] || providerOrder[0] || "anthropic")
   const [backupProvider, setBackupProvider] = useState(settings["llm_backup_provider"] || providerOrder.find(k => k !== (settings["llm_primary_provider"] || providerOrder[0])) || "")
@@ -73,6 +74,29 @@ export default function LLMSettingsForm({
     })
   }
 
+  const handleSave = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    setPending(true)
+    setSaveState(null)
+
+    const fd = new FormData()
+    fd.set("llm_providers", providerOrder.join(","))
+    fd.set("llm_primary_provider", primaryProvider)
+    fd.set("llm_backup_provider", backupProvider)
+    fd.set("prompt_analyse_new_file", prompt)
+    for (const p of PROVIDERS) {
+      const v = providerValues[p.key] ?? { apiKey: "", model: "", thinking: "", baseUrl: "" }
+      fd.set(p.apiKeyName, v.apiKey)
+      fd.set(p.modelName, v.model)
+      if (p.thinkingSettingName) fd.set(p.thinkingSettingName, v.thinking || "medium")
+      if (p.baseUrlName) fd.set(p.baseUrlName, v.baseUrl)
+    }
+
+    const result = await saveSettingsAction(null, fd)
+    setSaveState(result)
+    setPending(false)
+  }
+
   const sensors = useSensors(useSensor(PointerSensor))
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event
@@ -84,24 +108,7 @@ export default function LLMSettingsForm({
 
   return (
     <>
-      <form action={saveAction} className="space-y-6" data-form-type="other" autoComplete="off">
-        {/* Hidden fields */}
-        <input type="hidden" name="llm_providers" value={providerOrder.join(",")} />
-        <input type="hidden" name="llm_primary_provider" value={primaryProvider} />
-        <input type="hidden" name="llm_backup_provider" value={backupProvider} />
-        {PROVIDERS.map(p => (
-          <span key={p.key}>
-            <input type="hidden" name={p.apiKeyName} value={providerValues[p.key]?.apiKey || ""} />
-            <input type="hidden" name={p.modelName} value={providerValues[p.key]?.model || ""} />
-            {p.thinkingSettingName && (
-              <input type="hidden" name={p.thinkingSettingName} value={providerValues[p.key]?.thinking || "medium"} />
-            )}
-            {p.baseUrlName && (
-              <input type="hidden" name={p.baseUrlName} value={providerValues[p.key]?.baseUrl || ""} />
-            )}
-          </span>
-        ))}
-
+      <form onSubmit={handleSave} className="space-y-6" data-form-type="other" autoComplete="off">
         {/* Provider cards */}
         <div>
           <label className="text-sm font-medium">{t("aiProviders")}</label>
@@ -138,7 +145,8 @@ export default function LLMSettingsForm({
         <FormTextarea
           title={t("promptForFileAnalysis")}
           name="prompt_analyse_new_file"
-          defaultValue={settings["prompt_analyse_new_file"] ?? ""}
+          value={prompt}
+          onChange={(e) => setPrompt(e.target.value)}
           className="h-64"
         />
 
