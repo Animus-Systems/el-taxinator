@@ -1,3 +1,4 @@
+import { randomUUID } from "crypto"
 import { z } from "zod"
 import { TRPCError } from "@trpc/server"
 import { router, authedProcedure } from "../init"
@@ -363,6 +364,65 @@ export const wizardRouter = router({
     .query(async ({ ctx }) => {
       const has = await hasAnyBusinessFacts(ctx.user.id)
       return { needsOnboarding: !has }
+    }),
+
+  applyTransferLink: authedProcedure
+    .input(z.object({
+      sessionId: z.string(),
+      rowIndexA: z.number().int(),
+      rowIndexB: z.number().int().nullable(),
+    }))
+    .output(z.object({ ok: z.boolean() }))
+    .mutation(async ({ ctx, input }) => {
+      const session = await getImportSessionById(input.sessionId, ctx.user.id)
+      if (!session) throw new TRPCError({ code: "NOT_FOUND", message: "Session not found" })
+
+      // A shared UUID links both legs pre-commit. Orphans (rowIndexB null) get
+      // null — a partner may show up later and adopt the same id via the
+      // matcher, or the row simply stays an unlinked transfer.
+      const sharedTransferId = input.rowIndexB !== null ? randomUUID() : null
+
+      const deriveDirection = (priorType: string | null | undefined): "outgoing" | "incoming" => {
+        if (priorType === "income") return "incoming"
+        return "outgoing"
+      }
+
+      const candidates = (session.data as TransactionCandidate[]).map((c) => {
+        if (c.rowIndex !== input.rowIndexA && c.rowIndex !== input.rowIndexB) return c
+        const nextExtra = { ...(c.extra ?? {}) }
+        Reflect.deleteProperty(nextExtra, "proposedTransferLink")
+        return {
+          ...c,
+          type: "transfer",
+          status: "personal_ignored",
+          extra: nextExtra,
+          transferId: sharedTransferId,
+          transferDirection: deriveDirection(c.type),
+        } satisfies TransactionCandidate
+      })
+
+      await updateImportSession(input.sessionId, ctx.user.id, { data: candidates })
+      return { ok: true }
+    }),
+
+  dismissTransferLink: authedProcedure
+    .input(z.object({
+      sessionId: z.string(),
+      rowIndexA: z.number().int(),
+      rowIndexB: z.number().int().nullable(),
+    }))
+    .output(z.object({ ok: z.boolean() }))
+    .mutation(async ({ ctx, input }) => {
+      const session = await getImportSessionById(input.sessionId, ctx.user.id)
+      if (!session) throw new TRPCError({ code: "NOT_FOUND", message: "Session not found" })
+      const candidates = (session.data as TransactionCandidate[]).map((c) => {
+        if (c.rowIndex !== input.rowIndexA && c.rowIndex !== input.rowIndexB) return c
+        const nextExtra = { ...(c.extra ?? {}) }
+        Reflect.deleteProperty(nextExtra, "proposedTransferLink")
+        return { ...c, extra: nextExtra } satisfies TransactionCandidate
+      })
+      await updateImportSession(input.sessionId, ctx.user.id, { data: candidates })
+      return { ok: true }
     }),
 })
 

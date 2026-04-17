@@ -102,7 +102,7 @@ export function TransactionsPage() {
       />
 
       <main>
-        <TransactionList transactions={transactions} fields={fields ?? []} />
+        <TransactionList transactions={transactions} fields={fields ?? []} accounts={accounts ?? []} />
 
         {total > TRANSACTIONS_PER_PAGE && (
           <Pagination totalItems={total} itemsPerPage={TRANSACTIONS_PER_PAGE} />

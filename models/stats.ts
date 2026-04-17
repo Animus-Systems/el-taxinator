@@ -77,15 +77,28 @@ export type DashboardAnalytics = {
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** Convenience wrapper: builds WHERE for stats queries (no table alias, no search). */
+/** Convenience wrapper: builds WHERE for stats queries (no table alias, no search).
+ *
+ * Always excludes two categories of rows:
+ * - `status = 'personal_ignored'` — rows representing movements between the
+ *   user's own accounts, mistaken deposits, etc. These should never land in
+ *   business income/expense totals regardless of the AI's `type` classification
+ *   (which is often `income` for incoming own-account transfers).
+ * - `type = 'transfer'` — first-class transfer rows, which are explicitly
+ *   non-business movements and must never appear in any aggregate.
+ */
 function buildStatsWhere(
   userId: string,
   filters: TransactionFilters = {},
   extraConditions?: string[],
 ): { clause: string; values: unknown[] } {
+  const excludePersonal = "(status IS NULL OR status <> 'personal_ignored')"
+  const excludeTransfer = "(type IS NULL OR type <> 'transfer')"
+  const defaults = [excludePersonal, excludeTransfer]
+  const merged = extraConditions ? [...defaults, ...extraConditions] : defaults
   const { clause, values } = buildTransactionWhere(userId, filters, {
     alias: "",
-    ...(extraConditions !== undefined ? { extraConditions } : {}),
+    extraConditions: merged,
   })
   return { clause, values }
 }

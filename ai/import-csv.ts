@@ -22,6 +22,15 @@ export type CandidateCryptoMeta = {
   fingerprint?: string | null
 }
 
+// AI-proposed pairing between two candidate legs of an own-account transfer.
+// `rowIndexB` is null when only one leg is visible (orphan transfer).
+export type ProposedTransferLink = {
+  rowIndexA: number
+  rowIndexB: number | null
+  confidence: number
+  reason: string
+}
+
 export type TransactionCandidate = {
   rowIndex: number
   name: string | null
@@ -57,8 +66,15 @@ export type TransactionCandidate = {
   // (e.g. missing cost basis) keep the candidate in `needs_review`.
   extra?: {
     crypto?: CandidateCryptoMeta
+    proposedTransferLink?: ProposedTransferLink
     [key: string]: unknown
   }
+  // Populated by `wizard.applyTransferLink` when the user confirms a transfer
+  // link proposed by the AI. `transferId` is a shared UUID across both legs
+  // (null for orphan / unpaired legs). `transferDirection` records which leg
+  // this row represents so the commit loop can persist the correct columns.
+  transferId?: string | null
+  transferDirection?: "outgoing" | "incoming" | null
 }
 
 export type SuggestedCategory = {

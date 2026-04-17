@@ -16,6 +16,7 @@ import type { Transaction, Category, Project, BulkUpdateFilter, BulkUpdatePatch 
 import { cache } from "react"
 import { getFields } from "./fields"
 import { deleteFile } from "./files"
+import { maybePairNewTransaction, unlinkTransfer } from "@/models/transfers"
 
 export type TransactionData = {
   name?: string | null
@@ -38,6 +39,9 @@ export type TransactionData = {
   status?: string | null
   incomeSourceId?: string | null
   appliedRuleId?: string | null
+  transferId?: string | null
+  transferDirection?: "outgoing" | "incoming" | null
+  counterAccountId?: string | null
   [key: string]: unknown
 }
 
@@ -327,6 +331,15 @@ export const createTransaction = async (
   }
 
   const result = await queryOne<Transaction>(buildInsert("transactions", insertData))
+  if (result) {
+    // Fire-and-forget pairing: a transfer match is never required for the
+    // row to be created, so failures here must not break the insert.
+    try {
+      await maybePairNewTransaction(result)
+    } catch (err) {
+      console.warn("[transactions] maybePairNewTransaction failed:", err)
+    }
+  }
   return result!
 }
 
@@ -373,6 +386,17 @@ export const deleteTransaction = async (
     for (const fileId of files as string[]) {
       if ((await getTransactionsByFileId(fileId, userId)).length <= 1) {
         await deleteFile(fileId, userId, entityId)
+      }
+    }
+
+    // If the row is one leg of a paired transfer, unlink first so the surviving
+    // sibling doesn't end up with a dangling transfer_id / counter_account_id.
+    // unlinkTransfer restores both legs' pre-transfer type from extra.preMigrationType.
+    if (transaction.transferId) {
+      try {
+        await unlinkTransfer({ userId, transferId: transaction.transferId })
+      } catch (err) {
+        console.warn("[transactions] unlinkTransfer before delete failed:", err)
       }
     }
 

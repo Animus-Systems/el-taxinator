@@ -323,7 +323,43 @@
     "types": {
       "income": "Income",
       "expense": "Expense",
+      "transfer": "Transfer",
       "other": "Other"
+    },
+    "filters": {
+      "allTypes": "All types"
+    },
+    "transfers": {
+      "pairedBadgeGeneric": "Transfer",
+      "pairedBadge": {
+        "outgoing": "Transfer out",
+        "incoming": "Transfer in"
+      },
+      "unmatchedBadge": "Unmatched transfer — awaiting the other leg"
+    },
+    "transferDetail": {
+      "linkedLabel": "Linked as transfer",
+      "unmatchedLabel": "Unmatched transfer — no counterparty linked yet",
+      "openPaired": "Open paired row",
+      "unlink": "Unlink",
+      "unlinkConfirmTitle": "Unlink this transfer?",
+      "unlinkConfirmBody": "Both legs will go back to their original income/expense classification. The underlying rows will not be deleted."
+    },
+    "bulkActions": {
+      "linkAsTransfer": "Link as transfer",
+      "linkAsTransferDialogTitle": "Confirm transfer direction",
+      "linkAsTransferDialogBody": "Which way did the money flow?",
+      "linkAsTransferSuccess": "Linked as transfer",
+      "linkAsTransferFromTo": "{amount} went FROM {from} TO {to}",
+      "linkAsTransferSwap": "Swap direction",
+      "linkAsTransferConfirm": "Link",
+      "linkAsTransferCancel": "Cancel",
+      "linkAsTransferNeedsAccounts": "Both transactions need an account set before they can be linked.",
+      "linkAsTransferSameAccount": "Selected rows are on the same account. Transfers must cross accounts.",
+      "linkAsTransferAlreadyLinked": "One of the selected rows is already part of a transfer.",
+      "linkAsTransferCurrencyMismatch": "The selected rows have different currencies.",
+      "linkAsTransferAmountMismatch": "Amounts or dates differ — linked anyway, double-check the pair.",
+      "linkAsTransferError": "Failed to link as transfer"
     },
     "description": "Description",
     "note": "Note",
@@ -1368,7 +1404,13 @@
     "dockMinimize": "Minimize",
     "dockClose": "Close dock",
     "dockAndContinue": "Dock & continue elsewhere",
-    "viewAllReports": "View all reports"
+    "viewAllReports": "View all reports",
+    "transfers": {
+      "proposedBanner": "Link as a transfer?",
+      "unknownCounterparty": "unknown counterparty",
+      "confirm": "Confirm link",
+      "dismiss": "Dismiss"
+    }
   },
   "reports": {
     "title": "Reports",

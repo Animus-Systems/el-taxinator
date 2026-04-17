@@ -1,14 +1,26 @@
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
+import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
-import { Landmark } from "lucide-react"
+import { ArrowLeftRight, Landmark } from "lucide-react"
 import type { TransactionCandidate } from "@/ai/import-csv"
 import { formatCurrency } from "@/lib/utils"
 import { summarizeImportCandidates } from "@/lib/import-review"
 import { trpc } from "~/trpc"
 
 type Props = {
+  sessionId: string
   candidates: TransactionCandidate[]
+}
+
+function formatLegSummary(c?: TransactionCandidate | null): string {
+  if (!c) return "—"
+  const parts: string[] = []
+  if (c.merchant) parts.push(c.merchant)
+  if (c.total !== null && c.currencyCode) {
+    parts.push(formatCurrency(c.total, c.currencyCode))
+  }
+  return parts.join(" · ") || "—"
 }
 
 type StatusKey = "needs_review" | "business" | "business_non_deductible" | "personal_ignored"
@@ -56,7 +68,7 @@ type AccountInfo = { name: string; bankName: string | null }
 
 const PAGE_SIZE = 50
 
-export function WizardCandidatePanel({ candidates }: Props) {
+export function WizardCandidatePanel({ sessionId, candidates }: Props) {
   const { t } = useTranslation("wizard")
   const { data: accounts = [] } = trpc.accounts.listActive.useQuery({})
   const accountById = new Map<string, AccountInfo>(
@@ -65,6 +77,48 @@ export function WizardCandidatePanel({ candidates }: Props) {
 
   const [filter, setFilter] = useState<FilterKey>("all")
   const [visibleLimit, setVisibleLimit] = useState(PAGE_SIZE)
+  const [pendingLinkRow, setPendingLinkRow] = useState<number | null>(null)
+  const utils = trpc.useUtils()
+  const applyTransferLink = trpc.wizard.applyTransferLink.useMutation({
+    onSuccess: () => {
+      utils.wizard.get.invalidate()
+    },
+  })
+  const dismissTransferLink = trpc.wizard.dismissTransferLink.useMutation({
+    onSuccess: () => {
+      utils.wizard.get.invalidate()
+    },
+  })
+
+  const handleConfirmTransfer = async (c: TransactionCandidate) => {
+    const link = c.extra?.proposedTransferLink
+    if (!link) return
+    setPendingLinkRow(c.rowIndex)
+    try {
+      await applyTransferLink.mutateAsync({
+        sessionId,
+        rowIndexA: link.rowIndexA,
+        rowIndexB: link.rowIndexB,
+      })
+    } finally {
+      setPendingLinkRow(null)
+    }
+  }
+
+  const handleDismissTransfer = async (c: TransactionCandidate) => {
+    const link = c.extra?.proposedTransferLink
+    if (!link) return
+    setPendingLinkRow(c.rowIndex)
+    try {
+      await dismissTransferLink.mutateAsync({
+        sessionId,
+        rowIndexA: link.rowIndexA,
+        rowIndexB: link.rowIndexB,
+      })
+    } finally {
+      setPendingLinkRow(null)
+    }
+  }
 
   if (candidates.length === 0) {
     return (
@@ -162,9 +216,52 @@ export function WizardCandidatePanel({ candidates }: Props) {
           ) : (
             <>
               <div className="divide-y divide-border/30">
-                {visible.map((c) => (
-                  <CandidateRow key={c.rowIndex} c={c} accountById={accountById} />
-                ))}
+                {visible.map((c) => {
+                  const link = c.extra?.proposedTransferLink
+                  const showBanner = !!link && link.rowIndexA === c.rowIndex
+                  const sibling =
+                    link && link.rowIndexB !== null
+                      ? candidates.find((o) => o.rowIndex === link.rowIndexB) ?? null
+                      : null
+                  return (
+                    <div key={c.rowIndex}>
+                      {showBanner && link ? (
+                        <div className="mx-3 my-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm">
+                          <div className="flex items-center gap-2 font-medium text-amber-900">
+                            <ArrowLeftRight className="h-4 w-4" />
+                            <span>{t("transfers.proposedBanner")}</span>
+                          </div>
+                          <div className="mt-1 text-xs text-amber-900/80">
+                            {formatLegSummary(c)}
+                            {" ↔ "}
+                            {link.rowIndexB !== null
+                              ? formatLegSummary(sibling)
+                              : t("transfers.unknownCounterparty")}
+                          </div>
+                          <div className="mt-1 text-xs text-amber-900/70 italic">{link.reason}</div>
+                          <div className="mt-2 flex gap-2">
+                            <Button
+                              size="sm"
+                              onClick={() => handleConfirmTransfer(c)}
+                              disabled={pendingLinkRow === c.rowIndex}
+                            >
+                              {t("transfers.confirm")}
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => handleDismissTransfer(c)}
+                              disabled={pendingLinkRow === c.rowIndex}
+                            >
+                              {t("transfers.dismiss")}
+                            </Button>
+                          </div>
+                        </div>
+                      ) : null}
+                      <CandidateRow c={c} accountById={accountById} />
+                    </div>
+                  )
+                })}
               </div>
               {hiddenCount > 0 ? (
                 <button

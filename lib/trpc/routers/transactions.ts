@@ -12,13 +12,16 @@ import {
 } from "@/models/transactions"
 import type { TransactionData, TransactionFilters } from "@/models/transactions"
 import { attachFileToTransaction, getFileById } from "@/models/files"
+import { linkTransferPair, unlinkTransfer } from "@/models/transfers"
 import { TRPCError } from "@trpc/server"
 import {
   transactionSchema,
   categorySchema,
   projectSchema,
+  type Transaction,
 } from "@/lib/db-types"
 import { getActiveEntityId } from "@/lib/entities"
+import { sql, queryMany } from "@/lib/sql"
 
 // Transaction with joined category/project relations
 const transactionWithRelationsSchema = transactionSchema.extend({
@@ -181,5 +184,42 @@ export const transactionsRouter = router({
         throw new TRPCError({ code: "NOT_FOUND", message: "Transaction not found" })
       }
       return { ok: true }
+    }),
+
+  confirmTransferLink: authedProcedure
+    .input(z.object({
+      outgoingId: z.string().uuid(),
+      outgoingAccountId: z.string().uuid(),
+      incomingId: z.string().uuid(),
+      incomingAccountId: z.string().uuid(),
+    }))
+    .output(z.object({ transferId: z.string().uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      return linkTransferPair({ userId: ctx.user.id, ...input })
+    }),
+
+  unlinkTransfer: authedProcedure
+    .input(z.object({ transferId: z.string().uuid() }))
+    .output(z.object({ ok: z.boolean() }))
+    .mutation(async ({ ctx, input }) => {
+      await unlinkTransfer({ userId: ctx.user.id, transferId: input.transferId })
+      return { ok: true }
+    }),
+
+  getPairedLeg: authedProcedure
+    .input(z.object({
+      transferId: z.string().uuid(),
+      excludeId: z.string().uuid(),
+    }))
+    .output(transactionSchema.nullable())
+    .query(async ({ ctx, input }) => {
+      const rows = await queryMany<Transaction>(
+        sql`SELECT * FROM transactions
+            WHERE transfer_id = ${input.transferId}
+              AND id <> ${input.excludeId}
+              AND user_id = ${ctx.user.id}
+            LIMIT 1`,
+      )
+      return rows[0] ?? null
     }),
 })

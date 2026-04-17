@@ -120,6 +120,16 @@ export async function processWizardTurn(input: ProcessTurnInput): Promise<Proces
     applyBulkAction(candidates, action)
   }
 
+  for (const link of parsed.proposedTransferLinks ?? []) {
+    const a = candidates.find((c) => c.rowIndex === link.rowIndexA)
+    if (!a) continue
+    a.extra = { ...(a.extra ?? {}), proposedTransferLink: link }
+    if (link.rowIndexB !== null) {
+      const b = candidates.find((c) => c.rowIndex === link.rowIndexB)
+      if (b) b.extra = { ...(b.extra ?? {}), proposedTransferLink: link }
+    }
+  }
+
   await updateImportSession(input.sessionId, input.userId, {
     data: candidates,
     promptVersion,
@@ -321,6 +331,7 @@ function parseWizardReply(raw: unknown): WizardAssistantReply {
       clarifyingQuestions: [],
       taxTips: [],
       businessFactsToSave: [],
+      proposedTransferLinks: [],
     }
   }
 

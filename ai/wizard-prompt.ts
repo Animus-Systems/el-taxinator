@@ -10,7 +10,7 @@ import type {
 } from "@/lib/db-types"
 import type { TransactionCandidate } from "./import-csv"
 
-export const WIZARD_PROMPT_VERSION = "2026-04-15.1"
+export const WIZARD_PROMPT_VERSION = "2026-04-17.3"
 
 const MAX_FOCUSED_CANDIDATES = 50
 
@@ -46,7 +46,7 @@ const REPLY_SCHEMA = {
           description: { type: ["string", "null"] },
           total: { type: ["number", "null"] },
           currencyCode: { type: ["string", "null"] },
-          type: { type: ["string", "null"], enum: ["expense", "income", null] },
+          type: { type: ["string", "null"], enum: ["expense", "income", "transfer", null] },
           categoryCode: { type: ["string", "null"] },
           projectCode: { type: ["string", "null"] },
           accountId: { type: ["string", "null"] },
@@ -90,7 +90,7 @@ const REPLY_SCHEMA = {
             properties: {
               categoryCode: { type: ["string", "null"] },
               projectCode: { type: ["string", "null"] },
-              type: { type: ["string", "null"], enum: ["expense", "income", null] },
+              type: { type: ["string", "null"], enum: ["expense", "income", "transfer", null] },
               status: { type: ["string", "null"] },
             },
           },
@@ -140,6 +140,19 @@ const REPLY_SCHEMA = {
           confidence: { type: "number" },
         },
         required: ["key", "value"],
+      },
+    },
+    proposedTransferLinks: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          rowIndexA: { type: "number" },
+          rowIndexB: { type: ["number", "null"] },
+          confidence: { type: "number" },
+          reason: { type: "string" },
+        },
+        required: ["rowIndexA", "rowIndexB", "confidence", "reason"],
       },
     },
   },
@@ -425,6 +438,24 @@ Rules mirror crypto but use the "stock_" prefix: stock_purchase, stock_disposal,
 ## Personal streams (individual filer or autónomo's personal side)
 Salary deposits from an employer (nómina): don't assign a crypto/stock category — instead set status="personal_income" and link an income_source via the /personal/employment page. The wizard only categorizes and flags these for the user to attach.
 Rental income: same pattern; link to an income_source of kind=rental.
+
+## Own-account transfers (IMPORTANT — transfers are first-class)
+
+Movements between the user's own accounts are a distinct transaction TYPE, not personal expenses/income. The DB now models them as type="transfer" with a transfer_direction of "outgoing" (on the debited leg) or "incoming" (on the credited leg).
+
+Always classify own-account rows as:
+- type: "transfer"
+- status: "personal_ignored"
+
+Telltales:
+- "Transferencia saliente/entrante" naming the user themselves as counterparty.
+- Cash deposit / "ingreso en efectivo" into the user's own account.
+- "Sent from <bank>" / "Received from <bank>" with both sides belonging to the user.
+- Mistaken deposit + same-day reversal pair — both legs are transfers.
+
+When you see two candidate rows that look like two legs of one transfer (same amount, different accounts, close in time), emit one entry in proposedTransferLinks naming both rowIndex values. When only one leg is visible (user tells you or description clearly implies an off-Taxinator account), emit an entry with rowIndexB=null to mark the row as an orphan transfer.
+
+TRUST the user when they say "mistake" or "between my accounts" — apply type="transfer" even if the description looks like income.
 
 ## Output rules
 Produce a single JSON object with these top-level fields:

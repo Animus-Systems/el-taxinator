@@ -145,8 +145,15 @@ export function computeTotals(
     categoryLookup.set(c.code, { name: c.name, taxFormRef: c.taxFormRef ?? null })
   }
 
+  // If no candidate is marked selected (a legacy-bug artifact where commits
+  // went through with an empty selected-index list), fall back to counting
+  // every candidate that has a terminal review status. That way the report
+  // reflects what the wizard saw, rather than showing zeros.
+  const anySelected = candidates.some((c) => c.selected)
+
   for (const c of candidates) {
-    if (!c.selected) continue
+    if (anySelected && !c.selected) continue
+    if (!anySelected && (!c.status || c.status === "needs_review")) continue
     const status = c.status || "needs_review"
     const total = c.total ?? 0
 

@@ -323,7 +323,43 @@
     "types": {
       "income": "Ingreso",
       "expense": "Gasto",
+      "transfer": "Transferencia",
       "other": "Otro"
+    },
+    "filters": {
+      "allTypes": "Todos los tipos"
+    },
+    "transfers": {
+      "pairedBadgeGeneric": "Transferencia",
+      "pairedBadge": {
+        "outgoing": "Transferencia saliente",
+        "incoming": "Transferencia entrante"
+      },
+      "unmatchedBadge": "Transferencia sin emparejar — esperando la otra parte"
+    },
+    "transferDetail": {
+      "linkedLabel": "Enlazada como transferencia",
+      "unmatchedLabel": "Transferencia sin emparejar — falta la otra parte",
+      "openPaired": "Abrir fila emparejada",
+      "unlink": "Desenlazar",
+      "unlinkConfirmTitle": "¿Desenlazar esta transferencia?",
+      "unlinkConfirmBody": "Ambas partes volverán a su clasificación original (ingreso/gasto). Las filas no se eliminarán."
+    },
+    "bulkActions": {
+      "linkAsTransfer": "Enlazar como transferencia",
+      "linkAsTransferDialogTitle": "Confirmar dirección de transferencia",
+      "linkAsTransferDialogBody": "¿En qué dirección se movió el dinero?",
+      "linkAsTransferSuccess": "Enlazadas como transferencia",
+      "linkAsTransferFromTo": "{amount} salió DE {from} HACIA {to}",
+      "linkAsTransferSwap": "Invertir dirección",
+      "linkAsTransferConfirm": "Enlazar",
+      "linkAsTransferCancel": "Cancelar",
+      "linkAsTransferNeedsAccounts": "Ambas transacciones deben tener una cuenta asignada antes de poder enlazarlas.",
+      "linkAsTransferSameAccount": "Las filas seleccionadas están en la misma cuenta. Las transferencias deben cruzar cuentas.",
+      "linkAsTransferAlreadyLinked": "Una de las filas seleccionadas ya forma parte de una transferencia.",
+      "linkAsTransferCurrencyMismatch": "Las filas seleccionadas tienen monedas distintas.",
+      "linkAsTransferAmountMismatch": "Los importes o las fechas no coinciden — enlazadas de todos modos, revisa el par.",
+      "linkAsTransferError": "Error al enlazar como transferencia"
     },
     "description": "Descripción",
     "note": "Nota",
@@ -1368,7 +1404,13 @@
     "dockMinimize": "Minimizar",
     "dockClose": "Cerrar panel",
     "dockAndContinue": "Anclar y seguir en otra pantalla",
-    "viewAllReports": "Ver todos los informes"
+    "viewAllReports": "Ver todos los informes",
+    "transfers": {
+      "proposedBanner": "¿Enlazar como transferencia?",
+      "unknownCounterparty": "contraparte desconocida",
+      "confirm": "Confirmar enlace",
+      "dismiss": "Descartar"
+    }
   },
   "reports": {
     "title": "Informes",

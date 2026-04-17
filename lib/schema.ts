@@ -15,7 +15,7 @@ import path from "path"
 // 2. Add a migration entry here with the next version number
 // 3. The migration SQL should be idempotent (use IF NOT EXISTS, etc.)
 
-export const SCHEMA_VERSION = 20 // bump this when adding a migration
+export const SCHEMA_VERSION = 22 // bump this when adding a migration
 
 export const migrations: { version: number; description: string; sql: string }[] = [
   {
@@ -486,6 +486,159 @@ export const migrations: { version: number; description: string; sql: string }[]
         ON tax_filings (user_id, year, COALESCE(quarter, -1), modelo_code);
       CREATE INDEX IF NOT EXISTS tax_filings_user_year_idx
         ON tax_filings (user_id, year);
+    `,
+  },
+  {
+    version: 21,
+    description: "First-class transfers: add transfer_id, counter_account_id, transfer_direction columns and retrofit existing same-day opposite-sign same-amount pairs",
+    sql: `
+      ALTER TABLE transactions
+        ADD COLUMN IF NOT EXISTS transfer_id uuid,
+        ADD COLUMN IF NOT EXISTS counter_account_id uuid REFERENCES accounts(id) ON DELETE SET NULL,
+        ADD COLUMN IF NOT EXISTS transfer_direction text;
+
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM information_schema.table_constraints
+          WHERE table_name = 'transactions' AND constraint_name = 'transactions_transfer_direction_check'
+        ) THEN
+          ALTER TABLE transactions
+            ADD CONSTRAINT transactions_transfer_direction_check
+            CHECK (transfer_direction IN ('outgoing', 'incoming') OR transfer_direction IS NULL);
+        END IF;
+      END $$;
+
+      CREATE INDEX IF NOT EXISTS transactions_transfer_id_idx
+        ON transactions (transfer_id) WHERE transfer_id IS NOT NULL;
+
+      CREATE INDEX IF NOT EXISTS transactions_orphan_transfer_idx
+        ON transactions (user_id, issued_at)
+        WHERE type = 'transfer' AND transfer_id IS NULL;
+
+      -- Retrofit: pair same-day same-amount opposite-sign rows. Conservative —
+      -- same-day only (not ±1 day like runtime) to minimize false positives.
+      CREATE TEMP TABLE _transfer_pairs ON COMMIT DROP AS
+      WITH candidates AS (
+        SELECT
+          o.id AS outgoing_id,
+          i.id AS incoming_id,
+          o.account_id AS outgoing_account_id,
+          i.account_id AS incoming_account_id,
+          ROW_NUMBER() OVER (PARTITION BY o.id ORDER BY i.issued_at, i.id) AS rn_o,
+          ROW_NUMBER() OVER (PARTITION BY i.id ORDER BY o.issued_at, o.id) AS rn_i
+        FROM transactions o
+        JOIN transactions i
+          ON o.user_id = i.user_id
+         AND o.account_id <> i.account_id
+         AND ABS(o.total) = ABS(i.total)
+         AND o.currency_code = i.currency_code
+         AND o.issued_at::date = i.issued_at::date
+         AND o.type = 'expense'
+         AND i.type = 'income'
+         AND o.transfer_id IS NULL
+         AND i.transfer_id IS NULL
+      )
+      SELECT outgoing_id, incoming_id, outgoing_account_id, incoming_account_id,
+             gen_random_uuid() AS transfer_id
+      FROM candidates
+      WHERE rn_o = 1 AND rn_i = 1;
+
+      UPDATE transactions t
+      SET type = 'transfer',
+          transfer_id = p.transfer_id,
+          transfer_direction = 'outgoing',
+          counter_account_id = p.incoming_account_id,
+          extra = COALESCE(extra, '{}'::jsonb) || jsonb_build_object('preMigrationType', 'expense')
+      FROM _transfer_pairs p
+      WHERE t.id = p.outgoing_id;
+
+      UPDATE transactions t
+      SET type = 'transfer',
+          transfer_id = p.transfer_id,
+          transfer_direction = 'incoming',
+          counter_account_id = p.outgoing_account_id,
+          extra = COALESCE(extra, '{}'::jsonb) || jsonb_build_object('preMigrationType', 'income')
+      FROM _transfer_pairs p
+      WHERE t.id = p.incoming_id;
+    `,
+  },
+  {
+    version: 22,
+    description: "Broader transfer retrofit: pair own-account movements by transfer-specific name patterns (type='other' outgoing legs that v21 missed)",
+    sql: `
+      -- v21 only paired rows where outgoing.type='expense' AND incoming.type='income'.
+      -- In practice, AI-classified own-account transfers often landed as type='other'
+      -- on the outgoing side, so v21 missed them. This migration pairs same-day
+      -- same-amount opposite-account rows where the NAME clearly indicates a
+      -- self-transfer (Transferencia saliente/entrante, Transfer sent/received,
+      -- "Sent from <bank>", "Received from <bank>") and both sides are marked
+      -- status='personal_ignored'. The status gate + keyword gate together prevent
+      -- false positives like same-amount Bizum payments from different people.
+
+      CREATE TEMP TABLE _transfer_pairs_v22 ON COMMIT DROP AS
+      WITH candidates AS (
+        SELECT
+          o.id AS outgoing_id,
+          i.id AS incoming_id,
+          o.account_id AS outgoing_account_id,
+          i.account_id AS incoming_account_id,
+          o.type AS outgoing_type,
+          i.type AS incoming_type,
+          ROW_NUMBER() OVER (PARTITION BY o.id ORDER BY i.issued_at, i.id) AS rn_o,
+          ROW_NUMBER() OVER (PARTITION BY i.id ORDER BY o.issued_at, o.id) AS rn_i
+        FROM transactions o
+        JOIN transactions i
+          ON o.user_id = i.user_id
+         AND o.account_id <> i.account_id
+         AND ABS(o.total) = ABS(i.total)
+         AND o.currency_code = i.currency_code
+         AND o.issued_at::date = i.issued_at::date
+         AND o.status = 'personal_ignored'
+         AND i.status = 'personal_ignored'
+         AND o.transfer_id IS NULL
+         AND i.transfer_id IS NULL
+         AND o.type IN ('expense', 'other')
+         AND i.type IN ('income', 'other')
+         -- outgoing side mentions a transfer-specific keyword
+         AND (
+           o.name ILIKE '%transferencia saliente%'
+           OR o.name ILIKE '%transfer sent%'
+           OR o.name ILIKE '%transferencia a%'
+           OR o.name ILIKE '%sent to%'
+         )
+         -- and/or incoming side mentions one
+         AND (
+           i.name ILIKE '%transferencia entrante%'
+           OR i.name ILIKE '%transfer received%'
+           OR i.name ILIKE '%sent from%'
+           OR i.name ILIKE '%received from%'
+           OR i.name ILIKE '%transferencia recibida%'
+         )
+      )
+      SELECT outgoing_id, incoming_id, outgoing_account_id, incoming_account_id,
+             outgoing_type, incoming_type,
+             gen_random_uuid() AS transfer_id
+      FROM candidates
+      WHERE rn_o = 1 AND rn_i = 1;
+
+      UPDATE transactions t
+      SET type = 'transfer',
+          transfer_id = p.transfer_id,
+          transfer_direction = 'outgoing',
+          counter_account_id = p.incoming_account_id,
+          extra = COALESCE(extra, '{}'::jsonb) || jsonb_build_object('preMigrationType', p.outgoing_type)
+      FROM _transfer_pairs_v22 p
+      WHERE t.id = p.outgoing_id;
+
+      UPDATE transactions t
+      SET type = 'transfer',
+          transfer_id = p.transfer_id,
+          transfer_direction = 'incoming',
+          counter_account_id = p.outgoing_account_id,
+          extra = COALESCE(extra, '{}'::jsonb) || jsonb_build_object('preMigrationType', p.incoming_type)
+      FROM _transfer_pairs_v22 p
+      WHERE t.id = p.incoming_id;
     `,
   },
 ]

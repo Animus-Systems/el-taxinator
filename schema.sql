@@ -125,6 +125,9 @@ CREATE TABLE transactions (
     deductible boolean,
     account_id uuid REFERENCES accounts(id) ON DELETE SET NULL,
     status text NOT NULL DEFAULT 'business',
+    transfer_id uuid,
+    counter_account_id uuid REFERENCES accounts(id) ON DELETE SET NULL,
+    transfer_direction text CHECK (transfer_direction IN ('outgoing', 'incoming') OR transfer_direction IS NULL),
     FOREIGN KEY (category_code, user_id) REFERENCES categories(code, user_id) ON UPDATE CASCADE ON DELETE RESTRICT,
     FOREIGN KEY (project_code, user_id) REFERENCES projects(code, user_id) ON UPDATE CASCADE ON DELETE RESTRICT
 );
@@ -138,6 +141,11 @@ CREATE INDEX transactions_total_idx ON transactions (total);
 CREATE INDEX transactions_account_id_idx ON transactions (account_id);
 CREATE INDEX transactions_crypto_idx ON transactions (user_id) WHERE (extra ? 'crypto');
 CREATE INDEX transactions_applied_rule_idx ON transactions (applied_rule_id) WHERE applied_rule_id IS NOT NULL;
+CREATE INDEX transactions_transfer_id_idx
+    ON transactions (transfer_id) WHERE transfer_id IS NOT NULL;
+CREATE INDEX transactions_orphan_transfer_idx
+    ON transactions (user_id, issued_at)
+    WHERE type = 'transfer' AND transfer_id IS NULL;
 
 -- ─── Crypto FIFO ledger ─────────────────────────────────────────────────────
 --

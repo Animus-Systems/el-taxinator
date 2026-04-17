@@ -21,6 +21,8 @@ import { randomUUID } from "node:crypto"
 import { buildSessionReport } from "@/ai/session-report"
 import { renderWizardSessionReportPdf } from "@/components/wizard/wizard-report-pdf"
 import { createTransaction } from "@/models/transactions"
+import { maybePairNewTransaction } from "@/models/transfers"
+import { sql, execute } from "@/lib/sql"
 import { syncCryptoLedger } from "@/lib/crypto-hooks"
 import { createCategory } from "@/models/categories"
 import { getSettings } from "@/models/settings"
@@ -590,9 +592,30 @@ export async function importRoutes(app: FastifyInstance) {
         }>
       }
 
-      const selectedIndexes = new Set(body.selectedRowIndexes ?? [])
+      const sourceCandidates =
+        body.reviewedCandidates ?? (session.data as TransactionCandidate[])
+
+      // If the client didn't send an explicit index list, fall back on the
+      // candidates' own `selected` flag rather than zeroing everything out.
+      // Without this, a commit with an empty `selectedRowIndexes` would flip
+      // every row to `selected: false`, create zero transactions, and still
+      // mark the session "committed" — yielding an empty session report.
+      const explicitIndexes = body.selectedRowIndexes
+      const selectedIndexes = new Set<number>(
+        explicitIndexes && explicitIndexes.length > 0
+          ? explicitIndexes
+          : sourceCandidates.filter((c) => c.selected).map((c) => c.rowIndex),
+      )
+
+      if (selectedIndexes.size === 0) {
+        return reply.code(400).send({
+          success: false,
+          error: "No rows selected — refusing to commit an empty session.",
+        })
+      }
+
       const reviewedCandidates = applySelectionToCandidates(
-        body.reviewedCandidates ?? (session.data as TransactionCandidate[]),
+        sourceCandidates,
         selectedIndexes,
       )
       const validation = validateImportCommit(reviewedCandidates)
@@ -646,6 +669,13 @@ export async function importRoutes(app: FastifyInstance) {
             accountId: c.accountId || session.accountId || null,
             status: c.status,
             appliedRuleId: c.matchedRuleId ?? null,
+            // Transfer linking: `wizard.applyTransferLink` sets these on
+            // confirmed pairs. `counterAccountId` is populated AFTER the loop
+            // by the cross-populate sweep below, because the partner's DB id
+            // is not known until both legs are inserted.
+            transferId: c.transferId ?? null,
+            transferDirection: c.transferDirection ?? null,
+            counterAccountId: null,
             // Carry the wizard's extra payload (crypto meta, etc.) through to
             // transactions.extra so /crypto-page queries can find it.
             ...(extraPayload ? { extra: extraPayload } : {}),
@@ -662,10 +692,46 @@ export async function importRoutes(app: FastifyInstance) {
           // and realised gains stay in sync with committed transactions.
           await syncCryptoLedger(user.id, tx, c)
 
+          // Belt-and-suspenders: createTransaction best-effort-calls maybePairNewTransaction,
+          // but that call swallows errors to console.warn. Re-run here so a failure during
+          // the createTransaction callback (which could race a sibling insert earlier in
+          // this same batch) gets a second chance. Idempotent: if already paired, the
+          // matcher returns `kind: "none"` and no link happens.
+          try {
+            await maybePairNewTransaction(tx)
+          } catch (err) {
+            console.warn("[import/commit] maybePairNewTransaction retry failed:", err)
+          }
+
           created++
         } catch (err) {
           console.error(`[import/commit] Failed to create transaction row ${c.rowIndex}:`, err)
         }
+      }
+
+      // Cross-populate counter_account_id for any freshly-committed transfer
+      // pairs that share a transfer_id. The wizard assigns a shared
+      // transfer_id to both legs BEFORE their DB ids exist, so this sweep
+      // runs after all inserts to point each leg at its partner's
+      // account_id. Paired legs committed earlier in this loop (or in prior
+      // sessions that left counter_account_id null) get filled in here.
+      try {
+        await execute(sql`
+          WITH pairs AS (
+            SELECT a.id AS a_id, b.id AS b_id, a.account_id AS a_acc, b.account_id AS b_acc
+            FROM transactions a
+            JOIN transactions b ON b.transfer_id = a.transfer_id AND b.id <> a.id
+            WHERE a.user_id = ${user.id}
+              AND a.transfer_id IS NOT NULL
+              AND a.counter_account_id IS NULL
+          )
+          UPDATE transactions t
+          SET counter_account_id = pairs.b_acc
+          FROM pairs
+          WHERE t.id = pairs.a_id
+        `)
+      } catch (err) {
+        console.warn("[import/commit] counter_account sweep failed:", err)
       }
 
       // Batch-update rule hit counters so 300-row imports produce N UPDATEs

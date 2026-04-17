@@ -36,9 +36,11 @@ export function TransactionSearchAndFilters({
     name: keyof TransactionFilters,
     value: TransactionFilters[keyof TransactionFilters],
   ) => {
-    const nextSearch = applyTransactionFilterPatch(searchParams, {
-      [name]: value ?? "",
-    })
+    applyPatch({ [name]: value ?? "" })
+  }
+
+  const applyPatch = (patch: Partial<TransactionFilters>) => {
+    const nextSearch = applyTransactionFilterPatch(searchParams, patch)
     const href = nextSearch.toString() ? `/transactions?${nextSearch}` : "/transactions"
     router.replace(href)
   }
@@ -74,6 +76,22 @@ export function TransactionSearchAndFilters({
                 </div>
               </SelectItem>
             ))}
+          </SelectContent>
+        </Select>
+
+        <Select
+          value={filters.type || "-"}
+          onValueChange={(value) => handleFilterChange("type", value === "-" ? "" : value)}
+        >
+          <SelectTrigger className="w-[150px]">
+            <SelectValue placeholder={t("filters.allTypes")} />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="-">{t("filters.allTypes")}</SelectItem>
+            <SelectItem value="income">{t("types.income")}</SelectItem>
+            <SelectItem value="expense">{t("types.expense")}</SelectItem>
+            <SelectItem value="transfer">{t("types.transfer")}</SelectItem>
+            <SelectItem value="other">{t("types.other")}</SelectItem>
           </SelectContent>
         </Select>
 
@@ -137,8 +155,10 @@ export function TransactionSearchAndFilters({
             to: filters.dateTo ? new Date(filters.dateTo) : undefined,
           }}
           onChange={(date) => {
-            handleFilterChange("dateFrom", date?.from ? format(date.from, "yyyy-MM-dd") : "")
-            handleFilterChange("dateTo", date?.to ? format(date.to, "yyyy-MM-dd") : "")
+            applyPatch({
+              dateFrom: date?.from ? format(date.from, "yyyy-MM-dd") : "",
+              dateTo: date?.to ? format(date.to, "yyyy-MM-dd") : "",
+            })
           }}
         />
 

@@ -138,6 +138,12 @@ export const fileSchema = z.object({
   createdAt: z.date(),
 })
 
+export const transactionTypeSchema = z.enum(["income", "expense", "transfer", "other"])
+export type TransactionType = z.infer<typeof transactionTypeSchema>
+
+export const transferDirectionSchema = z.enum(["outgoing", "incoming"]).nullable()
+export type TransferDirection = z.infer<typeof transferDirectionSchema>
+
 export const transactionSchema = z.object({
   id: z.string(),
   userId: z.string(),
@@ -148,7 +154,7 @@ export const transactionSchema = z.object({
   currencyCode: z.string().nullable(),
   convertedTotal: z.number().nullable(),
   convertedCurrencyCode: z.string().nullable(),
-  type: z.string().nullable(),
+  type: transactionTypeSchema.nullable(),
   items: jsonValueSchema,
   note: z.string().nullable(),
   files: jsonValueSchema,
@@ -163,6 +169,9 @@ export const transactionSchema = z.object({
   accountId: z.string().nullable(),
   status: z.string(),
   appliedRuleId: z.string().nullable(),
+  transferId: z.string().uuid().nullable(),
+  counterAccountId: z.string().uuid().nullable(),
+  transferDirection: transferDirectionSchema,
 })
 
 export const currencySchema = z.object({
@@ -247,7 +256,7 @@ export const candidateUpdateSchema = z.object({
   description: z.string().nullable().optional(),
   total: z.number().nullable().optional(),
   currencyCode: z.string().nullable().optional(),
-  type: z.enum(["expense", "income"]).nullable().optional(),
+  type: z.enum(["expense", "income", "transfer"]).nullable().optional(),
   categoryCode: z.string().nullable().optional(),
   projectCode: z.string().nullable().optional(),
   accountId: z.string().nullable().optional(),
@@ -269,7 +278,7 @@ export const bulkActionSchema = z.object({
   apply: z.object({
     categoryCode: z.string().nullable().optional(),
     projectCode: z.string().nullable().optional(),
-    type: z.enum(["expense", "income"]).nullable().optional(),
+    type: z.enum(["expense", "income", "transfer"]).nullable().optional(),
     status: transactionReviewStatusSchema.nullable().optional(),
   }),
   affectedRowIndexes: z.array(z.number()).default([]),
@@ -529,6 +538,17 @@ export const wizardAssistantReplySchema = z.object({
         confidence: z.number().optional(),
       }),
     )
+    .default([]),
+  proposedTransferLinks: z
+    .array(
+      z.object({
+        rowIndexA: z.number().int(),
+        rowIndexB: z.number().int().nullable(),
+        confidence: z.number().min(0).max(1),
+        reason: z.string().min(1).max(500),
+      }),
+    )
+    .optional()
     .default([]),
 })
 export type WizardAssistantReply = z.infer<typeof wizardAssistantReplySchema>

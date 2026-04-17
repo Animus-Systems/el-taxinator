@@ -8,7 +8,7 @@ import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, Table
 import { calcNetTotalPerCurrency, calcTotalPerCurrency, isTransactionIncomplete } from "@/lib/stats"
 import { getVisibleTransactionFields } from "@/lib/transaction-list-fields"
 import { cn, formatCurrency } from "@/lib/utils"
-import type { Category, Field, Project, Transaction } from "@/lib/db-types"
+import type { BankAccount, Category, Field, Project, Transaction } from "@/lib/db-types"
 import { formatDate } from "date-fns"
 import { AlertTriangle, ArrowDownIcon, ArrowLeftRight, ArrowUpIcon, File, Paperclip, Sparkles, TrendingDown, TrendingUp, Zap } from "lucide-react"
 import { AttachReceiptDialog } from "@/components/transactions/attach-receipt-dialog"
@@ -21,12 +21,16 @@ import { L } from "@/components/ui/localized-text"
 import { getLocalizedValue } from "@/lib/i18n-db"
 import { useLocale } from "next-intl"
 
+type FieldRendererContext = {
+  accountById: Map<string, { name: string }>
+}
+
 type FieldRenderer = {
   name: string
   code: string
   classes?: string
   sortable: boolean
-  formatValue?: (transaction: TransactionWithRelations) => React.ReactNode
+  formatValue?: (transaction: TransactionWithRelations, ctx: FieldRendererContext) => React.ReactNode
   footerValue?: (transactions: Transaction[]) => React.ReactNode
 }
 
@@ -87,6 +91,31 @@ function FilesCell({ transaction }: { transaction: Transaction }) {
 
 function TypeCell({ transaction }: { transaction: Transaction }) {
   const t = useTranslations("transactions.types")
+  const tTransfers = useTranslations("transactions.transfers")
+
+  if (transaction.type === "transfer") {
+    const isOrphan = !transaction.transferId
+    const direction = transaction.transferDirection
+    const label = isOrphan
+      ? tTransfers("unmatchedBadge")
+      : direction
+        ? tTransfers(`pairedBadge.${direction}`)
+        : tTransfers("pairedBadgeGeneric")
+    return (
+      <span
+        title={label}
+        aria-label={label}
+        className={cn(
+          "inline-flex items-center gap-0.5",
+          isOrphan ? "text-amber-600" : "text-sky-600",
+        )}
+      >
+        {isOrphan && <AlertTriangle className="h-3 w-3" />}
+        <ArrowLeftRight className="h-4 w-4" />
+      </span>
+    )
+  }
+
   const type: "income" | "expense" | "other" =
     transaction.type === "income" || transaction.type === "expense" ? transaction.type : "other"
   const label = t(type)
@@ -167,12 +196,32 @@ export const standardFieldRenderers: Record<string, FieldRenderer> = {
     code: "accountName",
     classes: "min-w-[120px] max-w-[200px] overflow-hidden",
     sortable: true,
-    formatValue: (transaction: TransactionWithRelations) => {
+    formatValue: (transaction: TransactionWithRelations, ctx: FieldRendererContext) => {
       const accountName = (transaction as Record<string, unknown>)["accountName"] as string | null
       const accountBankName = (transaction as Record<string, unknown>)["accountBankName"] as string | null
-      if (!accountName) return <span className="text-muted-foreground">-</span>
-      const titleAttr = accountBankName ? `${accountName} (${accountBankName})` : undefined
-      return <span title={titleAttr}>{accountName}</span>
+      const titleAttr = accountBankName && accountName ? `${accountName} (${accountBankName})` : undefined
+
+      const counterAccountId = transaction.counterAccountId
+      const counterName =
+        transaction.type === "transfer" && counterAccountId
+          ? ctx.accountById.get(counterAccountId)?.name ?? null
+          : null
+      const direction = transaction.transferDirection
+
+      if (!accountName && !counterName) {
+        return <span className="text-muted-foreground">-</span>
+      }
+
+      return (
+        <div className="flex flex-col">
+          <span title={titleAttr}>{accountName ?? "-"}</span>
+          {counterName && (
+            <span className="text-xs text-muted-foreground">
+              {direction === "outgoing" ? "→" : direction === "incoming" ? "←" : "↔"} {counterName}
+            </span>
+          )}
+        </div>
+      )
     },
   },
   files: {
@@ -190,7 +239,7 @@ export const standardFieldRenderers: Record<string, FieldRenderer> = {
       <div className="text-right text-lg">
         <div
           className={cn(
-            { income: "text-green-500", expense: "text-red-500", other: "text-black" }[transaction.type || "other"],
+            { income: "text-green-500", expense: "text-red-500", transfer: "text-sky-600", other: "text-black" }[transaction.type || "other"],
             "flex flex-col justify-end"
           )}
         >
@@ -246,7 +295,7 @@ export const standardFieldRenderers: Record<string, FieldRenderer> = {
     formatValue: (transaction: Transaction) => (
       <div
         className={cn(
-          { income: "text-green-500", expense: "text-red-500", other: "text-black" }[transaction.type || "other"],
+          { income: "text-green-500", expense: "text-red-500", transfer: "text-sky-600", other: "text-black" }[transaction.type || "other"],
           "flex flex-col justify-end text-right text-lg"
         )}
       >
@@ -284,12 +333,28 @@ const getFieldRenderer = (field: Field): FieldRenderer => {
   }
 }
 
-export function TransactionList({ transactions, fields = [] }: { transactions: TransactionWithRelations[]; fields?: Field[] }) {
+export function TransactionList({
+  transactions,
+  fields = [],
+  accounts = [],
+}: {
+  transactions: TransactionWithRelations[]
+  fields?: Field[]
+  accounts?: BankAccount[]
+}) {
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const router = useRouter()
   const locale = useLocale()
   const searchParams = useSearchParams()
   const searchKey = searchParams.toString()
+
+  const accountById = useMemo(() => {
+    const map = new Map<string, { name: string }>()
+    for (const account of accounts) {
+      map.set(account.id, { name: account.name })
+    }
+    return map
+  }, [accounts])
 
   const [sorting, setSorting] = useState<{ field: string | null; direction: "asc" | "desc" | null }>(() => {
     const ordering = searchParams.get("ordering")
@@ -361,7 +426,7 @@ export function TransactionList({ transactions, fields = [] }: { transactions: T
     if (field.isExtra) {
       return transaction.extra?.[field.code as keyof typeof transaction.extra] ?? ""
     } else if (field.renderer.formatValue) {
-      return field.renderer.formatValue(transaction)
+      return field.renderer.formatValue(transaction, { accountById })
     } else {
       return String(transaction[field.code as keyof Transaction])
     }
@@ -455,7 +520,11 @@ export function TransactionList({ transactions, fields = [] }: { transactions: T
       </Table>
       {selectedIds.length > 0 && (
         <>
-          <BulkActionsMenu selectedIds={selectedIds} onActionComplete={() => setSelectedIds([])} />
+          <BulkActionsMenu
+            selectedIds={selectedIds}
+            selectedTransactions={transactions.filter((tx) => selectedIds.includes(tx.id))}
+            onActionComplete={() => setSelectedIds([])}
+          />
           <div className="fixed bottom-4 right-56 z-50">
             <ReanalyzeDialog
               transactionIds={selectedIds}

@@ -18,6 +18,7 @@ import { startTransition, useActionState, useEffect, useMemo, useState } from "r
 import { useTranslations, useLocale } from "next-intl"
 import { useConfirm } from "@/components/ui/confirm-dialog"
 import { getLocalizedValue } from "@/lib/i18n-db"
+import { TransferDetailRow } from "@/components/transactions/transfer-detail-row"
 
 export default function TransactionEditForm({
   transaction,
@@ -110,6 +111,8 @@ export default function TransactionEditForm({
   return (
     <form action={saveAction} className="space-y-4">
       <input type="hidden" name="transactionId" value={transaction.id} />
+
+      <TransferDetailRow transaction={transaction} onBeforeNavigate={onDone} />
 
       <FormInput
         title={getLocalizedValue(getField("name").name, locale)}

@@ -226,7 +226,7 @@ export function WizardShell({ sessionId }: Props) {
               />
             </Card>
             <div className="lg:col-span-3 min-h-0 overflow-hidden">
-              <WizardCandidatePanel candidates={candidates} />
+              <WizardCandidatePanel sessionId={sessionId} candidates={candidates} />
             </div>
           </div>
         ) : null}
@@ -243,7 +243,7 @@ export function WizardShell({ sessionId }: Props) {
 
         {view === "table" ? (
           <div className="flex-1 min-h-0 overflow-auto">
-            <WizardCandidatePanel candidates={candidates} />
+            <WizardCandidatePanel sessionId={sessionId} candidates={candidates} />
           </div>
         ) : null}
       </div>

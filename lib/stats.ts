@@ -3,6 +3,7 @@ import type { Field, Transaction } from "@/lib/db-types"
 export function calcTotalPerCurrency(transactions: Transaction[]): Record<string, number> {
   return transactions.reduce(
     (acc, transaction) => {
+      if (transaction.type === "transfer") return acc
       if (transaction.convertedCurrencyCode) {
         acc[transaction.convertedCurrencyCode.toUpperCase()] =
           (acc[transaction.convertedCurrencyCode.toUpperCase()] || 0) + (transaction.convertedTotal || 0)
@@ -19,6 +20,7 @@ export function calcTotalPerCurrency(transactions: Transaction[]): Record<string
 export function calcNetTotalPerCurrency(transactions: Transaction[]): Record<string, number> {
   return transactions.reduce(
     (acc, transaction) => {
+      if (transaction.type === "transfer") return acc
       let amount = 0
       let currency: string | undefined
       if (
