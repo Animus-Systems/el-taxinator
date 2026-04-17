@@ -769,6 +769,20 @@ export const invoicePaymentSchema = z.object({
   createdAt: z.date(),
 })
 
+export const taxFilingSchema = z.object({
+  id: z.string().uuid(),
+  userId: z.string().uuid(),
+  year: z.number().int(),
+  quarter: z.number().int().nullable(),
+  modeloCode: z.string(),
+  filedAt: z.date().nullable(),
+  checklist: z.record(z.string(), z.boolean()),
+  notes: z.string().nullable(),
+  createdAt: z.date(),
+  updatedAt: z.date(),
+})
+export type TaxFiling = z.infer<typeof taxFilingSchema>
+
 export const accountantInviteSchema = z.object({
   id: z.string(),
   userId: z.string(),

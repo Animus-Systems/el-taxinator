@@ -3,10 +3,9 @@ import { fieldsToJsonSchema } from "@/ai/schema"
 import { FormError } from "@/components/forms/error"
 import { FormTextarea } from "@/components/forms/simple"
 import { Button } from "@/components/ui/button"
-import { Card, CardTitle } from "@/components/ui/card"
 import type { Field } from "@/lib/db-types"
 import { saveSettingsAction, testProviderAction } from "@/actions/settings"
-import { CircleCheckBig, Edit, GripVertical, Loader2, Star, Zap } from "lucide-react"
+import { ChevronRight, CircleCheckBig, Edit, GripVertical, Loader2, Star, Zap } from "lucide-react"
 import { Link } from "@/lib/navigation"
 import { useState } from "react"
 import {
@@ -63,6 +62,16 @@ export default function LLMSettingsForm({
     })
     return values
   })
+  const [expandedProviders, setExpandedProviders] = useState<Set<string>>(new Set())
+
+  function toggleExpanded(key: string) {
+    setExpandedProviders((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }
 
   function handleProviderValueChange(providerKey: string, field: string, value: string) {
     setProviderValues((prev) => {
@@ -125,6 +134,8 @@ export default function LLMSettingsForm({
                   providerKey={providerKey}
                   isPrimary={primaryProvider === providerKey}
                   isBackup={backupProvider === providerKey}
+                  expanded={expandedProviders.has(providerKey)}
+                  onToggleExpanded={() => toggleExpanded(providerKey)}
                   onSetPrimary={() => {
                     if (backupProvider === providerKey) setBackupProvider(primaryProvider)
                     setPrimaryProvider(providerKey)
@@ -142,13 +153,21 @@ export default function LLMSettingsForm({
         </div>
 
         {/* Prompt */}
-        <FormTextarea
-          title={t("promptForFileAnalysis")}
-          name="prompt_analyse_new_file"
-          value={prompt}
-          onChange={(e) => setPrompt(e.target.value)}
-          className="h-64"
-        />
+        <details className="group rounded-lg border bg-muted/30">
+          <summary className="flex cursor-pointer items-center gap-2 px-4 py-2.5 text-sm font-medium [&::-webkit-details-marker]:hidden">
+            <ChevronRight className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-90" />
+            <span>{t("promptForFileAnalysis")}</span>
+          </summary>
+          <div className="px-4 pb-4">
+            <FormTextarea
+              title=""
+              name="prompt_analyse_new_file"
+              value={prompt}
+              onChange={(e) => setPrompt(e.target.value)}
+              className="h-64"
+            />
+          </div>
+        </details>
 
         {/* Save */}
         <div className="flex flex-row items-center gap-4">
@@ -165,22 +184,23 @@ export default function LLMSettingsForm({
       </form>
 
       {/* JSON schema reference */}
-      <Card className="flex flex-col gap-4 p-4 bg-accent mt-12">
-        <CardTitle className="flex flex-row justify-between items-center gap-2">
-          <span className="text-md font-medium">
+      <details className="group mt-12 rounded-lg border bg-accent">
+        <summary className="flex cursor-pointer items-center gap-2 px-4 py-2.5 text-sm font-medium [&::-webkit-details-marker]:hidden">
+          <ChevronRight className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-90" />
+          <span className="flex-1">
             Current JSON Schema for{" "}
             <a href="https://platform.openai.com/docs/guides/structured-outputs" target="_blank" className="underline">
               structured output
             </a>
           </span>
-          <Link href="/settings/fields" className="text-xs underline inline-flex flex-row items-center gap-1 text-muted-foreground">
+          <Link href="/settings/fields" className="text-xs underline inline-flex flex-row items-center gap-1 text-muted-foreground" onClick={(e) => e.stopPropagation()}>
             <Edit className="w-4 h-4" /> Edit Fields
           </Link>
-        </CardTitle>
-        <pre className="text-xs overflow-hidden text-ellipsis">
+        </summary>
+        <pre className="text-xs overflow-auto px-4 pb-4 max-h-96">
           {JSON.stringify(fieldsToJsonSchema(fields), null, 2)}
         </pre>
-      </Card>
+      </details>
     </>
   )
 }
@@ -190,13 +210,15 @@ type SortableProviderCardProps = {
   providerKey: string
   isPrimary: boolean
   isBackup: boolean
+  expanded: boolean
+  onToggleExpanded: () => void
   onSetPrimary: () => void
   onSetBackup: () => void
   value: { apiKey: string; model: string; thinking: string; baseUrl: string }
   onValueChange: (providerKey: string, field: string, value: string) => void
 }
 
-function SortableProviderCard({ id, providerKey, isPrimary, isBackup, onSetPrimary, onSetBackup, value, onValueChange }: SortableProviderCardProps) {
+function SortableProviderCard({ id, providerKey, isPrimary, isBackup, expanded, onToggleExpanded, onSetPrimary, onSetBackup, value, onValueChange }: SortableProviderCardProps) {
   const t = useTranslations("settings")
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id })
   const provider = PROVIDERS.find(p => p.key === providerKey)
@@ -218,6 +240,9 @@ function SortableProviderCard({ id, providerKey, isPrimary, isBackup, onSetPrima
     setTesting(false)
   }
 
+  const hasApiKey = !provider.isSubscription && value.apiKey.length > 0
+  const modelLabel = provider.models.find(m => m.id === value.model)?.name ?? value.model
+
   return (
     <div
       ref={setNodeRef}
@@ -226,45 +251,64 @@ function SortableProviderCard({ id, providerKey, isPrimary, isBackup, onSetPrima
         transition,
         opacity: isDragging ? 0.6 : 1,
       }}
-      className={`rounded-lg p-4 mb-2 border ${
+      className={`rounded-md mb-1.5 border ${
         isPrimary ? "border-yellow-500/50 bg-yellow-50/5" :
         isBackup ? "border-blue-500/30 bg-blue-50/5" :
-        "border-border bg-muted/50"
+        "border-border bg-muted/40"
       }`}
     >
-      {/* Header row */}
-      <div className="flex items-center gap-2 mb-3">
+      {/* Compact header row (single line) */}
+      <div className="flex items-center gap-2 px-2 py-1.5">
         <span {...attributes} {...listeners} className="cursor-grab p-0.5 rounded hover:bg-accent" aria-label={t("dragToReorder")}>
-          <GripVertical className="w-4 h-4 text-muted-foreground" />
+          <GripVertical className="w-3.5 h-3.5 text-muted-foreground" />
         </span>
-        <span className="font-semibold text-sm flex-1">{provider.label}</span>
-        <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={onToggleExpanded}
+          className="flex flex-1 min-w-0 items-center gap-2 text-left"
+          aria-expanded={expanded}
+        >
+          <ChevronRight className={`h-3.5 w-3.5 text-muted-foreground transition-transform ${expanded ? "rotate-90" : ""}`} />
+          <span className="font-medium text-sm truncate">{provider.label}</span>
+          {!expanded ? (
+            <span className="truncate text-xs text-muted-foreground font-mono">
+              {modelLabel}
+            </span>
+          ) : null}
+          {!expanded && !provider.isSubscription ? (
+            <span className={`text-[10px] uppercase tracking-wide ${hasApiKey ? "text-green-600" : "text-muted-foreground/60"}`}>
+              {hasApiKey ? "\u2713 key" : "no key"}
+            </span>
+          ) : null}
+        </button>
+        <div className="flex items-center gap-1.5 shrink-0">
           {isPrimary ? (
-            <span className="flex items-center gap-1 text-xs font-medium text-yellow-600">
-              <Star className="w-3.5 h-3.5 fill-yellow-500 text-yellow-500" /> {t("primary")}
+            <span className="flex items-center gap-1 text-[11px] font-medium text-yellow-600">
+              <Star className="w-3 h-3 fill-yellow-500 text-yellow-500" /> {t("primary")}
             </span>
           ) : (
-            <button type="button" onClick={onSetPrimary} className="flex items-center gap-1 text-xs text-muted-foreground hover:text-yellow-600">
-              <Star className="w-3.5 h-3.5" /> {t("primary")}
+            <button type="button" onClick={onSetPrimary} className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-yellow-600">
+              <Star className="w-3 h-3" /> {t("primary")}
             </button>
           )}
-          <span className="text-muted-foreground text-xs">|</span>
+          <span className="text-muted-foreground/40 text-xs">·</span>
           {isBackup ? (
-            <span className="flex items-center gap-1 text-xs font-medium text-blue-600">
+            <span className="text-[11px] font-medium text-blue-600">
               {t("backup")}
             </span>
           ) : !isPrimary ? (
-            <button type="button" onClick={onSetBackup} className="flex items-center gap-1 text-xs text-muted-foreground hover:text-blue-600">
+            <button type="button" onClick={onSetBackup} className="text-[11px] text-muted-foreground hover:text-blue-600">
               {t("backup")}
             </button>
           ) : (
-            <span className="text-xs text-muted-foreground/50">{t("backup")}</span>
+            <span className="text-[11px] text-muted-foreground/40">{t("backup")}</span>
           )}
         </div>
       </div>
 
-      {/* Settings row */}
-      <div className="flex flex-wrap gap-3">
+      {/* Settings row — only when expanded */}
+      {expanded ? (
+      <div className="flex flex-wrap gap-3 px-3 pb-3 pt-1 border-t">
         {/* API key — only for non-subscription providers */}
         {!provider.isSubscription && (
           <div className="flex-1 min-w-[200px]">
@@ -375,15 +419,16 @@ function SortableProviderCard({ id, providerKey, isPrimary, isBackup, onSetPrima
           </Button>
         </div>
       </div>
+      ) : null}
 
       {/* Test result */}
-      {testResult && (
-        <div className={`mt-2 text-xs px-2 py-1.5 rounded ${testResult.success ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"}`}>
+      {expanded && testResult ? (
+        <div className={`mx-3 mb-3 text-xs px-2 py-1.5 rounded ${testResult.success ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"}`}>
           {testResult.success
             ? `${t("testSuccess")} (${testResult.responseTime}ms)`
             : `${t("testFailed")}: ${testResult.error}`}
         </div>
-      )}
+      ) : null}
     </div>
   )
 }

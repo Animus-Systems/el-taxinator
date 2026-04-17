@@ -1,10 +1,13 @@
-
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { CasillaDrillSheet, type DrillSource } from "@/components/tax/casilla-drill-sheet"
+import { CasillaTable, type CasillaGroup, type CasillaRow } from "@/components/tax/casilla-table"
+import { FilingChecklist, type ChecklistItem } from "@/components/tax/filing-checklist"
+import { ModeloHero } from "@/components/tax/modelo-hero"
+import type { TaxFiling } from "@/lib/db-types"
 import type { Modelo130Result, Modelo420Result, Quarter } from "@/models/tax"
 import { format } from "date-fns"
-import { Download } from "lucide-react"
 import { useTranslations } from "next-intl"
+import { useState } from "react"
+import { trpc } from "~/trpc"
 
 type Props = {
   modelo420: Modelo420Result
@@ -13,30 +16,29 @@ type Props = {
   quarter: Quarter
 }
 
-function formatEUR(cents: number) {
-  return new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR" }).format(cents / 100)
-}
+const ATC_PORTAL_URL = "https://sede.gobiernodecanarias.org/tributos/"
+const AEAT_PORTAL_URL = "https://sede.agenciatributaria.gob.es/"
 
-function Row({ casilla, label, value, highlight }: { casilla: string; label: string; value: number; highlight?: "positive" | "negative" | "neutral" }) {
-  const colorClass =
-    highlight === "positive"
-      ? "text-red-600 font-semibold"
-      : highlight === "negative"
-      ? "text-green-600 font-semibold"
-      : ""
-
+function findFiling(
+  list: TaxFiling[] | undefined,
+  year: number,
+  quarter: number | null,
+  modelo: string,
+): TaxFiling | null {
   return (
-    <div className="flex items-center justify-between py-2 text-sm">
-      <div className="flex items-center gap-3">
-        <span className="text-xs text-muted-foreground font-mono w-8 text-right">{casilla}</span>
-        <span className="text-muted-foreground">{label}</span>
-      </div>
-      <span className={colorClass}>{formatEUR(value)}</span>
-    </div>
+    list?.find((f) => f.year === year && f.quarter === quarter && f.modeloCode === modelo) ?? null
   )
 }
 
-function exportCSV420(m: Modelo420Result) {
+function atcDeadline(periodEnd: Date): Date {
+  return new Date(periodEnd.getFullYear(), periodEnd.getMonth() + 1, 20)
+}
+
+function isoDate(date: Date): string {
+  return date.toISOString().slice(0, 10)
+}
+
+function exportCSV420(m: Modelo420Result): void {
   const rows = [
     ["Casilla", "Descripcion", "Importe (EUR)"],
     ["", "Base tipo cero (0%)", (m.baseZero / 100).toFixed(2)],
@@ -64,7 +66,7 @@ function exportCSV420(m: Modelo420Result) {
   URL.revokeObjectURL(url)
 }
 
-function exportCSV130(m: Modelo130Result) {
+function exportCSV130(m: Modelo130Result): void {
   const rows = [
     ["Casilla", "Descripcion", "Importe (EUR)"],
     ["01", "Ingresos del periodo (acumulado)", (m.casilla01_ingresos / 100).toFixed(2)],
@@ -86,122 +88,362 @@ function exportCSV130(m: Modelo130Result) {
 
 export function QuarterlyReport({ modelo420, modelo130, year, quarter }: Props) {
   const t = useTranslations("tax")
-  const igicOwed = modelo420.resultado >= 0
-  const irpfOwed = modelo130.casilla06_aIngresar > 0
+  const { data: filingList } = trpc.taxFilings.list.useQuery({ year })
+
+  const [drill, setDrill] = useState<{ key: string; source: DrillSource; title: string; casilla?: string } | null>(null)
+
+  const filing420 = findFiling(filingList, year, quarter, "420")
+  const filing130 = findFiling(filingList, year, quarter, "130")
+
+  const period = modelo420.period
+  const deadline = atcDeadline(period.end)
+  const dateFromQuarter = isoDate(period.start)
+  const dateTo = isoDate(period.end)
+  const yearStart = isoDate(new Date(year, 0, 1))
+
+  // ── Modelo 420 rows ──────────────────────────────────────────────────────
+  const igicChargedRows: CasillaRow[] = []
+  if (modelo420.baseZero > 0) {
+    igicChargedRows.push({
+      casilla: "",
+      label: t("baseZeroRate"),
+      amountCents: modelo420.baseZero,
+      drillDownKey: "igic-zero",
+    })
+  }
+  if (modelo420.baseReducido > 0) {
+    igicChargedRows.push({
+      casilla: "",
+      label: t("baseReducedRate"),
+      amountCents: modelo420.baseReducido,
+      drillDownKey: "igic-reduced",
+    })
+    igicChargedRows.push({
+      casilla: "",
+      label: t("igicReduced"),
+      amountCents: modelo420.cuotaReducido,
+    })
+  }
+  igicChargedRows.push({
+    casilla: "",
+    label: t("baseGeneralRate"),
+    amountCents: modelo420.baseGeneral,
+    drillDownKey: "igic-general",
+  })
+  igicChargedRows.push({
+    casilla: "",
+    label: t("igicGeneral"),
+    amountCents: modelo420.cuotaGeneral,
+  })
+  if (modelo420.baseIncrementado > 0) {
+    igicChargedRows.push({
+      casilla: "",
+      label: t("baseIncreasedRate"),
+      amountCents: modelo420.baseIncrementado,
+      drillDownKey: "igic-increased",
+    })
+    igicChargedRows.push({
+      casilla: "",
+      label: t("igicIncreased"),
+      amountCents: modelo420.cuotaIncrementado,
+    })
+  }
+  if (modelo420.baseEspecial > 0) {
+    igicChargedRows.push({
+      casilla: "",
+      label: t("baseSpecialRate"),
+      amountCents: modelo420.baseEspecial,
+      drillDownKey: "igic-special",
+    })
+    igicChargedRows.push({
+      casilla: "",
+      label: t("igicSpecial"),
+      amountCents: modelo420.cuotaEspecial,
+    })
+  }
+  igicChargedRows.push({
+    casilla: "",
+    label: t("totalIgicChargedLabel"),
+    amountCents: modelo420.totalIgicDevengado,
+  })
+
+  const igicDeductibleRows: CasillaRow[] = [
+    {
+      casilla: "",
+      label: t("deductibleBase"),
+      amountCents: modelo420.baseDeducible,
+      drillDownKey: "igic-deductible",
+    },
+    {
+      casilla: "",
+      label: t("deductibleAmount"),
+      amountCents: modelo420.cuotaDeducible,
+    },
+  ]
+
+  const groups420: CasillaGroup[] = [
+    { heading: t("igicCharged"), rows: igicChargedRows },
+    { heading: t("igicDeductibleExpenses"), rows: igicDeductibleRows },
+  ]
+
+  const resultRow420: CasillaRow = {
+    casilla: "",
+    label: t("result"),
+    amountCents: modelo420.resultado,
+    highlight: modelo420.resultado > 0 ? "positive" : "negative",
+  }
+
+  // ── Modelo 130 rows ──────────────────────────────────────────────────────
+  const groups130: CasillaGroup[] = [
+    {
+      rows: [
+        {
+          casilla: "01",
+          label: t("periodIncome"),
+          amountCents: modelo130.casilla01_ingresos,
+          drillDownKey: "income",
+        },
+        {
+          casilla: "02",
+          label: t("periodExpenses"),
+          amountCents: modelo130.casilla02_gastos,
+          drillDownKey: "expenses",
+        },
+        {
+          casilla: "03",
+          label: t("netIncome"),
+          amountCents: modelo130.casilla03_rendimientoNeto,
+        },
+      ],
+    },
+    {
+      rows: [
+        {
+          casilla: "04",
+          label: t("irpfQuota"),
+          amountCents: modelo130.casilla04_cuota20pct,
+        },
+        {
+          casilla: "05",
+          label: t("irpfWithheldByClients"),
+          amountCents: modelo130.casilla05_irpfRetenido,
+        },
+      ],
+    },
+  ]
+
+  const resultRow130: CasillaRow = {
+    casilla: "06",
+    label: t("amountToPay"),
+    amountCents: modelo130.casilla06_aIngresar,
+    highlight: modelo130.casilla06_aIngresar > 0 ? "positive" : "neutral",
+  }
+
+  // ── Drill-down source maps ───────────────────────────────────────────────
+  const drill420Sources: Record<string, DrillSource> = {
+    "igic-zero": {
+      kind: "invoices",
+      year,
+      quarter,
+      dateFrom: dateFromQuarter,
+      dateTo,
+      statuses: ["sent", "paid"],
+    },
+    "igic-reduced": {
+      kind: "invoices",
+      year,
+      quarter,
+      dateFrom: dateFromQuarter,
+      dateTo,
+      statuses: ["sent", "paid"],
+    },
+    "igic-general": {
+      kind: "invoices",
+      year,
+      quarter,
+      dateFrom: dateFromQuarter,
+      dateTo,
+      statuses: ["sent", "paid"],
+    },
+    "igic-increased": {
+      kind: "invoices",
+      year,
+      quarter,
+      dateFrom: dateFromQuarter,
+      dateTo,
+      statuses: ["sent", "paid"],
+    },
+    "igic-special": {
+      kind: "invoices",
+      year,
+      quarter,
+      dateFrom: dateFromQuarter,
+      dateTo,
+      statuses: ["sent", "paid"],
+    },
+    "igic-deductible": {
+      kind: "transactions",
+      dateFrom: dateFromQuarter,
+      dateTo,
+      type: "expense",
+    },
+  }
+
+  const drill130Sources: Record<string, DrillSource> = {
+    income: {
+      kind: "invoices",
+      year,
+      quarter,
+      dateFrom: yearStart,
+      dateTo,
+      statuses: ["sent", "paid"],
+    },
+    expenses: {
+      kind: "transactions",
+      dateFrom: yearStart,
+      dateTo,
+      type: "expense",
+    },
+  }
+
+  const drill420Titles: Record<string, string> = {
+    "igic-zero": t("baseZeroRate"),
+    "igic-reduced": t("baseReducedRate"),
+    "igic-general": t("baseGeneralRate"),
+    "igic-increased": t("baseIncreasedRate"),
+    "igic-special": t("baseSpecialRate"),
+    "igic-deductible": t("deductibleBase"),
+  }
+
+  const drill130Titles: Record<string, string> = {
+    income: t("periodIncome"),
+    expenses: t("periodExpenses"),
+  }
+
+  function open420Drill(key: string): void {
+    const source = drill420Sources[key]
+    const title = drill420Titles[key]
+    if (!source || !title) return
+    setDrill({ key, source, title })
+  }
+
+  function open130Drill(key: string): void {
+    const source = drill130Sources[key]
+    const title = drill130Titles[key]
+    if (!source || !title) return
+    const casilla = key === "income" ? "01" : key === "expenses" ? "02" : undefined
+    setDrill({ key, source, title, ...(casilla && { casilla }) })
+  }
+
+  const subtitle420 = `${format(period.start, "dd/MM/yyyy")} – ${format(period.end, "dd/MM/yyyy")} · ${modelo420.invoiceCount} ${t("invoices")} · ${modelo420.expenseCount} ${t("expenses")}`
+  const subtitle130 = `${format(new Date(year, 0, 1), "dd/MM/yyyy")} – ${format(period.end, "dd/MM/yyyy")} · ${modelo130.invoiceCount} ${t("invoices")} · ${modelo130.expenseCount} ${t("expenses")}`
+
+  const checklistItems = (agency: "aeat" | "atc", portalUrl: string): ChecklistItem[] => [
+    { key: "verifyEstimates", label: t("checklist.verifyEstimates") },
+    { key: "exportCsv", label: t("checklist.exportCsv") },
+    {
+      key: "fileOnPortal",
+      label: t("checklist.fileOnPortal", {
+        agency: t(agency === "aeat" ? "agency.aeat" : "agency.atc"),
+      }),
+      href: portalUrl,
+    },
+    {
+      key: "payToAgency",
+      label: t("checklist.payToAgency", {
+        agency: t(agency === "aeat" ? "agency.aeat" : "agency.atc"),
+      }),
+    },
+  ]
 
   return (
-    <div className="space-y-6 max-w-2xl">
-      <p className="text-sm text-muted-foreground">
-        {t("exerciseQuarter", { year, quarter })}{" "}
-        {t("modelo130Cumulative")} {t("modelo420Quarterly")}
-      </p>
+    <div className="space-y-8">
+      <section className="space-y-4">
+        <ModeloHero
+          modeloCode="420"
+          title={t("igicQuarterlyDeclaration")}
+          subtitle={subtitle420}
+          deadline={deadline}
+          agency="atc"
+          amountCents={modelo420.resultado}
+          positiveLabel={t("hero.toPayAmount")}
+          negativeLabel={t("hero.toReturnAmount")}
+          zeroLabel={t("hero.nothingToPay")}
+          filing={filing420}
+          year={year}
+          quarter={quarter}
+          onExportCsv={() => exportCSV420(modelo420)}
+          portalUrl={ATC_PORTAL_URL}
+          knowledgeSlug="filing-modelo-420"
+        />
+        <CasillaTable
+          groups={groups420}
+          resultRow={resultRow420}
+          onDrillDown={open420Drill}
+          footer={<span className="text-amber-600 dark:text-amber-400">{t("igicEstimateWarning")}</span>}
+        />
+        <FilingChecklist
+          year={year}
+          quarter={quarter}
+          modeloCode="420"
+          filing={filing420}
+          items={checklistItems("atc", ATC_PORTAL_URL)}
+        />
+      </section>
 
-      {/* Modelo 420 — IGIC */}
-      <Card>
-        <CardHeader className="pb-2">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-base">{t("igicQuarterlyDeclaration")}</CardTitle>
-            <Button variant="outline" size="sm" onClick={() => exportCSV420(modelo420)}>
-              <Download className="w-4 h-4 mr-1" /> CSV
-            </Button>
-          </div>
-          <p className="text-xs text-muted-foreground">
-            {format(modelo420.period.start, "dd/MM/yyyy")} – {format(modelo420.period.end, "dd/MM/yyyy")} &middot;{" "}
-            {modelo420.invoiceCount} {t("invoices")} &middot; {modelo420.expenseCount} {t("expenses")}
-          </p>
-        </CardHeader>
-        <CardContent className="divide-y">
-          <div className="pb-2">
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground py-1">{t("igicCharged")}</p>
-            {modelo420.baseZero > 0 && (
-              <Row casilla="" label={t("baseZeroRate")} value={modelo420.baseZero} />
-            )}
-            {modelo420.baseReducido > 0 && (
-              <>
-                <Row casilla="" label={t("baseReducedRate")} value={modelo420.baseReducido} />
-                <Row casilla="" label={t("igicReduced")} value={modelo420.cuotaReducido} />
-              </>
-            )}
-            <Row casilla="" label={t("baseGeneralRate")} value={modelo420.baseGeneral} />
-            <Row casilla="" label={t("igicGeneral")} value={modelo420.cuotaGeneral} />
-            {modelo420.baseIncrementado > 0 && (
-              <>
-                <Row casilla="" label={t("baseIncreasedRate")} value={modelo420.baseIncrementado} />
-                <Row casilla="" label={t("igicIncreased")} value={modelo420.cuotaIncrementado} />
-              </>
-            )}
-            {modelo420.baseEspecial > 0 && (
-              <>
-                <Row casilla="" label={t("baseSpecialRate")} value={modelo420.baseEspecial} />
-                <Row casilla="" label={t("igicSpecial")} value={modelo420.cuotaEspecial} />
-              </>
-            )}
-            <Row casilla="" label={t("totalIgicChargedLabel")} value={modelo420.totalIgicDevengado} />
-          </div>
-          <div className="py-2">
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground py-1">
-              {t("igicDeductibleExpenses")}
-            </p>
-            <Row casilla="" label={t("deductibleBase")} value={modelo420.baseDeducible} />
-            <Row casilla="" label={t("deductibleAmount")} value={modelo420.cuotaDeducible} />
-            <p className="text-xs text-amber-600 mt-1">{t("igicEstimateWarning")}</p>
-          </div>
-          <div className="pt-2">
-            <Row
-              casilla=""
-              label={t("result")}
-              value={modelo420.resultado}
-              highlight={igicOwed ? "positive" : "negative"}
-            />
-            <p className="text-xs text-muted-foreground mt-1">
-              {igicOwed ? t("amountToPayATC") : t("amountToCompensate")}
-            </p>
-          </div>
-        </CardContent>
-      </Card>
+      <section className="space-y-4">
+        <ModeloHero
+          modeloCode="130"
+          title={t("irpfQuarterlyPayment")}
+          subtitle={subtitle130}
+          deadline={deadline}
+          agency="aeat"
+          amountCents={modelo130.casilla06_aIngresar}
+          positiveLabel={t("hero.toPayAmount")}
+          negativeLabel={t("hero.toReturnAmount")}
+          zeroLabel={t("hero.nothingToPay")}
+          filing={filing130}
+          year={year}
+          quarter={quarter}
+          onExportCsv={() => exportCSV130(modelo130)}
+          portalUrl={AEAT_PORTAL_URL}
+          knowledgeSlug="filing-modelo-130"
+        />
+        <CasillaTable
+          groups={groups130}
+          resultRow={resultRow130}
+          onDrillDown={open130Drill}
+          footer={
+            modelo130.casilla06_aIngresar <= 0 ? t("witholdingsCoverPayment") : null
+          }
+        />
+        <FilingChecklist
+          year={year}
+          quarter={quarter}
+          modeloCode="130"
+          filing={filing130}
+          items={checklistItems("aeat", AEAT_PORTAL_URL)}
+        />
+      </section>
 
-      {/* Modelo 130 — IRPF */}
-      <Card>
-        <CardHeader className="pb-2">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-base">{t("irpfQuarterlyPayment")}</CardTitle>
-            <Button variant="outline" size="sm" onClick={() => exportCSV130(modelo130)}>
-              <Download className="w-4 h-4 mr-1" /> CSV
-            </Button>
-          </div>
-          <p className="text-xs text-muted-foreground">
-            {t("cumulativeDataFrom")} {format(modelo130.period.end, "dd/MM/yyyy")} &middot;{" "}
-            {modelo130.invoiceCount} {t("invoices")} &middot; {modelo130.expenseCount} {t("expenses")}
-          </p>
-        </CardHeader>
-        <CardContent className="divide-y">
-          <div className="pb-2">
-            <Row casilla="01" label={t("periodIncome")} value={modelo130.casilla01_ingresos} />
-            <Row casilla="02" label={t("periodExpenses")} value={modelo130.casilla02_gastos} />
-            <Row casilla="03" label={t("netIncome")} value={modelo130.casilla03_rendimientoNeto} />
-          </div>
-          <div className="py-2">
-            <Row casilla="04" label={t("irpfQuota")} value={modelo130.casilla04_cuota20pct} />
-            <Row casilla="05" label={t("irpfWithheldByClients")} value={modelo130.casilla05_irpfRetenido} />
-          </div>
-          <div className="pt-2">
-            <Row
-              casilla="06"
-              label={t("amountToPay")}
-              value={modelo130.casilla06_aIngresar}
-              highlight={irpfOwed ? "positive" : "neutral"}
-            />
-            {!irpfOwed && (
-              <p className="text-xs text-muted-foreground mt-1">{t("witholdingsCoverPayment")}</p>
-            )}
-          </div>
-        </CardContent>
-      </Card>
-
-      <div className="text-xs text-muted-foreground space-y-1 p-4 bg-muted rounded-lg">
-        <p className="font-medium">{t("legalDisclaimer")}</p>
-        <p>{t("legalDisclaimerText")}</p>
-      </div>
+      <CasillaDrillSheet
+        open={drill !== null}
+        onOpenChange={(v) => {
+          if (!v) setDrill(null)
+        }}
+        title={drill?.title ?? ""}
+        {...(drill?.casilla && { casilla: drill.casilla })}
+        source={
+          drill?.source ?? {
+            kind: "invoices",
+            year,
+            quarter,
+            dateFrom: dateFromQuarter,
+            dateTo,
+            statuses: ["sent", "paid"],
+          }
+        }
+      />
     </div>
   )
 }

@@ -66,10 +66,21 @@ const invoiceUpdateResultSchema = z.tuple([
 export const invoicesRouter = router({
   list: authedProcedure
     .meta({ openapi: { method: "GET", path: "/api/v1/invoices" } })
-    .input(z.object({}))
+    .input(
+      z.object({
+        dateFrom: z.string().optional(),
+        dateTo: z.string().optional(),
+        status: z.array(z.string()).optional(),
+      }),
+    )
     .output(z.array(invoiceWithRelationsSchema))
-    .query(async ({ ctx }) => {
-      return getInvoices(ctx.user.id)
+    .query(async ({ ctx, input }) => {
+      const filters: { dateFrom?: string; dateTo?: string; status?: string[] } = {
+        ...(input.dateFrom !== undefined && { dateFrom: input.dateFrom }),
+        ...(input.dateTo !== undefined && { dateTo: input.dateTo }),
+        ...(input.status !== undefined && { status: input.status }),
+      }
+      return getInvoices(ctx.user.id, filters)
     }),
 
   getById: authedProcedure

@@ -710,6 +710,55 @@
     "totalValueLabel": "Valor a cierre del año",
     "thresholdLabel": "Umbral",
     "deadlineLabel": "Fecha límite",
+    "hero": {
+      "nextDeadline": "Próximo vencimiento",
+      "dueInDays": "Vence en {days} días",
+      "dueInOneDay": "Vence en 1 día",
+      "dueToday": "Vence hoy",
+      "overdueBy": "Vencido hace {days} días",
+      "overdueByOneDay": "Vencido hace 1 día",
+      "backToCalculator": "Volver a Tax Calculator",
+      "viewFilingProcedure": "Ver procedimiento de presentación",
+      "nothingToPay": "Nada a pagar este trimestre",
+      "toPayAmount": "A pagar",
+      "toReturnAmount": "A devolver",
+      "markAsFiled": "Marcar como presentado",
+      "markAsUnfiled": "Desmarcar presentación",
+      "filedOn": "Presentado el {date}",
+      "viewDetail": "Ver detalle",
+      "periodLabel": "Periodo"
+    },
+    "timeline": {
+      "filed": "Presentado",
+      "current": "Actual",
+      "upcoming": "Próximo",
+      "future": "Futuro",
+      "overdue": "Vencido"
+    },
+    "checklist": {
+      "title": "Lista de presentación",
+      "verifyEstimates": "Verificar los importes estimados de IGIC / retenciones",
+      "exportCsv": "Exportar CSV para tus registros",
+      "fileOnPortal": "Presentar en el portal de {agency}",
+      "payToAgency": "Pagar el importe resultante a {agency}",
+      "filingComplete": "Todos los pasos completados — esta presentación está lista."
+    },
+    "drilldown": {
+      "sourceInvoices": "Facturas de origen",
+      "sourceExpenses": "Gastos de origen",
+      "noItems": "No hay elementos en este rango.",
+      "showingInRange": "Mostrando {count} elementos desde {from} hasta {to}",
+      "close": "Cerrar",
+      "viewAll": "Ver todos \u2192"
+    },
+    "agency": {
+      "aeat": "AEAT",
+      "atc": "Agencia Tributaria Canaria",
+      "openPortal": "Abrir portal de {agency}"
+    },
+    "yearTotals": "Totales del año",
+    "entityAutonomo": "Autónomo",
+    "entitySL": "Sociedad Limitada",
     "personal": {
       "title": "Rentas personales",
       "subtitle": "Ingresos y deducciones que se consolidan en tu Modelo 100.",
@@ -825,6 +874,7 @@
     "title": "Asistente",
     "placeholder": "Pregúntame lo que sea…",
     "send": "Enviar",
+    "close": "Cerrar",
     "clearHistory": "Borrar historial",
     "clearConfirmTitle": "¿Borrar el historial de chat?",
     "clearConfirmBody": "Se eliminan todos los mensajes. El asistente conserva los hechos del negocio que hayas compartido.",
@@ -1235,10 +1285,10 @@
     "importFromCsv": "Importar desde CSV",
     "thankAuthor": "Agradecer al autor",
     "knowledge": {
-      "freshLabel": "Conocimientos al día",
-      "agingLabel": "Conocimientos actualizados hace {days}",
-      "staleLabel": "El conocimiento puede estar desactualizado",
-      "neverRefreshed": "Conocimientos nunca actualizados",
+      "freshLabel": "Al día",
+      "agingLabel": "Actualizados hace {days}",
+      "staleLabel": "Estar desactualizado",
+      "neverRefreshed": "Nunca actualizados",
       "popoverTitle": "Paquetes de conocimiento fiscal",
       "refreshAction": "Actualizar",
       "openSettings": "Abrir ajustes"

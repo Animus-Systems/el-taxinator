@@ -46,6 +46,7 @@ export function ProjectsSettingsPage() {
       </p>
 
       <CrudTable
+        compact
         items={projectsWithActions}
         columns={[
           { key: "name", label: t("name"), editable: true },

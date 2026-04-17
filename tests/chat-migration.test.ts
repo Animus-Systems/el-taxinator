@@ -2,8 +2,8 @@ import { describe, it, expect } from "vitest"
 import { migrations, SCHEMA_VERSION } from "@/lib/schema"
 
 describe("chat_messages migration v19", () => {
-  it("bumps SCHEMA_VERSION to 19", () => {
-    expect(SCHEMA_VERSION).toBe(19)
+  it("schema version is at least 19 (v19 introduced chat_messages)", () => {
+    expect(SCHEMA_VERSION).toBeGreaterThanOrEqual(19)
   })
 
   it("registers a v19 migration that creates chat_messages", () => {

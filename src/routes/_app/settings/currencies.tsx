@@ -45,6 +45,7 @@ export function CurrenciesSettingsPage() {
       </p>
 
       <CrudTable
+        compact
         items={currenciesWithActions}
         columns={[
           { key: "code", label: t("code"), editable: true },

@@ -424,7 +424,7 @@ export function applyBaseGeneralBrackets(
     const amountInBracket = Math.min(Math.max(0, remaining), bandSize)
     const taxInBracket = Math.round(amountInBracket * b.rate)
     breakdown.push({
-      upToCents: b.upToCents,
+      upToCents: b.upToCents === Infinity ? Number.MAX_SAFE_INTEGER : b.upToCents,
       rate: b.rate,
       amountInBracketCents: amountInBracket,
       taxInBracketCents: taxInBracket,
@@ -455,7 +455,7 @@ export function applyBaseAhorroBrackets(
     const amountInBracket = Math.min(Math.max(0, remaining), bandSize)
     const taxInBracket = Math.round(amountInBracket * b.rate)
     breakdown.push({
-      upToCents: b.upToCents,
+      upToCents: b.upToCents === Infinity ? Number.MAX_SAFE_INTEGER : b.upToCents,
       rate: b.rate,
       amountInBracketCents: amountInBracket,
       taxInBracketCents: taxInBracket,

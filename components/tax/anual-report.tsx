@@ -1,19 +1,36 @@
-
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { CasillaTable, type CasillaGroup, type CasillaRow } from "@/components/tax/casilla-table"
+import { FilingChecklist, type ChecklistItem } from "@/components/tax/filing-checklist"
+import { ModeloHero } from "@/components/tax/modelo-hero"
+import type { TaxFiling } from "@/lib/db-types"
 import type { Modelo425Result } from "@/models/tax"
-import { Download } from "lucide-react"
-import { Link } from "@/lib/navigation"
+import { useTranslations } from "next-intl"
+import { trpc } from "~/trpc"
 
 type Props = {
   modelo425: Modelo425Result
 }
 
-function formatEUR(cents: number) {
-  return new Intl.NumberFormat("es-ES", { style: "currency", currency: "EUR" }).format(cents / 100)
+const ATC_PORTAL_URL = "https://sede.gobiernodecanarias.org/tributos/"
+
+function findFiling(
+  list: TaxFiling[] | undefined,
+  year: number,
+  quarter: number | null,
+  modelo: string,
+): TaxFiling | null {
+  return (
+    list?.find((f) => f.year === year && f.quarter === quarter && f.modeloCode === modelo) ?? null
+  )
 }
 
-function exportCSV425(m: Modelo425Result) {
+const QUARTER_LABELS: Record<1 | 2 | 3 | 4, string> = {
+  1: "Q1 (Ene\u2013Mar)",
+  2: "Q2 (Abr\u2013Jun)",
+  3: "Q3 (Jul\u2013Sep)",
+  4: "Q4 (Oct\u2013Dic)",
+}
+
+function exportCSV425(m: Modelo425Result): void {
   const rows = [
     ["Trimestre", "Base 7%", "Cuota 7%", "Base 3%", "Cuota 3%", "IGIC devengado", "IGIC deducible", "Resultado"],
     ...m.quarters.map((q) => [
@@ -48,89 +65,92 @@ function exportCSV425(m: Modelo425Result) {
 }
 
 export function AnualReport({ modelo425 }: Props) {
-  const quarterLabels = ["Q1 (Ene\u2013Mar)", "Q2 (Abr\u2013Jun)", "Q3 (Jul\u2013Sep)", "Q4 (Oct\u2013Dic)"]
+  const t = useTranslations("tax")
+  const { year } = modelo425
+  const { data: filingList } = trpc.taxFilings.list.useQuery({ year })
+
+  const filing425 = findFiling(filingList, year, null, "425")
+
+  const deadline = new Date(year + 1, 0, 30)
+
+  const groups: CasillaGroup[] = modelo425.quarters.map((q) => {
+    const label = QUARTER_LABELS[q.quarter]
+    const rows: CasillaRow[] = [
+      {
+        casilla: `Q${q.quarter}`,
+        label: t("igicDevengado"),
+        amountCents: q.totalIgicDevengado,
+      },
+      {
+        casilla: `Q${q.quarter}`,
+        label: t("igicDeducible"),
+        amountCents: q.cuotaDeducible,
+      },
+      {
+        casilla: `Q${q.quarter}`,
+        label: t("result"),
+        amountCents: q.resultado,
+        highlight: q.resultado > 0 ? "positive" : q.resultado < 0 ? "negative" : "neutral",
+      },
+    ]
+    return { heading: label, rows }
+  })
+
+  const resultRow: CasillaRow = {
+    casilla: "",
+    label: t("result"),
+    amountCents: modelo425.totalResultado,
+    highlight:
+      modelo425.totalResultado > 0
+        ? "positive"
+        : modelo425.totalResultado < 0
+          ? "negative"
+          : "neutral",
+  }
+
+  const checklistItems: ChecklistItem[] = [
+    { key: "verifyEstimates", label: t("checklist.verifyEstimates") },
+    { key: "exportCsv", label: t("checklist.exportCsv") },
+    {
+      key: "fileOnPortal",
+      label: t("checklist.fileOnPortal", { agency: t("agency.atc") }),
+      href: ATC_PORTAL_URL,
+    },
+    {
+      key: "payToAgency",
+      label: t("checklist.payToAgency", { agency: t("agency.atc") }),
+    },
+  ]
+
+  const subtitle = `${year} · ${t("annualSummary")}`
 
   return (
-    <div className="space-y-6 max-w-3xl">
-      <Card>
-        <CardHeader className="pb-2">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-base">Modelo 425 — Resumen Anual IGIC {modelo425.year}</CardTitle>
-            <Button variant="outline" size="sm" onClick={() => exportCSV425(modelo425)}>
-              <Download className="w-4 h-4 mr-1" /> CSV
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {/* Summary totals */}
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
-            <div>
-              <p className="text-xs text-muted-foreground">Total IGIC devengado</p>
-              <p className="text-xl font-semibold">{formatEUR(modelo425.totalIgicDevengado)}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Total IGIC deducible</p>
-              <p className="text-xl font-semibold">{formatEUR(modelo425.totalIgicDeducible)}</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground">Resultado anual</p>
-              <p className={`text-xl font-semibold ${modelo425.totalResultado >= 0 ? "text-red-600" : "text-green-600"}`}>
-                {formatEUR(Math.abs(modelo425.totalResultado))}
-                <span className="text-xs ml-1">{modelo425.totalResultado >= 0 ? "(a pagar)" : "(a devolver)"}</span>
-              </p>
-            </div>
-          </div>
-
-          {/* Quarterly breakdown table */}
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-xs text-muted-foreground border-b">
-                  <th className="text-left pb-2 font-medium">Trimestre</th>
-                  <th className="text-right pb-2 font-medium">IGIC devengado</th>
-                  <th className="text-right pb-2 font-medium">IGIC deducible</th>
-                  <th className="text-right pb-2 font-medium">Resultado</th>
-                  <th className="text-right pb-2"></th>
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {modelo425.quarters.map((q, i) => (
-                  <tr key={q.quarter}>
-                    <td className="py-2 text-muted-foreground">{quarterLabels[i]}</td>
-                    <td className="py-2 text-right">{formatEUR(q.totalIgicDevengado)}</td>
-                    <td className="py-2 text-right">{formatEUR(q.cuotaDeducible)}</td>
-                    <td className={`py-2 text-right font-medium ${q.resultado >= 0 ? "text-red-600" : "text-green-600"}`}>
-                      {formatEUR(q.resultado)}
-                    </td>
-                    <td className="py-2 text-right">
-                      <Link href={`/tax/${modelo425.year}/${q.quarter}`} className="text-xs text-primary hover:underline">
-                        Detalle &rarr;
-                      </Link>
-                    </td>
-                  </tr>
-                ))}
-                <tr className="border-t-2 font-semibold">
-                  <td className="py-2">Total anual</td>
-                  <td className="py-2 text-right">{formatEUR(modelo425.totalIgicDevengado)}</td>
-                  <td className="py-2 text-right">{formatEUR(modelo425.totalIgicDeducible)}</td>
-                  <td className={`py-2 text-right ${modelo425.totalResultado >= 0 ? "text-red-600" : "text-green-600"}`}>
-                    {formatEUR(modelo425.totalResultado)}
-                  </td>
-                  <td></td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </CardContent>
-      </Card>
-
-      <div className="text-xs text-muted-foreground space-y-1 p-4 bg-muted rounded-lg">
-        <p className="font-medium">Aviso legal</p>
-        <p>
-          El Modelo 425 es el resumen anual del IGIC. Se presenta en enero del anno siguiente junto con la declaracion del Q4 (Modelo 420)
-          ante la Agencia Tributaria Canaria. Verifica todos los importes antes de presentar la declaracion.
-        </p>
-      </div>
+    <div className="space-y-8">
+      <ModeloHero
+        modeloCode="425"
+        title={`Modelo 425 — ${t("annualSummary")} ${year}`}
+        subtitle={subtitle}
+        deadline={deadline}
+        agency="atc"
+        amountCents={modelo425.totalResultado}
+        positiveLabel={t("hero.toPayAmount")}
+        negativeLabel={t("hero.toReturnAmount")}
+        zeroLabel={t("hero.nothingToPay")}
+        filing={filing425}
+        year={year}
+        quarter={null}
+        onExportCsv={() => exportCSV425(modelo425)}
+        portalUrl={ATC_PORTAL_URL}
+        knowledgeSlug="filing-modelo-425"
+      />
+      <CasillaTable groups={groups} resultRow={resultRow} />
+      <FilingChecklist
+        year={year}
+        quarter={null}
+        modeloCode="425"
+        filing={filing425}
+        items={checklistItems}
+      />
     </div>
   )
 }

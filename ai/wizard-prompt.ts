@@ -187,6 +187,7 @@ function formatCategories(categories: Category[]): string {
 // payload stays under ~8 KB of prompt, leaving headroom for candidates +
 // conversation history.
 const PACK_CHAR_BUDGET = 4000
+const FILING_PACK_CHAR_BUDGET = 1500
 
 /**
  * Pick the ordered list of knowledge packs to feed the LLM, entity-type
@@ -203,10 +204,24 @@ export function pickRelevantPacks(packs: KnowledgePack[], entityType: EntityType
   const ordered: Array<KnowledgePack | undefined> = []
   if (entityType === "autonomo") {
     ordered.push(bySlug("canary-autonomo"), bySlug("personal-tax"))
+    ordered.push(
+      bySlug("filing-modelo-420"),
+      bySlug("filing-modelo-130"),
+      bySlug("filing-modelo-425"),
+      bySlug("filing-modelo-100"),
+      bySlug("filing-modelo-721"),
+    )
   } else if (entityType === "sl") {
     ordered.push(bySlug("canary-sl"))
+    ordered.push(
+      bySlug("filing-modelo-420"),
+      bySlug("filing-modelo-202"),
+      bySlug("filing-modelo-425"),
+      bySlug("filing-modelo-100"),
+      bySlug("filing-modelo-721"),
+    )
   } else if (entityType === "individual") {
-    ordered.push(bySlug("personal-tax"))
+    ordered.push(bySlug("personal-tax"), bySlug("filing-modelo-100"))
   }
   ordered.push(bySlug("property-tax"), bySlug("crypto-tax"))
 
@@ -220,10 +235,11 @@ export function pickRelevantPacks(packs: KnowledgePack[], entityType: EntityType
   return result
 }
 
-function formatKnowledgePack(pack: KnowledgePack): string {
+export function formatKnowledgePack(pack: KnowledgePack): string {
+  const budget = pack.slug.startsWith("filing-") ? FILING_PACK_CHAR_BUDGET : PACK_CHAR_BUDGET
   let content = pack.content.trim()
-  if (content.length > PACK_CHAR_BUDGET) {
-    content = content.slice(0, PACK_CHAR_BUDGET) + "\n\n…(truncated for prompt budget)"
+  if (content.length > budget) {
+    content = content.slice(0, budget) + "\n\n…(truncated for prompt budget)"
   }
   const refreshedAt = pack.lastRefreshedAt
     ? pack.lastRefreshedAt.toISOString().slice(0, 10)

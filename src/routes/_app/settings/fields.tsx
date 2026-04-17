@@ -45,6 +45,7 @@ export function FieldsSettingsPage() {
       </p>
 
       <CrudTable
+        compact
         items={fieldsWithActions}
         columns={[
           { key: "name", label: t("name"), editable: true },

@@ -710,6 +710,55 @@
     "totalValueLabel": "Year-end value",
     "thresholdLabel": "Threshold",
     "deadlineLabel": "Deadline",
+    "hero": {
+      "nextDeadline": "Next deadline",
+      "dueInDays": "Due in {days} days",
+      "dueInOneDay": "Due in 1 day",
+      "dueToday": "Due today",
+      "overdueBy": "Overdue by {days} days",
+      "overdueByOneDay": "Overdue by 1 day",
+      "backToCalculator": "Back to Tax Calculator",
+      "viewFilingProcedure": "View filing procedure",
+      "nothingToPay": "Nothing to pay this quarter",
+      "toPayAmount": "To pay",
+      "toReturnAmount": "To return",
+      "markAsFiled": "Mark as filed",
+      "markAsUnfiled": "Mark as unfiled",
+      "filedOn": "Filed on {date}",
+      "viewDetail": "View detail",
+      "periodLabel": "Period"
+    },
+    "timeline": {
+      "filed": "Filed",
+      "current": "Current",
+      "upcoming": "Upcoming",
+      "future": "Future",
+      "overdue": "Overdue"
+    },
+    "checklist": {
+      "title": "Filing checklist",
+      "verifyEstimates": "Verify estimated IGIC / withholding amounts",
+      "exportCsv": "Export CSV for your records",
+      "fileOnPortal": "File on {agency} portal",
+      "payToAgency": "Pay the resulting amount to {agency}",
+      "filingComplete": "All steps complete \u2014 this filing is done."
+    },
+    "drilldown": {
+      "sourceInvoices": "Source invoices",
+      "sourceExpenses": "Source expenses",
+      "noItems": "No items in this range.",
+      "showingInRange": "Showing {count} items from {from} to {to}",
+      "close": "Close",
+      "viewAll": "View all \u2192"
+    },
+    "agency": {
+      "aeat": "AEAT",
+      "atc": "Agencia Tributaria Canaria",
+      "openPortal": "Open {agency} portal"
+    },
+    "yearTotals": "Year totals",
+    "entityAutonomo": "Aut\u00f3nomo",
+    "entitySL": "Sociedad Limitada",
     "personal": {
       "title": "Personal income",
       "subtitle": "Extras that fold into your Modelo 100.",
@@ -825,6 +874,7 @@
     "title": "Assistant",
     "placeholder": "Ask me anything…",
     "send": "Send",
+    "close": "Close",
     "clearHistory": "Clear history",
     "clearConfirmTitle": "Clear chat history?",
     "clearConfirmBody": "This removes all messages. The agent keeps business facts you've shared.",

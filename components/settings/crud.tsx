@@ -22,9 +22,10 @@ interface CrudProps<T> {
   onDelete: (id: string) => Promise<{ success: boolean; error?: string }>
   onAdd: (data: Partial<T>) => Promise<{ success: boolean; error?: string }>
   onEdit?: (id: string, data: Partial<T>) => Promise<{ success: boolean; error?: string }>
+  compact?: boolean
 }
 
-export function CrudTable<T extends Record<string, unknown>>({ items, columns, onDelete, onAdd, onEdit }: CrudProps<T>) {
+export function CrudTable<T extends Record<string, unknown>>({ items, columns, onDelete, onAdd, onEdit, compact = false }: CrudProps<T>) {
   const t = useTranslations("settings")
   const locale = useLocale()
   const [isAdding, setIsAdding] = useState(false)
@@ -57,7 +58,9 @@ export function CrudTable<T extends Record<string, unknown>>({ items, columns, o
 
   const FormCell = (item: T, column: CrudColumn<T>) => {
     if (column.type === "checkbox") {
-      return getCellValue(item, column) ? <Check /> : ""
+      return getCellValue(item, column)
+        ? <Check className={compact ? "w-3.5 h-3.5 mx-auto" : "mx-auto"} />
+        : <span className="block text-center text-muted-foreground/40">·</span>
     }
     if (column.type === "color" || column.key === "color") {
       const value = String(getCellValue(item, column) ?? "")
@@ -90,7 +93,7 @@ export function CrudTable<T extends Record<string, unknown>>({ items, columns, o
       return (
         <select
           value={String(getCellValue(editingItem, column) ?? "")}
-          className="p-2 rounded-md border bg-transparent"
+          className={compact ? "p-1 rounded-md border bg-transparent text-xs h-7" : "p-2 rounded-md border bg-transparent"}
           aria-label={String(column.label)}
           onChange={(e) =>
             setEditingItem({
@@ -130,6 +133,7 @@ export function CrudTable<T extends Record<string, unknown>>({ items, columns, o
             type="text"
             value={String(getCellValue(editingItem, column) ?? "")}
             aria-label={String(column.label)}
+            className={compact ? "h-7 text-xs font-mono" : ""}
             onChange={(e) =>
               setEditingItem({
                 ...editingItem,
@@ -147,6 +151,7 @@ export function CrudTable<T extends Record<string, unknown>>({ items, columns, o
         type="text"
         value={String(getCellValue(editingItem, column) ?? "")}
         aria-label={String(column.label)}
+        className={compact ? "h-7 text-xs" : ""}
         onChange={(e) =>
           setEditingItem({
             ...editingItem,
@@ -176,7 +181,7 @@ export function CrudTable<T extends Record<string, unknown>>({ items, columns, o
       return (
         <select
           value={String(newItem[column.key] || column.defaultValue || "")}
-          className="p-2 rounded-md border bg-transparent"
+          className={compact ? "p-1 rounded-md border bg-transparent text-xs h-7" : "p-2 rounded-md border bg-transparent"}
           aria-label={String(column.label)}
           onChange={(e) =>
             setNewItem({
@@ -216,6 +221,7 @@ export function CrudTable<T extends Record<string, unknown>>({ items, columns, o
             type="text"
             value={String(newItem[column.key] || column.defaultValue || "")}
             aria-label={String(column.label)}
+            className={compact ? "h-7 text-xs font-mono" : ""}
             onChange={(e) =>
               setNewItem({
                 ...newItem,
@@ -232,6 +238,7 @@ export function CrudTable<T extends Record<string, unknown>>({ items, columns, o
         type={column.type || "text"}
         value={String(newItem[column.key] || column.defaultValue || "")}
         aria-label={String(column.label)}
+        className={compact ? "h-7 text-xs" : ""}
         onChange={(e) =>
           setNewItem({
             ...newItem,
@@ -287,29 +294,42 @@ export function CrudTable<T extends Record<string, unknown>>({ items, columns, o
     }
   }
 
+  const headClass = compact ? "h-8 px-2 text-xs" : ""
+  const cellClass = compact ? "px-2 py-1 text-xs" : ""
+  const narrowClass = (col: CrudColumn<T>) => (compact && col.type === "checkbox" ? "w-16 text-center" : "")
+  const actionsBtnClass = compact ? "h-7 w-7" : ""
+
   return (
     <div className="space-y-4">
       <Table>
         <TableHeader>
           <TableRow>
             {columns.map((column) => (
-              <TableHead key={String(column.key)}>{column.label}</TableHead>
+              <TableHead
+                key={String(column.key)}
+                className={`${headClass} ${column.type === "checkbox" && compact ? "w-16 text-center" : ""}`}
+              >
+                {column.label}
+              </TableHead>
             ))}
-            <TableHead className="w-[100px]">{t("actions")}</TableHead>
+            <TableHead className={`w-[100px] ${headClass}`}>{t("actions")}</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {optimisticItems.map((item, index) => (
             <TableRow key={index}>
               {columns.map((column) => (
-                <TableCell key={String(column.key)} className="first:font-semibold">
+                <TableCell
+                  key={String(column.key)}
+                  className={`first:font-semibold ${cellClass} ${narrowClass(column)}`}
+                >
                   {editingId === String(item["code"] ?? item["id"] ?? "") && column.editable
                     ? EditFormCell(item, column)
                     : FormCell(item, column)}
                 </TableCell>
               ))}
-              <TableCell>
-                <div className="flex gap-2">
+              <TableCell className={cellClass}>
+                <div className="flex gap-1">
                   {editingId === String(item["code"] ?? item["id"] ?? "") ? (
                     <>
                       <Button size="sm" onClick={() => handleEdit(String(item["code"] ?? item["id"] ?? ""))} aria-label={t("saveNewItem")}>
@@ -325,23 +345,25 @@ export function CrudTable<T extends Record<string, unknown>>({ items, columns, o
                         <Button
                           variant="ghost"
                           size="icon"
+                          className={actionsBtnClass}
                           onClick={() => {
                             startEditing(item)
                             setIsAdding(false)
                           }}
                           aria-label={t("editItem", { name: String(item["name"] ?? item["code"] ?? "item") })}
                         >
-                          <Edit />
+                          <Edit className={compact ? "w-3.5 h-3.5" : ""} />
                         </Button>
                       )}
                       {Boolean(item["isDeletable"]) && (
                         <Button
                           variant="ghost"
                           size="icon"
+                          className={actionsBtnClass}
                           onClick={() => handleDelete(String(item["code"] ?? item["id"] ?? ""))}
                           aria-label={t("deleteItem", { name: String(item["name"] ?? item["code"] ?? "item") })}
                         >
-                          <Trash2 />
+                          <Trash2 className={compact ? "w-3.5 h-3.5" : ""} />
                         </Button>
                       )}
                     </>
@@ -353,12 +375,15 @@ export function CrudTable<T extends Record<string, unknown>>({ items, columns, o
           {isAdding && (
             <TableRow>
               {columns.map((column) => (
-                <TableCell key={String(column.key)} className="first:font-semibold">
+                <TableCell
+                  key={String(column.key)}
+                  className={`first:font-semibold ${cellClass} ${narrowClass(column)}`}
+                >
                   {column.editable && AddFormCell(column)}
                 </TableCell>
               ))}
-              <TableCell>
-                <div className="flex gap-2">
+              <TableCell className={cellClass}>
+                <div className="flex gap-1">
                   <Button size="sm" onClick={handleAdd} aria-label={t("saveNewItem")}>
                     {t("saveItem")}
                   </Button>

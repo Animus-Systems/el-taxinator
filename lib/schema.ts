@@ -15,7 +15,7 @@ import path from "path"
 // 2. Add a migration entry here with the next version number
 // 3. The migration SQL should be idempotent (use IF NOT EXISTS, etc.)
 
-export const SCHEMA_VERSION = 19 // bump this when adding a migration
+export const SCHEMA_VERSION = 20 // bump this when adding a migration
 
 export const migrations: { version: number; description: string; sql: string }[] = [
   {
@@ -464,6 +464,28 @@ export const migrations: { version: number; description: string; sql: string }[]
         ON chat_messages (user_id, created_at);
       CREATE UNIQUE INDEX IF NOT EXISTS chat_messages_user_summary_idx
         ON chat_messages (user_id) WHERE role = 'system';
+    `,
+  },
+  {
+    version: 20,
+    description: "Tax filings table (per-user, per-year/quarter/modelo checklist + status)",
+    sql: `
+      CREATE TABLE IF NOT EXISTS tax_filings (
+        id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
+        user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        year int NOT NULL,
+        quarter int NULL,
+        modelo_code text NOT NULL,
+        filed_at timestamp(3) NULL,
+        checklist jsonb NOT NULL DEFAULT '{}'::jsonb,
+        notes text NULL,
+        created_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL,
+        updated_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL
+      );
+      CREATE UNIQUE INDEX IF NOT EXISTS tax_filings_unique_idx
+        ON tax_filings (user_id, year, COALESCE(quarter, -1), modelo_code);
+      CREATE INDEX IF NOT EXISTS tax_filings_user_year_idx
+        ON tax_filings (user_id, year);
     `,
   },
 ]

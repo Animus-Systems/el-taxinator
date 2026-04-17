@@ -325,6 +325,24 @@ CREATE TABLE personal_deductions (
 );
 CREATE INDEX personal_deductions_user_year_idx ON personal_deductions (user_id, tax_year);
 
+-- ─── Tax filings (per-year/quarter/modelo checklist + status) ──────────────
+
+CREATE TABLE tax_filings (
+    id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
+    user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    year int NOT NULL,
+    quarter int NULL,
+    modelo_code text NOT NULL,
+    filed_at timestamp(3) NULL,
+    checklist jsonb NOT NULL DEFAULT '{}'::jsonb,
+    notes text NULL,
+    created_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+CREATE UNIQUE INDEX tax_filings_unique_idx
+    ON tax_filings (user_id, year, COALESCE(quarter, -1), modelo_code);
+CREATE INDEX tax_filings_user_year_idx ON tax_filings (user_id, year);
+
 -- ─── Accountant Access ───────────────────────────────────────────────────────
 
 CREATE TABLE accountant_invites (

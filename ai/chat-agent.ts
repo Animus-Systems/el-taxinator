@@ -16,7 +16,9 @@ import { getActiveRules } from "@/models/rules"
 import { getTransactionById, findSimilarByMerchant } from "@/models/transactions"
 import { getDashboardStats } from "@/models/stats"
 import { getUserById } from "@/models/users"
+import { listPacks } from "@/models/knowledge-packs"
 import { getSettings, getLLMSettings } from "@/models/settings"
+import { formatKnowledgePack } from "@/ai/wizard-prompt"
 import {
   chatMessageMetadataSchema,
   proposedRuleSchema,
@@ -260,7 +262,7 @@ export async function compactChatHistory(userId: string): Promise<void> {
 // ---------------------------------------------------------------------------
 
 async function buildTurnPrompt(opts: ProcessChatTurnOptions): Promise<string> {
-  const [user, facts, categories, projects, rules, history, summary] = await Promise.all([
+  const [user, facts, categories, projects, rules, history, summary, packs] = await Promise.all([
     getUserById(opts.userId),
     listBusinessFacts(opts.userId),
     getCategories(opts.userId),
@@ -268,6 +270,7 @@ async function buildTurnPrompt(opts: ProcessChatTurnOptions): Promise<string> {
     getActiveRules(opts.userId),
     listChatMessages(opts.userId),
     getChatSummary(opts.userId),
+    listPacks(opts.userId),
   ])
 
   const now = new Date()
@@ -344,6 +347,17 @@ async function buildTurnPrompt(opts: ProcessChatTurnOptions): Promise<string> {
         }
       }
     }
+  }
+  const filingPacks = packs
+    .filter((p) => p.slug.startsWith("filing-"))
+    .sort((a, b) => a.slug.localeCompare(b.slug))
+  if (filingPacks.length > 0) {
+    parts.push(
+      "## Tax filing procedures (step-by-step walkthroughs)",
+      "The following walkthroughs describe exactly how to file each modelo on the official Spanish portals (AEAT / ATC). Use them when the user asks how to file a specific modelo or needs portal URLs / click paths. Cite the relevant sections rather than paraphrasing generic tax advice.",
+      "",
+    )
+    for (const p of filingPacks) parts.push(formatKnowledgePack(p), "")
   }
   if (summary) {
     parts.push("[Prior conversation summary]", summary.content, "")

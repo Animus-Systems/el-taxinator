@@ -41,6 +41,7 @@ vi.mock("@/models/transactions", () => ({
   findSimilarByMerchant: vi.fn(async () => []),
 }))
 vi.mock("@/models/users", () => ({ getUserById: vi.fn(async () => ({ id: "u", entityType: "autonomo" })) }))
+vi.mock("@/models/knowledge-packs", () => ({ listPacks: vi.fn(async () => []) }))
 vi.mock("@/models/stats", async () => {
   const actual = await vi.importActual<typeof import("@/models/stats")>("@/models/stats")
   return {

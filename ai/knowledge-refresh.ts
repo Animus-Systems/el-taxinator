@@ -42,6 +42,36 @@ export const SEED_PACKS: SeedPackDef[] = [
     title: "Crypto tax (FIFO, Modelo 721, staking)",
     file: "seed-crypto-tax.md",
   },
+  {
+    slug: "filing-modelo-420",
+    title: "Filing Modelo 420 (IGIC quarterly)",
+    file: "seed-filing-modelo-420.md",
+  },
+  {
+    slug: "filing-modelo-130",
+    title: "Filing Modelo 130 (IRPF quarterly, autónomo)",
+    file: "seed-filing-modelo-130.md",
+  },
+  {
+    slug: "filing-modelo-202",
+    title: "Filing Modelo 202 (IS quarterly, SL)",
+    file: "seed-filing-modelo-202.md",
+  },
+  {
+    slug: "filing-modelo-100",
+    title: "Filing Modelo 100 (annual IRPF / Renta)",
+    file: "seed-filing-modelo-100.md",
+  },
+  {
+    slug: "filing-modelo-425",
+    title: "Filing Modelo 425 (annual IGIC recap)",
+    file: "seed-filing-modelo-425.md",
+  },
+  {
+    slug: "filing-modelo-721",
+    title: "Filing Modelo 721 (informative foreign crypto)",
+    file: "seed-filing-modelo-721.md",
+  },
 ]
 
 /**
@@ -60,6 +90,18 @@ const TOPIC_DESC: Record<string, string> = {
     "Spanish property tax — rental income rules, 60%/70%/90% reductions, deductible rental expenses, IBI, plusvalía municipal, ITP / AJD, primary-residence exemption, wealth tax (Modelo 714) with Canarias bonificación",
   "crypto-tax":
     "Spanish crypto tax — realisation events, mandatory FIFO cost basis, staking/airdrop rendimiento del capital mobiliario, mining as actividad económica, Modelo 721 informativa, wash-sale (norma antiaplicación)",
+  "filing-modelo-420":
+    "Step-by-step procedure for filing Modelo 420 (quarterly IGIC) on the Agencia Tributaria Canaria sede electrónica — portal URLs, certificate/Cl@ve login, casilla-by-casilla instructions, NRC/domiciliación payment flow, downloading the justificante, common validation errors. Keep the content procedural, do not drift into tax-rate theory.",
+  "filing-modelo-130":
+    "Step-by-step procedure for filing Modelo 130 (quarterly IRPF autónomo) on the AEAT sede electrónica — portal URL, Cl@ve / certificate login, casilla 01–06 instructions, NRC or domiciliación payment, complementaria flow, downloading the justificante, common errors. Keep the content procedural.",
+  "filing-modelo-202":
+    "Step-by-step procedure for filing Modelo 202 (quarterly IS pago fraccionado for SL) on the AEAT sede electrónica — SL certificate login, modalidad 1 vs modalidad 2 selection, casilla 01–05 instructions, NRC/domiciliación payment, quarter-by-quarter deadlines (April/October/December), justificante. Keep the content procedural.",
+  "filing-modelo-100":
+    "Step-by-step procedure for filing Modelo 100 (annual IRPF / Renta) via Renta Web on AEAT — login options (Cl@ve, certificado, número de referencia), block-by-block review of the borrador, manually adding crypto disposals from Modelo 721 data, joint vs individual simulation, ingreso / domiciliación / fraccionamiento options, devolución IBAN, justificante. Keep the content procedural.",
+  "filing-modelo-425":
+    "Step-by-step procedure for filing Modelo 425 (annual IGIC recap) on the ATC sede electrónica — login, prefill from the four Modelo 420 quarterly submissions, volume distribution by IGIC rate, deducible totals, requesting pending devolución, reconciling mismatches with complementarias. Keep the content procedural.",
+  "filing-modelo-721":
+    "Step-by-step procedure for filing Modelo 721 (informative foreign crypto) on AEAT — when the €50k threshold applies, certificate login preference, per-custodian record entry (name, country, currency, quantity, EUR valuation at 31 Dec), sanctions for non-filing, retention period. Keep the content procedural.",
 }
 
 async function loadSeedContent(file: string): Promise<string> {

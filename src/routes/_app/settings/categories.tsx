@@ -47,6 +47,7 @@ export function CategoriesSettingsPage() {
       </p>
 
       <CrudTable
+        compact
         items={categoriesWithActions}
         columns={[
           { key: "name", label: t("name"), editable: true },

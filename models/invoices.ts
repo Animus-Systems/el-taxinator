@@ -106,11 +106,18 @@ const QUOTE_CONFIG: DocumentConfig = {
   itemFk: "quoteId",
 }
 
+export type InvoiceListFilters = {
+  dateFrom?: string
+  dateTo?: string
+  status?: string[]
+}
+
 /** Fetch a list of documents with their items and clients. */
 async function fetchDocumentsWithItems<TDoc extends { id: string; clientId: string | null }, TItem>(
   userId: string,
   config: DocumentConfig,
   itemParentKey: keyof TItem & string,
+  filters?: InvoiceListFilters,
 ): Promise<(TDoc & { client: Client | null; items: TItem[] })[]> {
   const pool = await getPool()
   // Validate identifiers — these come from hardcoded configs but guard anyway
@@ -119,9 +126,26 @@ async function fetchDocumentsWithItems<TDoc extends { id: string; clientId: stri
   const fkColumn = camelToSnake(config.itemFk)
   assertSafeIdentifier(fkColumn, "FK column name")
 
+  // Build WHERE clause piece by piece so optional filters don't bloat the
+  // base query with NULL-checks.
+  const where: string[] = ["user_id = $1"]
+  const params: unknown[] = [userId]
+  if (filters?.dateFrom) {
+    params.push(filters.dateFrom)
+    where.push(`issue_date >= $${params.length}`)
+  }
+  if (filters?.dateTo) {
+    params.push(filters.dateTo)
+    where.push(`issue_date <= $${params.length}`)
+  }
+  if (filters?.status && filters.status.length > 0) {
+    params.push(filters.status)
+    where.push(`status = ANY($${params.length})`)
+  }
+
   const docsResult = await pool.query(
-    `SELECT * FROM ${config.table} WHERE user_id = $1 ORDER BY issue_date DESC LIMIT 1000`,
-    [userId],
+    `SELECT * FROM ${config.table} WHERE ${where.join(" AND ")} ORDER BY issue_date DESC LIMIT 1000`,
+    params,
   )
   const docs = docsResult.rows.map((r) => mapRow<TDoc>(r))
   if (docs.length === 0) return []
@@ -245,9 +269,17 @@ async function fetchClientInTx(
 // Invoices
 // ---------------------------------------------------------------------------
 
-export const getInvoices = cache(async (userId: string): Promise<InvoiceWithRelations[]> => {
-  return fetchDocumentsWithItems<Invoice, InvoiceItem>(userId, INVOICE_CONFIG, "invoiceId")
-})
+export async function getInvoices(
+  userId: string,
+  filters?: InvoiceListFilters,
+): Promise<InvoiceWithRelations[]> {
+  return fetchDocumentsWithItems<Invoice, InvoiceItem>(
+    userId,
+    INVOICE_CONFIG,
+    "invoiceId",
+    filters,
+  )
+}
 
 export const getInvoiceById = cache(
   async (id: string, userId: string): Promise<InvoiceWithRelations | null> => {

@@ -1,6 +1,7 @@
 import { useParams } from "@tanstack/react-router"
 import { trpc } from "~/trpc"
 import { AnualReport } from "@/components/tax/anual-report"
+import { TaxBackLink } from "@/components/tax/tax-back-link"
 
 export function TaxYearPage() {
   const { year: yearParam } = useParams({ strict: false }) as { year?: string }
@@ -35,5 +36,10 @@ export function TaxYearPage() {
     )
   }
 
-  return <AnualReport modelo425={modelo425} />
+  return (
+    <div className="space-y-4">
+      <TaxBackLink year={year} />
+      <AnualReport modelo425={modelo425} />
+    </div>
+  )
 }

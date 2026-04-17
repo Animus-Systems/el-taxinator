@@ -48,6 +48,7 @@ export function AccountsSettingsPage() {
       </p>
 
       <CrudTable
+        compact
         items={accountsWithActions}
         columns={[
           { key: "name", label: t("name"), editable: true },
