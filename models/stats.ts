@@ -80,21 +80,24 @@ export type DashboardAnalytics = {
 /** Convenience wrapper: builds WHERE for stats queries (no table alias, no search).
  *
  * Always excludes two categories of rows:
- * - `status = 'personal_ignored'` — rows representing movements between the
- *   user's own accounts, mistaken deposits, etc. These should never land in
- *   business income/expense totals regardless of the AI's `type` classification
- *   (which is often `income` for incoming own-account transfers).
- * - `type = 'transfer'` — first-class transfer rows, which are explicitly
- *   non-business movements and must never appear in any aggregate.
+ * - `status IN ('personal_ignored', 'personal_taxable')` — personal rows that
+ *   are not business activity. `personal_ignored` covers own-account transfers,
+ *   mistaken deposits, conversion legs. `personal_taxable` covers crypto
+ *   disposals, staking rewards, airdrops, stock dividends — they ARE taxable
+ *   on Modelo 100 but surface via the FIFO ledger + category queries, not via
+ *   the business income/expense aggregates.
+ * - `type IN ('transfer', 'conversion')` — first-class non-business movement
+ *   rows (cross-account transfers and in-account currency conversions). They
+ *   are explicitly non-business and must never appear in any aggregate.
  */
 function buildStatsWhere(
   userId: string,
   filters: TransactionFilters = {},
   extraConditions?: string[],
 ): { clause: string; values: unknown[] } {
-  const excludePersonal = "(status IS NULL OR status <> 'personal_ignored')"
-  const excludeTransfer = "(type IS NULL OR type <> 'transfer')"
-  const defaults = [excludePersonal, excludeTransfer]
+  const excludePersonal = "(status IS NULL OR status NOT IN ('personal_ignored', 'personal_taxable'))"
+  const excludeNonBusinessTypes = "(type IS NULL OR type NOT IN ('transfer', 'conversion'))"
+  const defaults = [excludePersonal, excludeNonBusinessTypes]
   const merged = extraConditions ? [...defaults, ...extraConditions] : defaults
   const { clause, values } = buildTransactionWhere(userId, filters, {
     alias: "",

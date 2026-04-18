@@ -10,7 +10,7 @@ import { getVisibleTransactionFields } from "@/lib/transaction-list-fields"
 import { cn, formatCurrency } from "@/lib/utils"
 import type { BankAccount, Category, Field, Project, Transaction } from "@/lib/db-types"
 import { formatDate } from "date-fns"
-import { AlertTriangle, ArrowDownIcon, ArrowLeftRight, ArrowUpIcon, File, Paperclip, Sparkles, TrendingDown, TrendingUp, Zap } from "lucide-react"
+import { AlertTriangle, ArrowDownIcon, ArrowLeftRight, ArrowUpIcon, File, Paperclip, Repeat, Sparkles, TrendingDown, TrendingUp, Zap } from "lucide-react"
 import { AttachReceiptDialog } from "@/components/transactions/attach-receipt-dialog"
 import { EditTransactionDialog } from "@/components/transactions/edit-dialog"
 import { useTranslations } from "next-intl"
@@ -41,6 +41,22 @@ type FieldWithRenderer = Field & {
 type TransactionWithRelations = Transaction & {
   category?: Category | null
   project?: Project | null
+}
+
+// Returns the text color class for a transaction total. Three transfer states:
+//   - paired (transfer_id set) → sky
+//   - counterparty known, not yet paired (counter_account_id set, transfer_id null) → muted sky
+//   - truly unknown (neither set) → amber + warning
+function totalColorClass(transaction: Transaction): string {
+  if (transaction.type === "transfer") {
+    if (transaction.transferId !== null) return "text-sky-600"
+    if (transaction.counterAccountId !== null) return "text-sky-600/60"
+    return "text-amber-600"
+  }
+  if (transaction.type === "conversion") return "text-purple-600"
+  if (transaction.type === "income") return "text-green-500"
+  if (transaction.type === "expense") return "text-red-500"
+  return "text-black"
 }
 
 function FilesCell({ transaction }: { transaction: Transaction }) {
@@ -94,24 +110,42 @@ function TypeCell({ transaction }: { transaction: Transaction }) {
   const tTransfers = useTranslations("transactions.transfers")
 
   if (transaction.type === "transfer") {
-    const isOrphan = !transaction.transferId
+    const isPaired = transaction.transferId !== null
+    const awaitingMatch = !isPaired && transaction.counterAccountId !== null
     const direction = transaction.transferDirection
-    const label = isOrphan
-      ? tTransfers("unmatchedBadge")
-      : direction
+    const label = isPaired
+      ? direction
         ? tTransfers(`pairedBadge.${direction}`)
         : tTransfers("pairedBadgeGeneric")
+      : awaitingMatch
+        ? tTransfers("awaitingMatchBadge")
+        : tTransfers("unmatchedBadge")
+    const colorClass = isPaired
+      ? "text-sky-600"
+      : awaitingMatch
+        ? "text-sky-600/60"
+        : "text-amber-600"
     return (
       <span
         title={label}
         aria-label={label}
-        className={cn(
-          "inline-flex items-center gap-0.5",
-          isOrphan ? "text-amber-600" : "text-sky-600",
-        )}
+        className={cn("inline-flex items-center gap-0.5", colorClass)}
       >
-        {isOrphan && <AlertTriangle className="h-3 w-3" />}
+        {!isPaired && !awaitingMatch && <AlertTriangle className="h-3 w-3" />}
         <ArrowLeftRight className="h-4 w-4" />
+      </span>
+    )
+  }
+
+  if (transaction.type === "conversion") {
+    const label = tTransfers("conversionBadge")
+    return (
+      <span
+        title={label}
+        aria-label={label}
+        className="inline-flex items-center gap-0.5 text-purple-600"
+      >
+        <Repeat className="h-4 w-4" />
       </span>
     )
   }
@@ -239,7 +273,7 @@ export const standardFieldRenderers: Record<string, FieldRenderer> = {
       <div className="text-right text-lg">
         <div
           className={cn(
-            { income: "text-green-500", expense: "text-red-500", transfer: "text-sky-600", other: "text-black" }[transaction.type || "other"],
+            totalColorClass(transaction),
             "flex flex-col justify-end"
           )}
         >
@@ -295,7 +329,7 @@ export const standardFieldRenderers: Record<string, FieldRenderer> = {
     formatValue: (transaction: Transaction) => (
       <div
         className={cn(
-          { income: "text-green-500", expense: "text-red-500", transfer: "text-sky-600", other: "text-black" }[transaction.type || "other"],
+          totalColorClass(transaction),
           "flex flex-col justify-end text-right text-lg"
         )}
       >

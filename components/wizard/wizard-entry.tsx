@@ -52,29 +52,78 @@ export function WizardEntry() {
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
 
-  async function handleFile(file: File) {
+  const addContextFile = trpc.wizard.addContextFile.useMutation()
+
+  const PRIMARY_PRIORITY = [".csv", ".xlsx", ".xls", ".pdf"] as const
+
+  function pickPrimaryIndex(files: File[]): number {
+    for (const ext of PRIMARY_PRIORITY) {
+      const idx = files.findIndex((f) => f.name.toLowerCase().endsWith(ext))
+      if (idx >= 0) return idx
+    }
+    return 0
+  }
+
+  async function uploadContextFile(file: File): Promise<string> {
+    const form = new FormData()
+    form.append("files", file)
+    const resp = await fetch("/api/files/upload", {
+      method: "POST",
+      body: form,
+      credentials: "include",
+    })
+    if (!resp.ok) throw new Error(`upload failed (${resp.status})`)
+    const json = (await resp.json()) as { files?: Array<{ id: string }> }
+    const id = json.files?.[0]?.id
+    if (!id) throw new Error("no file id returned")
+    return id
+  }
+
+  async function handleFiles(fileList: File[]) {
     setUploadError(null)
-    const name = file.name.toLowerCase()
-    if (!name.endsWith(".csv") && !name.endsWith(".pdf")) {
-      setUploadError("Only CSV and PDF files are supported.")
+    if (fileList.length === 0) return
+    const supported = fileList.filter((f) => {
+      const n = f.name.toLowerCase()
+      return n.endsWith(".csv") || n.endsWith(".xlsx") || n.endsWith(".xls") || n.endsWith(".pdf")
+    })
+    if (supported.length === 0) {
+      setUploadError("Only CSV, XLSX, and PDF files are supported.")
       return
     }
+    const primaryIdx = pickPrimaryIndex(supported)
+    const primary = supported[primaryIdx]!
+    const contextFiles = supported.filter((_, i) => i !== primaryIdx)
+    const name = primary.name.toLowerCase()
+    const isPdf = name.endsWith(".pdf")
+
     setUploading(true)
     try {
+      // 1. Primary through detect/extract pipeline.
       const form = new FormData()
-      form.append("file", file)
-      const endpoint = name.endsWith(".pdf")
-        ? "/api/import/pdf/extract"
-        : "/api/import/csv"
+      form.append("file", primary)
+      const endpoint = isPdf ? "/api/import/pdf/extract" : "/api/import/csv"
       const resp = await fetch(endpoint, { method: "POST", body: form, credentials: "include" })
       if (!resp.ok) {
         const text = await resp.text()
         throw new Error(text || `upload failed (${resp.status})`)
       }
       const json = (await resp.json()) as { sessionId?: string }
-      if (!json.sessionId) throw new Error("no session returned from upload")
+      const sessionId = json.sessionId
+      if (!sessionId) throw new Error("no session returned from upload")
+
+      // 2. Context files: upload + attach. Failures are logged but don't block
+      //    navigation — the user can re-attach from the wizard shell if needed.
+      for (const ctx of contextFiles) {
+        try {
+          const fileId = await uploadContextFile(ctx)
+          await addContextFile.mutateAsync({ sessionId, fileId })
+        } catch (err) {
+          console.warn("failed to attach context file:", ctx.name, err)
+        }
+      }
+
       utils.wizard.listResumable.invalidate()
-      navigate({ to: `/wizard/${json.sessionId}` as string })
+      navigate({ to: `/wizard/${sessionId}` as string })
     } catch (err) {
       setUploadError(err instanceof Error ? err.message : "upload failed")
     } finally {
@@ -235,8 +284,8 @@ export function WizardEntry() {
             onDrop={(e) => {
               e.preventDefault()
               setDragActive(false)
-              const f = e.dataTransfer.files[0]
-              if (f) handleFile(f)
+              const fs = Array.from(e.dataTransfer.files)
+              if (fs.length > 0) handleFiles(fs)
             }}
           >
             <CardContent className="py-10 flex flex-col items-center justify-center gap-2">
@@ -250,11 +299,12 @@ export function WizardEntry() {
               <input
                 id="wizard-file-input"
                 type="file"
-                accept=".csv,.pdf"
+                multiple
+                accept=".csv,.xlsx,.xls,.pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv,application/pdf"
                 className="hidden"
                 onChange={(e) => {
-                  const f = e.target.files?.[0]
-                  if (f) handleFile(f)
+                  const fs = Array.from(e.target.files ?? [])
+                  if (fs.length > 0) handleFiles(fs)
                 }}
               />
             </CardContent>

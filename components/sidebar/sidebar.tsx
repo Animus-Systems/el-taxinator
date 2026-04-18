@@ -102,25 +102,22 @@ export function AppSidebar({
   return (
     <>
       <Sidebar variant="inset" collapsible="icon">
-        <SidebarHeader>
-          <NavLink
-            href="/dashboard"
-            className="flex flex-col items-center text-center leading-tight"
-          >
+        <SidebarHeader className="items-center">
+          <NavLink href="/dashboard" className="block w-full text-center leading-tight">
             <img
               src="/logo/logo.webp"
               alt="Logo"
-              className="h-[7.5rem] w-[7.5rem] rounded-lg group-data-[collapsible=icon]:h-8 group-data-[collapsible=icon]:w-8"
+              className="mx-auto block h-[7.5rem] w-[7.5rem] rounded-lg group-data-[collapsible=icon]:h-8 group-data-[collapsible=icon]:w-8"
               width={120}
               height={120}
             />
-            <span className="-mt-2 font-semibold text-lg text-sidebar-foreground group-data-[collapsible=icon]:hidden">
+            <div className="-mt-2 block font-semibold text-lg text-sidebar-foreground group-data-[collapsible=icon]:hidden">
               {config.app.title}
-            </span>
+            </div>
             {entityName && (
-              <span className="mt-0.5 truncate max-w-full text-xs text-sidebar-foreground/70 group-data-[collapsible=icon]:hidden">
+              <div className="mt-0.5 block truncate px-2 text-xs text-sidebar-foreground/70 group-data-[collapsible=icon]:hidden">
                 {entityName}
-              </span>
+              </div>
             )}
           </NavLink>
         </SidebarHeader>

@@ -24,11 +24,15 @@ export type CandidateCryptoMeta = {
 
 // AI-proposed pairing between two candidate legs of an own-account transfer.
 // `rowIndexB` is null when only one leg is visible (orphan transfer).
+// `counterAccountId` is the AI's best guess at which of the user's existing
+// accounts is the other end of an orphan transfer; the UI uses it as a default
+// when asking the user to pick a counter-account manually.
 export type ProposedTransferLink = {
   rowIndexA: number
   rowIndexB: number | null
   confidence: number
   reason: string
+  counterAccountId?: string | null
 }
 
 export type TransactionCandidate = {
@@ -67,6 +71,10 @@ export type TransactionCandidate = {
   extra?: {
     crypto?: CandidateCryptoMeta
     proposedTransferLink?: ProposedTransferLink
+    // Set by the import pipeline when a candidate matches an existing
+    // transaction in the user's ledger. The candidate is auto-deselected
+    // so duplicates don't get re-committed unless the user re-enables them.
+    duplicateOfId?: string | null
     [key: string]: unknown
   }
   // Populated by `wizard.applyTransferLink` when the user confirms a transfer
@@ -75,6 +83,10 @@ export type TransactionCandidate = {
   // this row represents so the commit loop can persist the correct columns.
   transferId?: string | null
   transferDirection?: "outgoing" | "incoming" | null
+  // Populated by `wizard.applyTransferLink` for orphan transfers when the
+  // user picks which of their existing accounts is the counter-party. Flows
+  // straight through to `transactions.counter_account_id` at commit time.
+  counterAccountId?: string | null
 }
 
 export type SuggestedCategory = {
@@ -176,6 +188,25 @@ ${projects.length > 0 ? formatProjectList(projects) : "(none defined)"}
 Analyze this CSV and determine:
 1. Which bank or institution this CSV likely comes from
 2. How each CSV column maps to our transaction fields: name, merchant, description, total, currencyCode, type, issuedAt
+
+Crypto exchanges (Swissborg, Kraken, Coinbase, Binance, Bitstamp, Bit2Me, Revolut Crypto) use different column shapes than banks. Typical columns:
+- "Type" — values like "Sell", "Buy", "Deposit", "Withdrawal", "Payouts", "Fee Adjustment", "Redemption".
+- "Currency" — the crypto asset ticker (BORG, ETH, BTC, SOL, etc.) — NOT an ISO fiat code.
+- "Gross amount", "Net amount" — in the asset currency.
+- "Gross amount (EUR)", "Net amount (EUR)" — EUR-equivalent for tax reporting.
+- "Note" — free-text description like "Exchanged to EUR", "Alpha redemption".
+
+When the CSV is a crypto-exchange statement:
+- Map the EUR-denominated amount column (e.g. "Net amount (EUR)") to \`total\`.
+- Set currencyCode to the string "EUR" explicitly by returning "const:EUR" as the mapping value for currencyCode (see "Constant / synthesized values" below).
+- If there's no natural "name" or "merchant" column, use synthesized values (see below) to produce something readable in the UI.
+
+Constant / synthesized values. When a field value isn't in a single column, you may return one of these special forms as the mapping value:
+- "const:<literal>" — use the literal string for every row. E.g. \`"merchant": "const:SwissBorg"\` sets merchant to "SwissBorg" on every row.
+- "concat:<Column A>+<Column B>" — concatenate two column values with a space. E.g. \`"name": "concat:Type+Currency"\` produces "Sell BORG", "Buy EUR", etc.
+
+Prefer mapping a real column when possible. Only use const: or concat: when no single column represents the field.
+
 3. The date format used (e.g. "yyyy-MM-dd", "MM/dd/yyyy", "dd/MM/yyyy")
 4. How amounts are represented:
    - "negative_expense": negative values are expenses, positive are income
@@ -183,7 +214,22 @@ Analyze this CSV and determine:
    - "absolute_with_type": amounts are always positive with a separate type/direction column
 5. Any rows in the sample that should be skipped (summary rows, totals, etc.)
 
-For columnMapping, map CSV column names to our field names. Only include columns that have a clear mapping. If a column maps to "total" but contains expenses in a separate column, use the format "total:expense" or "total:income" for separate_columns format.`
+For columnMapping, map CSV column names to our field names. Only include columns that have a clear mapping. If a column maps to "total" but contains expenses in a separate column, use the format "total:expense" or "total:income" for separate_columns format.
+
+Example — Swissborg crypto CSV:
+Headers: ["Local time","Time in UTC","Type","Currency","Gross amount","Gross amount (EUR)","Fee","Fee (EUR)","Net amount","Net amount (EUR)","Note"]
+Good mapping:
+{
+  "Time in UTC": "issuedAt",
+  "Net amount (EUR)": "total",
+  "Note": "description",
+  "Type": "type",
+  "Currency": "const:EUR",
+  "name": "concat:Type+Currency",
+  "merchant": "const:SwissBorg"
+}
+
+Note the last three entries are "virtual" mappings — the key side of the mapping object can be the LITERAL field name (e.g. "name", "merchant", "currencyCode") when using const: or concat: because there's no real CSV column on that side.`
 
   const schema = {
     type: "object",
@@ -196,7 +242,7 @@ For columnMapping, map CSV column names to our field names. Only include columns
       columnMapping: {
         type: "object",
         description:
-          "Maps CSV column names to transaction fields (name, merchant, description, total, currencyCode, type, issuedAt). For separate_columns amount format, use total:expense and total:income as values.",
+          "Maps CSV column names to transaction fields (name, merchant, description, total, currencyCode, type, issuedAt). For separate_columns amount format, use total:expense and total:income as values. Values may also be synthesized directives: 'const:<literal>' (fixed value for every row) or 'concat:<ColA>+<ColB>' (joins two columns with a space). When using const: or concat:, the key side may be the literal field name (e.g. 'merchant', 'currencyCode', 'name') since there's no corresponding CSV column.",
         additionalProperties: { type: "string" },
       },
       dateFormat: {
@@ -275,7 +321,31 @@ export function applyCSVMapping(
   let expenseColIndex = -1
   let incomeColIndex = -1
 
+  // Collect synthetic rules alongside the column-index mappings.
+  const syntheticFields: Record<
+    string,
+    { kind: "const"; value: string } | { kind: "concat"; cols: number[] }
+  > = {}
+
   for (const [csvCol, field] of Object.entries(columnMapping)) {
+    // Normalize: the "field" side may be a real field name OR a synth directive.
+    const fieldLower = field.toLowerCase()
+    if (fieldLower.startsWith("const:")) {
+      // csvCol here is the target field name (e.g. "merchant")
+      syntheticFields[csvCol] = { kind: "const", value: field.slice("const:".length) }
+      continue
+    }
+    if (fieldLower.startsWith("concat:")) {
+      const cols = field
+        .slice("concat:".length)
+        .split("+")
+        .map((c) => c.trim())
+        .map((c) => headers.indexOf(c))
+        .filter((i) => i >= 0)
+      syntheticFields[csvCol] = { kind: "concat", cols }
+      continue
+    }
+
     const colIndex = headers.indexOf(csvCol)
     if (colIndex === -1) continue
 
@@ -299,10 +369,21 @@ export function applyCSVMapping(
 
     const getValue = (field: string): string | null => {
       const idx = fieldToIndex[field]
-      if (idx === undefined || idx < 0 || idx >= row.length) return null
-      const val = row[idx]?.trim()
-      if (val === undefined || val === "") return null
-      return val
+      if (idx !== undefined && idx >= 0 && idx < row.length) {
+        const val = row[idx]?.trim()
+        if (val !== undefined && val !== "") return val
+      }
+      const synth = syntheticFields[field]
+      if (synth) {
+        if (synth.kind === "const") return synth.value
+        if (synth.kind === "concat") {
+          const parts = synth.cols
+            .map((i) => (i >= 0 && i < row.length ? row[i]?.trim() : ""))
+            .filter((s): s is string => !!s && s.length > 0)
+          if (parts.length > 0) return parts.join(" ")
+        }
+      }
+      return null
     }
 
     // Parse amount and determine type
@@ -458,7 +539,7 @@ For each transaction, return:
 - categoryCode: the best matching category code, or null if unsure
 - projectCode: the best matching project code, or null if unsure
 - type: "expense" or "income"
-- status: "business", "business_non_deductible", "personal_ignored", or null if unsure
+- status: "business", "business_non_deductible", "personal_taxable", "personal_ignored", or null if unsure. "personal_taxable" = crypto disposals/staking/airdrops/dividends (personal, Modelo 100 taxable). "personal_ignored" = own-account transfers, bank-side disposal legs, mistaken deposits.
 - confidence: 0 to 1, how confident you are in the categorization${feedbackContext}`
 
     const schema = {
@@ -479,7 +560,13 @@ For each transaction, return:
               type: { type: "string", enum: ["expense", "income"] },
               status: {
                 type: ["string", "null"],
-                enum: ["business", "business_non_deductible", "personal_ignored", null],
+                enum: [
+                  "business",
+                  "business_non_deductible",
+                  "personal_taxable",
+                  "personal_ignored",
+                  null,
+                ],
               },
               confidence: { type: "number" },
             },
@@ -551,6 +638,7 @@ For each transaction, return:
         candidate.suggestedStatus =
           result.status === "business" ||
           result.status === "business_non_deductible" ||
+          result.status === "personal_taxable" ||
           result.status === "personal_ignored"
             ? result.status
             : null

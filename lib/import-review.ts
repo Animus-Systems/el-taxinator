@@ -2,6 +2,7 @@ export type TransactionReviewStatus =
   | "needs_review"
   | "business"
   | "business_non_deductible"
+  | "personal_taxable"
   | "personal_ignored"
 
 type ReviewableCandidate = {
@@ -62,12 +63,14 @@ export function summarizeImportCandidates(candidates: ReviewableCandidate[]): {
     needs_review: 0,
     business: 0,
     business_non_deductible: 0,
+    personal_taxable: 0,
     personal_ignored: 0,
   }
   const totals: SummaryTotals = {
     needs_review: {},
     business: {},
     business_non_deductible: {},
+    personal_taxable: {},
     personal_ignored: {},
   }
 

@@ -324,6 +324,7 @@
       "income": "Ingreso",
       "expense": "Gasto",
       "transfer": "Transferencia",
+      "conversion": "Conversión",
       "other": "Otro"
     },
     "filters": {
@@ -335,15 +336,24 @@
         "outgoing": "Transferencia saliente",
         "incoming": "Transferencia entrante"
       },
-      "unmatchedBadge": "Transferencia sin emparejar — esperando la otra parte"
+      "unmatchedBadge": "Transferencia sin emparejar — contraparte desconocida",
+      "awaitingMatchBadge": "Esperando emparejamiento — cuenta contraparte definida, no se ha encontrado la fila específica",
+      "conversionBadge": "Conversión de divisa"
     },
     "transferDetail": {
       "linkedLabel": "Enlazada como transferencia",
+      "conversionLinkedLabel": "Enlazada como conversión de divisa",
       "unmatchedLabel": "Transferencia sin emparejar — falta la otra parte",
       "openPaired": "Abrir fila emparejada",
       "unlink": "Desenlazar",
       "unlinkConfirmTitle": "¿Desenlazar esta transferencia?",
-      "unlinkConfirmBody": "Ambas partes volverán a su clasificación original (ingreso/gasto). Las filas no se eliminarán."
+      "unlinkConfirmBody": "Ambas partes volverán a su clasificación original (ingreso/gasto). Las filas no se eliminarán.",
+      "realizedFxGain": "Ganancia FX realizada: {amount}",
+      "pickCounterAccount": "Apuntar a otra cuenta:",
+      "pickCounterAccountPlaceholder": "Elige una cuenta…",
+      "externalCounterparty": "Externa / no registrada aquí",
+      "saveCounterAccount": "Guardar",
+      "orphanWithAccountLabel": "Transferencia a {name} — esperando emparejamiento"
     },
     "bulkActions": {
       "linkAsTransfer": "Enlazar como transferencia",
@@ -931,6 +941,10 @@
       "createProjectTitle": "Crear proyecto",
       "deleteTransactionTitle": "Eliminar transacción",
       "deleteRuleTitle": "Eliminar regla",
+      "pairTransfersBulkTitle": "Emparejar transferencias entre cuentas",
+      "pairTransfersBulkDescription": "Buscar transferencias sin emparejar entre {from} y {to} dentro de \u00b11 d\u00eda y enlazarlas",
+      "pairTransfersBulkApplied": "{count} transferencias emparejadas",
+      "pairTransfersBulkNoMatches": "No se encontraron coincidencias sin emparejar en ese rango de fechas",
       "willAffectCount": "Afectará a {count} transacciones",
       "confirmBulkBody": "¿Actualizar {count} transacciones? No se puede deshacer.",
       "confirmDeleteTransactionBody": "¿Eliminar esta transacción permanentemente?",
@@ -956,7 +970,10 @@
     "analyzeWithAi": "Analizar con IA",
     "bankStatement": "Extracto bancario",
     "bankStatementDesc": "Este archivo CSV se puede importar como extracto bancario. Usa la herramienta de importación con IA para asociar transacciones con tus cuentas.",
-    "importAsBankStatement": "Importar como extracto bancario"
+    "importAsBankStatement": "Importar como extracto bancario",
+    "preview": "Vista previa",
+    "edit": "Editar",
+    "unnamedFile": "Archivo sin título"
   },
   "dataExport": {
     "title": "Exportar datos",
@@ -1095,11 +1112,19 @@
     "currenciesTitle": "Monedas",
     "currenciesDesc": "Las monedas personalizadas no se convierten automáticamente pero igualmente puedes tenerlas.",
     "accounts": "Cuentas",
-    "accountsTitle": "Cuentas Bancarias",
-    "accountsDesc": "Gestiona tus cuentas bancarias. Cada cuenta tiene un banco, moneda y número de cuenta.",
-    "bankName": "Banco",
-    "accountNumber": "Número de cuenta",
+    "accountsTitle": "Cuentas",
+    "accountsDesc": "Gestiona tus cuentas — bancos, tarjetas de crédito, exchanges cripto, wallets cripto y efectivo.",
+    "bankName": "Proveedor",
+    "accountNumber": "Identificador",
     "accountActive": "Activa",
+    "accountType": "Tipo",
+    "accountTypes": {
+      "bank": "Banco",
+      "credit_card": "Tarjeta de crédito",
+      "crypto_exchange": "Exchange cripto",
+      "crypto_wallet": "Wallet cripto",
+      "cash": "Efectivo"
+    },
     "dangerTitle": "Zona de peligro",
     "dangerDesc": "Los ajustes aquí sobrescribirán tus campos, categorías y prompts existentes. Úsalos solo si algo está roto.",
     "llmSettingsTitle": "Ajustes de LLM",
@@ -1142,8 +1167,15 @@
     "possibleDuplicate": "Posible duplicado",
     "bankDetected": "Banco detectado",
     "bankUnknown": "No se pudo detectar el banco",
-    "dropFileHere": "Arrastra CSV o PDF aquí",
+    "dropFileHere": "Arrastra CSV, XLSX o PDF aquí",
     "orClickToUpload": "o haz clic para subir",
+    "multiFileHint": "Suelta uno o más archivos. El primer CSV (o el primero disponible) será el principal; los demás se adjuntarán como contexto para el IA.",
+    "primaryChip": "Principal",
+    "contextChip": "Contexto",
+    "primaryChipHint": "Principal — se analizará",
+    "contextChipHint": "Contexto — se inyecta en el prompt de la IA",
+    "sharedBaseHint": "Pareja duplicada detectada: {pair}. Se usa el principal para analizar; el otro se adjunta como contexto.",
+    "attachingContextFiles": "Adjuntando {done} de {total} archivos de contexto…",
     "analyze": "Analizar",
     "rules": "Reglas",
     "rulesDesc": "Define patrones para categorizar transacciones automaticamente. Las reglas manuales siempre tienen prioridad sobre las sugerencias de IA.",
@@ -1387,8 +1419,12 @@
     "entryModeCsv": "CSV",
     "entryModePdf": "PDF",
     "entryModeManual": "Manual",
+    "entryModeDeferred": "Pospuesta",
     "commitDisabledHint": "Revisa todas las filas y asigna una categoría a cada gasto de negocio antes de guardar.",
     "commitSuccess": "Sesión guardada",
+    "commitWithDeferredOne": "Confirmadas · 1 fila pospuesta movida a una nueva sesión",
+    "commitWithDeferredMany": "Confirmadas · {count} filas pospuestas movidas a una nueva sesión",
+    "openDeferredSession": "Abrir",
     "startNewSession": "Iniciar nueva sesión",
     "reportTitle": "Informe de sesión",
     "reportDownload": "Descargar informe (PDF)",
@@ -1409,7 +1445,51 @@
       "proposedBanner": "¿Enlazar como transferencia?",
       "unknownCounterparty": "contraparte desconocida",
       "confirm": "Confirmar enlace",
-      "dismiss": "Descartar"
+      "dismiss": "Descartar",
+      "deferRow": "Posponer esta fila — se conserva en la sesión pero no se comprometerá aún",
+      "includeRow": "Incluir esta fila al commitear",
+      "deferredBadge": "Pospuesta",
+      "duplicateBadge": "Duplicada",
+      "pickCounterAccount": "¿Cuál de tus cuentas es la otra parte?",
+      "pickCounterAccountPlaceholder": "Elige una cuenta…",
+      "externalCounterparty": "Externa / no registrada aquí"
+    },
+    "filters": {
+      "includeDuplicates": "Incluir duplicadas",
+      "includeDeferred": "Incluir pospuestas",
+      "hiddenCount": "Ocultando {count}"
+    },
+    "contextFiles": {
+      "attach": "Adjuntar archivo de contexto",
+      "attaching": "Adjuntando {count} archivo(s)…",
+      "remove": "Quitar archivo adjunto",
+      "primaryChip": "Principal",
+      "contextChip": "Contexto",
+      "attachFailed": "No se pudo adjuntar {name}",
+      "autoAnalyzeOne": "Acabo de adjuntar {name} como contexto. Por favor, revísalo y toma en cuenta todo lo relevante en la revisión actual — reclasifica filas o propone reglas si el nuevo material lo amerita.",
+      "autoAnalyzeMany": "Acabo de adjuntar los siguientes archivos de contexto: {names}. Por favor, revísalos y toma en cuenta todo lo relevante en la revisión actual — reclasifica filas o propone reglas si el nuevo material lo amerita.",
+      "analyzing": "Analizando contexto adjunto…",
+      "analyzeFailed": "Contexto adjuntado pero el análisis falló — envía un mensaje para iniciarlo."
+    },
+    "status": {
+      "needs_review": "Por revisar",
+      "business": "Negocio",
+      "business_non_deductible": "No deducible",
+      "personal_taxable": "Personal (imponible)",
+      "personal_ignored": "Personal (ignorado)"
+    },
+    "committed": {
+      "personalTaxable": "Personal — imponible",
+      "personalIgnored": "Personal — ignorado",
+      "noBusinessActivityHint": "No hay actividad de negocio en esta sesión — las ventas de cripto tributan en la base del ahorro del Modelo 100 (ganancia patrimonial) y las recompensas de staking como rendimientos del capital mobiliario. Ver totales abajo.",
+      "taxRollups": {
+        "title": "Totales relevantes para impuestos",
+        "disposalProceeds": "Importes de venta de cripto",
+        "basisPurchases": "Compras de cripto (base de coste)",
+        "stakingRewards": "Recompensas de staking",
+        "airdrops": "Airdrops de cripto",
+        "pendingBasis": "{count} ventas requieren base FIFO"
+      }
     }
   },
   "reports": {

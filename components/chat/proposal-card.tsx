@@ -11,6 +11,7 @@ import type {
   UpdateTransactionAction,
   ApplyRuleToExistingAction,
   BulkUpdateAction,
+  PairTransfersBulkAction,
 } from "@/lib/db-types"
 
 type Props = {
@@ -98,6 +99,10 @@ function PreviewBlock({
   const t = useTranslations("chat")
   const previewRule = trpc.chat.previewRuleApplication.useMutation()
   const previewBulk = trpc.chat.previewBulkUpdate.useMutation()
+  const accountsQuery = trpc.accounts.listActive.useQuery(
+    {},
+    { enabled: action.kind === "pairTransfersBulk" },
+  )
 
   useEffect(() => {
     if (action.kind === "applyRuleToExisting") {
@@ -117,6 +122,21 @@ function PreviewBlock({
     if (data && data.matchCount > 1000) onTooMany(data.matchCount)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data?.matchCount])
+
+  if (action.kind === "pairTransfersBulk") {
+    const accounts = accountsQuery.data ?? []
+    const fromName = accounts.find((a) => a.id === action.fromAccountId)?.name ?? action.fromAccountId
+    const toName = accounts.find((a) => a.id === action.toAccountId)?.name ?? action.toAccountId
+    return (
+      <div className="mb-2 text-muted-foreground">
+        {t("actions.pairTransfersBulkDescription", {
+          from: fromName,
+          to: toName,
+        })}
+        {action.sinceDate ? ` · ≥ ${action.sinceDate}` : ""}
+      </div>
+    )
+  }
 
   if (action.kind !== "applyRuleToExisting" && action.kind !== "bulkUpdate") return null
 
@@ -191,6 +211,12 @@ function describeAction(
         destructive: true,
         confirmBody: t("actions.confirmDeleteRuleBody"),
       }
+    case "pairTransfersBulk":
+      return {
+        title: t("actions.pairTransfersBulkTitle"),
+        summary: summarizePairTransfersBulk(action),
+        destructive: false,
+      }
   }
 }
 
@@ -212,4 +238,8 @@ function summarizeBulkUpdate(a: BulkUpdateAction): string {
   const f = Object.entries(a.filter).filter(([, v]) => v).map(([k, v]) => `${k}=${v}`).join(", ") || "(no filter)"
   const p = Object.entries(a.patch).filter(([, v]) => v !== undefined).map(([k, v]) => `${k}=${v}`).join(", ") || "(no change)"
   return `filter: ${f}  →  patch: ${p}`
+}
+function summarizePairTransfersBulk(a: PairTransfersBulkAction): string {
+  const since = a.sinceDate ? ` since ${a.sinceDate}` : ""
+  return `from ${a.fromAccountId} → to ${a.toAccountId}${since}`
 }

@@ -12,8 +12,14 @@ interface CrudColumn<T> {
   label: string
   type?: "text" | "number" | "checkbox" | "select" | "color"
   options?: string[]
+  /** Optional value→label map used when type === "select". Keeps raw enum
+   * values on the wire while rendering localized labels in the dropdown. */
+  optionLabels?: Record<string, string>
   defaultValue?: string | boolean
   editable?: boolean
+  /** Optional custom renderer for the read-only cell — lets callers render a
+   * Badge/icon for enum-style columns without duplicating the whole table. */
+  renderCell?: (value: unknown) => ReactNode
 }
 
 interface CrudProps<T> {
@@ -57,6 +63,9 @@ export function CrudTable<T extends Record<string, unknown>>({ items, columns, o
   }
 
   const FormCell = (item: T, column: CrudColumn<T>) => {
+    if (column.renderCell) {
+      return column.renderCell(getCellValue(item, column))
+    }
     if (column.type === "checkbox") {
       return getCellValue(item, column)
         ? <Check className={compact ? "w-3.5 h-3.5 mx-auto" : "mx-auto"} />
@@ -104,7 +113,7 @@ export function CrudTable<T extends Record<string, unknown>>({ items, columns, o
         >
           {column.options?.map((option) => (
             <option key={option} value={option}>
-              {option}
+              {column.optionLabels?.[option] ?? option}
             </option>
           ))}
         </select>
@@ -192,7 +201,7 @@ export function CrudTable<T extends Record<string, unknown>>({ items, columns, o
         >
           {column.options?.map((option) => (
             <option key={option} value={option}>
-              {option}
+              {column.optionLabels?.[option] ?? option}
             </option>
           ))}
         </select>

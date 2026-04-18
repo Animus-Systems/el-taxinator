@@ -15,7 +15,7 @@ import path from "path"
 // 2. Add a migration entry here with the next version number
 // 3. The migration SQL should be idempotent (use IF NOT EXISTS, etc.)
 
-export const SCHEMA_VERSION = 22 // bump this when adding a migration
+export const SCHEMA_VERSION = 25 // bump this when adding a migration
 
 export const migrations: { version: number; description: string; sql: string }[] = [
   {
@@ -639,6 +639,54 @@ export const migrations: { version: number; description: string; sql: string }[]
           extra = COALESCE(extra, '{}'::jsonb) || jsonb_build_object('preMigrationType', p.incoming_type)
       FROM _transfer_pairs_v22 p
       WHERE t.id = p.incoming_id;
+    `,
+  },
+  {
+    version: 23,
+    description: "FX conversion support: add realized_fx_gain_cents and permit type='conversion'",
+    sql: `
+      ALTER TABLE transactions
+        ADD COLUMN IF NOT EXISTS realized_fx_gain_cents integer;
+    `,
+  },
+  {
+    version: 24,
+    description: "import_sessions.context_file_ids — supplementary files attached to a session, injected into wizard prompts",
+    sql: `
+      ALTER TABLE import_sessions
+        ADD COLUMN IF NOT EXISTS context_file_ids jsonb NOT NULL DEFAULT '[]'::jsonb;
+    `,
+  },
+  {
+    version: 25,
+    description: "Backfill crypto_* categories for users who seeded before they existed",
+    sql: `
+      INSERT INTO categories (id, user_id, code, name, color, llm_prompt, tax_form_ref, is_default)
+      SELECT gen_random_uuid(), u.id, c.code, c.name::jsonb, '#6B7280', c.llm_prompt, c.tax_form_ref, true
+      FROM users u
+      CROSS JOIN (VALUES
+        ('crypto_disposal',
+         '{"en":"Crypto Disposal","es":"Disposición de criptomoneda"}',
+         'Sale, withdrawal, or exchange of crypto into fiat or another asset. Triggered by merchants like Swissborg, Coinbase, Binance, Kraken, Bitstamp, Bit2Me, Bitpanda, Crypto.com, Revolut crypto, or any account with account_type crypto_exchange/crypto_wallet.',
+         'Ganancia patrimonial — base del ahorro (Modelo 100) / Modelo 200 SL'),
+        ('crypto_purchase',
+         '{"en":"Crypto Purchase","es":"Compra de criptomoneda"}',
+         'Buying crypto with fiat — not a taxable event, but builds cost basis for FIFO tracking.',
+         'Coste de adquisición (FIFO, no deducible directo)'),
+        ('crypto_fee',
+         '{"en":"Crypto Network Fee","es":"Comisión de red/exchange"}',
+         'Network gas fees, exchange trading fees, withdrawal fees on crypto platforms.',
+         'Coste asociado al activo'),
+        ('crypto_staking_reward',
+         '{"en":"Staking Reward","es":"Recompensa de staking"}',
+         'Staking rewards, lending interest, yield farming, liquidity provision payouts.',
+         'Rendimiento del capital mobiliario (Modelo 100)'),
+        ('crypto_airdrop',
+         '{"en":"Airdrop","es":"Airdrop"}',
+         'Free token airdrops, hard-fork distributions, free NFTs. Taxed at fair market value on receipt.',
+         'Ganancia patrimonial sin valor de adquisición')
+      ) AS c(code, name, llm_prompt, tax_form_ref)
+      ON CONFLICT (user_id, code) DO NOTHING;
     `,
   },
 ]

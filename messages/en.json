@@ -324,6 +324,7 @@
       "income": "Income",
       "expense": "Expense",
       "transfer": "Transfer",
+      "conversion": "Conversion",
       "other": "Other"
     },
     "filters": {
@@ -335,15 +336,24 @@
         "outgoing": "Transfer out",
         "incoming": "Transfer in"
       },
-      "unmatchedBadge": "Unmatched transfer — awaiting the other leg"
+      "unmatchedBadge": "Unmatched transfer — counterparty unknown",
+      "awaitingMatchBadge": "Awaiting match — counterparty account set, specific row not found yet",
+      "conversionBadge": "Currency conversion"
     },
     "transferDetail": {
       "linkedLabel": "Linked as transfer",
+      "conversionLinkedLabel": "Linked as currency conversion",
       "unmatchedLabel": "Unmatched transfer — no counterparty linked yet",
       "openPaired": "Open paired row",
       "unlink": "Unlink",
       "unlinkConfirmTitle": "Unlink this transfer?",
-      "unlinkConfirmBody": "Both legs will go back to their original income/expense classification. The underlying rows will not be deleted."
+      "unlinkConfirmBody": "Both legs will go back to their original income/expense classification. The underlying rows will not be deleted.",
+      "realizedFxGain": "Realized FX: {amount}",
+      "pickCounterAccount": "Point to another account:",
+      "pickCounterAccountPlaceholder": "Pick an account…",
+      "externalCounterparty": "External / not tracked here",
+      "saveCounterAccount": "Save",
+      "orphanWithAccountLabel": "Transfer to {name} — awaiting match"
     },
     "bulkActions": {
       "linkAsTransfer": "Link as transfer",
@@ -931,6 +941,10 @@
       "createProjectTitle": "Create project",
       "deleteTransactionTitle": "Delete transaction",
       "deleteRuleTitle": "Delete rule",
+      "pairTransfersBulkTitle": "Match transfers between accounts",
+      "pairTransfersBulkDescription": "Scan {from} and {to} for unpaired transfers within \u00b11 day and link them",
+      "pairTransfersBulkApplied": "Paired {count} transfers",
+      "pairTransfersBulkNoMatches": "No unpaired matches found in that date range",
       "willAffectCount": "Will affect {count} transactions",
       "confirmBulkBody": "Update {count} transactions? This can't be undone.",
       "confirmDeleteTransactionBody": "Delete this transaction permanently?",
@@ -956,7 +970,10 @@
     "analyzeWithAi": "Analyze with AI",
     "bankStatement": "Bank Statement",
     "bankStatementDesc": "This CSV file can be imported as a bank statement. Use the AI Import tool to match transactions with your accounts.",
-    "importAsBankStatement": "Import as Bank Statement"
+    "importAsBankStatement": "Import as Bank Statement",
+    "preview": "Preview",
+    "edit": "Edit",
+    "unnamedFile": "Untitled file"
   },
   "dataExport": {
     "title": "Data Export",
@@ -1095,11 +1112,19 @@
     "currenciesTitle": "Currencies",
     "currenciesDesc": "Custom currencies would not be automatically converted but you still can have them.",
     "accounts": "Accounts",
-    "accountsTitle": "Bank Accounts",
-    "accountsDesc": "Manage your bank accounts. Each account tracks a specific bank, currency, and account number.",
-    "bankName": "Bank",
-    "accountNumber": "Account Number",
+    "accountsTitle": "Accounts",
+    "accountsDesc": "Manage your accounts — banks, credit cards, crypto exchanges, crypto wallets, and cash.",
+    "bankName": "Provider",
+    "accountNumber": "Identifier",
     "accountActive": "Active",
+    "accountType": "Type",
+    "accountTypes": {
+      "bank": "Bank",
+      "credit_card": "Credit card",
+      "crypto_exchange": "Crypto exchange",
+      "crypto_wallet": "Crypto wallet",
+      "cash": "Cash"
+    },
     "dangerTitle": "The Danger Zone",
     "dangerDesc": "The settings here will overwrite your existing fields, categories and prompts. Use them only if something is broken.",
     "llmSettingsTitle": "LLM settings",
@@ -1142,8 +1167,15 @@
     "possibleDuplicate": "Possible duplicate",
     "bankDetected": "Bank detected",
     "bankUnknown": "Could not detect bank",
-    "dropFileHere": "Drop CSV or PDF here",
+    "dropFileHere": "Drop CSV, XLSX, or PDF here",
     "orClickToUpload": "or click to upload",
+    "multiFileHint": "Drop one or more files. The first CSV (or first file) becomes the primary; others are attached as context for the AI.",
+    "primaryChip": "Primary",
+    "contextChip": "Context",
+    "primaryChipHint": "Primary — will be parsed",
+    "contextChipHint": "Context — injected into AI prompt",
+    "sharedBaseHint": "Detected a duplicate pair: {pair}. Using the primary for parsing; the other is attached as context.",
+    "attachingContextFiles": "Attaching {done} of {total} context files…",
     "analyze": "Analyze",
     "rules": "Rules",
     "rulesDesc": "Define patterns to automatically categorize transactions. Manual rules always override AI suggestions.",
@@ -1387,8 +1419,12 @@
     "entryModeCsv": "CSV",
     "entryModePdf": "PDF",
     "entryModeManual": "Manual",
+    "entryModeDeferred": "Deferred",
     "commitDisabledHint": "Review all rows and assign a category to every business row before committing.",
     "commitSuccess": "Session committed",
+    "commitWithDeferredOne": "Committed · 1 deferred row moved to a new session",
+    "commitWithDeferredMany": "Committed · {count} deferred rows moved to a new session",
+    "openDeferredSession": "Open",
     "startNewSession": "Start a new session",
     "reportTitle": "Session report",
     "reportDownload": "Download report (PDF)",
@@ -1409,7 +1445,51 @@
       "proposedBanner": "Link as a transfer?",
       "unknownCounterparty": "unknown counterparty",
       "confirm": "Confirm link",
-      "dismiss": "Dismiss"
+      "dismiss": "Dismiss",
+      "deferRow": "Skip this row — keep in session but don't commit yet",
+      "includeRow": "Include this row in the commit",
+      "deferredBadge": "Deferred",
+      "duplicateBadge": "Duplicate",
+      "pickCounterAccount": "Which of your accounts is the other side?",
+      "pickCounterAccountPlaceholder": "Pick an account…",
+      "externalCounterparty": "External / not tracked here"
+    },
+    "filters": {
+      "includeDuplicates": "Include duplicates",
+      "includeDeferred": "Include deferred",
+      "hiddenCount": "Hiding {count}"
+    },
+    "contextFiles": {
+      "attach": "Attach context file",
+      "attaching": "Attaching {count} file(s)…",
+      "remove": "Remove attached file",
+      "primaryChip": "Primary",
+      "contextChip": "Context",
+      "attachFailed": "Couldn't attach {name}",
+      "autoAnalyzeOne": "I just attached {name} as context. Please scan it and factor anything relevant into the current review — reclassify rows or propose rules if the new material warrants it.",
+      "autoAnalyzeMany": "I just attached the following context files: {names}. Please scan them and factor anything relevant into the current review — reclassify rows or propose rules if the new material warrants it.",
+      "analyzing": "Analyzing attached context…",
+      "analyzeFailed": "Context attached but analysis failed — try sending a message to kick it off."
+    },
+    "status": {
+      "needs_review": "Needs review",
+      "business": "Business",
+      "business_non_deductible": "Non-deductible",
+      "personal_taxable": "Personal (taxable)",
+      "personal_ignored": "Personal (ignored)"
+    },
+    "committed": {
+      "personalTaxable": "Personal — taxable",
+      "personalIgnored": "Personal — ignored",
+      "noBusinessActivityHint": "No business activity in this session — crypto disposals are taxed on Modelo 100 savings base (ganancia patrimonial), staking rewards as rendimientos capital mobiliario. See rollups below.",
+      "taxRollups": {
+        "title": "Tax-meaningful rollups",
+        "disposalProceeds": "Crypto disposal proceeds",
+        "basisPurchases": "Crypto purchases (building basis)",
+        "stakingRewards": "Crypto staking rewards",
+        "airdrops": "Crypto airdrops",
+        "pendingBasis": "{count} disposals need FIFO basis"
+      }
     }
   },
   "reports": {

@@ -569,7 +569,7 @@ export function ReviewTable({
         </div>
       </div>
 
-      <div className="grid gap-3 md:grid-cols-4">
+      <div className="grid gap-3 md:grid-cols-5">
         <Card>
           <CardContent className="p-3">
             <p className="text-xs text-muted-foreground">Needs review</p>
@@ -595,7 +595,16 @@ export function ReviewTable({
         </Card>
         <Card>
           <CardContent className="p-3">
-            <p className="text-xs text-muted-foreground">Personal / ignored</p>
+            <p className="text-xs text-muted-foreground">Personal (taxable)</p>
+            <p className="text-lg font-semibold">{summary.counts.personal_taxable}</p>
+            <p className="text-xs text-muted-foreground">
+              {formatStatusTotals(summary.totals.personal_taxable)}
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-3">
+            <p className="text-xs text-muted-foreground">Personal (ignored)</p>
             <p className="text-lg font-semibold">{summary.counts.personal_ignored}</p>
             <p className="text-xs text-muted-foreground">{formatStatusTotals(summary.totals.personal_ignored)}</p>
           </CardContent>
@@ -785,7 +794,8 @@ export function ReviewTable({
                         <SelectItem value="business_non_deductible">
                           Business, non-deductible
                         </SelectItem>
-                        <SelectItem value="personal_ignored">Personal / ignored</SelectItem>
+                        <SelectItem value="personal_taxable">Personal (taxable)</SelectItem>
+                        <SelectItem value="personal_ignored">Personal (ignored)</SelectItem>
                       </SelectContent>
                     </Select>
                     {row.suggestedStatus && row.status === "needs_review" && (

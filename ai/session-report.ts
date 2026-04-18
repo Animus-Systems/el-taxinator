@@ -27,6 +27,15 @@ export type StatusTotal = {
   amount: number        // cents
 }
 
+export type TaxRollups = {
+  disposalProceeds: number     // cents — category=crypto_disposal total
+  basisPurchases: number       // cents — category=crypto_purchase total
+  stakingRewards: number       // cents — category=crypto_staking_reward total
+  airdrops: number             // cents — category=crypto_airdrop total
+  disposalCount: number
+  pendingBasisCount: number    // disposals where extra.crypto.costBasisPerUnit is null/missing
+}
+
 export type SessionReport = {
   session: {
     id: string
@@ -48,12 +57,14 @@ export type SessionReport = {
   totals: {
     byStatus: Record<string, StatusTotal>
     byCategory: CategoryTotal[]
-    deductibleTotal: number       // cents — sum of `business` rows with a category
-    nonDeductibleTotal: number    // cents — sum of `business_non_deductible`
-    personalTotal: number         // cents — sum of `personal_ignored`
-    grandTotal: number            // cents — sum of all selected rows
-    currencyCode: string | null   // best-effort: dominant currency on the session
+    deductibleTotal: number          // cents — sum of `business` rows with a category
+    nonDeductibleTotal: number       // cents — sum of `business_non_deductible`
+    personalTaxableTotal: number     // cents — sum of `personal_taxable`
+    personalTotal: number            // cents — sum of `personal_ignored`
+    grandTotal: number               // cents — sum of all selected rows
+    currencyCode: string | null      // best-effort: dominant currency on the session
   }
+  taxRollups: TaxRollups
   taxTipsCollected: TaxTip[]
   businessFactsLearned: BusinessFact[]
   conversationDigest: Array<{
@@ -85,7 +96,7 @@ export async function buildSessionReport(sessionId: string, userId: string): Pro
     : []
   const messages: WizardMessage[] = Array.isArray(session.messages) ? session.messages : []
 
-  const totals = computeTotals(candidates, categories)
+  const { totals, taxRollups } = computeTotals(candidates, categories)
   const taxTipsCollected = collectTaxTips(messages)
   const factsForSession = businessFacts.filter((f) => f.learnedFromSessionId === session.id)
   const conversationDigest = buildDigest(messages, 30)
@@ -110,6 +121,7 @@ export async function buildSessionReport(sessionId: string, userId: string): Pro
     },
     user: userSummary(user),
     totals,
+    taxRollups,
     taxTipsCollected,
     businessFactsLearned: factsForSession,
     conversationDigest,
@@ -125,10 +137,11 @@ export async function buildSessionReport(sessionId: string, userId: string): Pro
 export function computeTotals(
   candidates: TransactionCandidate[],
   categories: Array<{ code: string; name: unknown; taxFormRef?: string | null }>,
-): SessionReport["totals"] {
+): { totals: SessionReport["totals"]; taxRollups: TaxRollups } {
   const byStatus: Record<string, StatusTotal> = {
     business: { count: 0, amount: 0 },
     business_non_deductible: { count: 0, amount: 0 },
+    personal_taxable: { count: 0, amount: 0 },
     personal_ignored: { count: 0, amount: 0 },
     needs_review: { count: 0, amount: 0 },
   }
@@ -137,8 +150,18 @@ export function computeTotals(
 
   let deductibleTotal = 0
   let nonDeductibleTotal = 0
+  let personalTaxableTotal = 0
   let personalTotal = 0
   let grandTotal = 0
+
+  const taxRollups: TaxRollups = {
+    disposalProceeds: 0,
+    basisPurchases: 0,
+    stakingRewards: 0,
+    airdrops: 0,
+    disposalCount: 0,
+    pendingBasisCount: 0,
+  }
 
   const categoryLookup = new Map<string, { name: unknown; taxFormRef?: string | null }>()
   for (const c of categories) {
@@ -168,6 +191,7 @@ export function computeTotals(
 
     if (status === "business") deductibleTotal += total
     else if (status === "business_non_deductible") nonDeductibleTotal += total
+    else if (status === "personal_taxable") personalTaxableTotal += total
     else if (status === "personal_ignored") personalTotal += total
 
     if (c.categoryCode) {
@@ -186,6 +210,30 @@ export function computeTotals(
         })
       }
     }
+
+    // Tax-meaningful rollups — populate per candidate category. These ignore
+    // status because the FIFO ledger and category-based tax queries don't
+    // branch on status either. Sum in cents; proceeds/rewards use absolute
+    // total so signed bank-like values don't cancel out.
+    const categoryCode = c.categoryCode
+    if (categoryCode === "crypto_disposal") {
+      taxRollups.disposalProceeds += Math.abs(total)
+      taxRollups.disposalCount += 1
+      const cryptoMeta = c.extra?.crypto
+      const hasBasis =
+        cryptoMeta !== undefined &&
+        cryptoMeta.costBasisPerUnit !== null &&
+        cryptoMeta.costBasisPerUnit !== undefined
+      if (!hasBasis) {
+        taxRollups.pendingBasisCount += 1
+      }
+    } else if (categoryCode === "crypto_purchase") {
+      taxRollups.basisPurchases += Math.abs(total)
+    } else if (categoryCode === "crypto_staking_reward") {
+      taxRollups.stakingRewards += Math.abs(total)
+    } else if (categoryCode === "crypto_airdrop") {
+      taxRollups.airdrops += Math.abs(total)
+    }
   }
 
   const byCategory = [...byCategoryMap.values()].sort((a, b) => b.amount - a.amount)
@@ -193,13 +241,17 @@ export function computeTotals(
     [...currencyTally.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null
 
   return {
-    byStatus,
-    byCategory,
-    deductibleTotal,
-    nonDeductibleTotal,
-    personalTotal,
-    grandTotal,
-    currencyCode,
+    totals: {
+      byStatus,
+      byCategory,
+      deductibleTotal,
+      nonDeductibleTotal,
+      personalTaxableTotal,
+      personalTotal,
+      grandTotal,
+      currencyCode,
+    },
+    taxRollups,
   }
 }
 

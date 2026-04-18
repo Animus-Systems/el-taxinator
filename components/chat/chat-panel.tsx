@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react"
 import { useTranslations } from "next-intl"
+import { toast } from "sonner"
 import { trpc } from "~/trpc"
 import { Button } from "@/components/ui/button"
 import { Loader2, Send, Trash2 } from "lucide-react"
@@ -13,9 +14,15 @@ import type { ProposedAction } from "@/lib/db-types"
 type Props = {
   contextTransactionId?: string
   className?: string
+  /** When true, suppress the internal header (title + clear button). Callers
+   * that wrap the panel in their own chrome (e.g. the floating panel) render
+   * those controls themselves to avoid a duplicate title. */
+  hideHeader?: boolean
+  /** Exposed so a wrapper can invoke "clear history" from its own header. */
+  onClearRequest?: () => void
 }
 
-export function ChatPanel({ contextTransactionId, className }: Props) {
+export function ChatPanel({ contextTransactionId, className, hideHeader = false }: Props) {
   const t = useTranslations("chat")
   const confirm = useConfirm()
   const utils = trpc.useUtils()
@@ -37,13 +44,23 @@ export function ChatPanel({ contextTransactionId, className }: Props) {
   })
 
   const applyAction = trpc.chat.applyProposedAction.useMutation({
-    onSuccess: () => {
+    onSuccess: (data) => {
       void utils.chat.list.invalidate()
       void utils.transactions.list.invalidate()
       void utils.transactions.getById.invalidate()
       void utils.rules.list.invalidate()
       void utils.categories.list.invalidate()
       void utils.projects.list.invalidate()
+      // Surface the concrete outcome so the user sees what actually happened
+      // (the "Applied" badge on the message is generic; this adds specificity).
+      const result = data?.result as { paired?: number } | undefined
+      if (result && typeof result.paired === "number") {
+        if (result.paired > 0) {
+          toast.success(t("actions.pairTransfersBulkApplied", { count: result.paired }))
+        } else {
+          toast.info(t("actions.pairTransfersBulkNoMatches"))
+        }
+      }
     },
   })
   const applyRule = trpc.chat.applyProposedRule.useMutation({
@@ -96,18 +113,20 @@ export function ChatPanel({ contextTransactionId, className }: Props) {
 
   return (
     <div className={cn("flex h-full flex-col", className)}>
-      <header className="flex items-center justify-between border-b px-3 py-2 pr-10">
-        <span className="text-sm font-semibold">{t("title")}</span>
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={handleClear}
-          title={t("clearHistory")}
-          disabled={clear.isPending}
-        >
-          <Trash2 className="h-4 w-4" />
-        </Button>
-      </header>
+      {!hideHeader && (
+        <header className="flex items-center justify-between border-b px-3 py-2 pr-10">
+          <span className="text-sm font-semibold">{t("title")}</span>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={handleClear}
+            title={t("clearHistory")}
+            disabled={clear.isPending}
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </header>
+      )}
 
       <div ref={listRef} className="flex-1 overflow-y-auto px-3 py-2 space-y-2">
         {isLoading && (

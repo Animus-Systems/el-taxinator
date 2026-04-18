@@ -1,16 +1,42 @@
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
+import { toast } from "sonner"
 import { useConfirm } from "@/components/ui/confirm-dialog"
 import { useNavigate } from "@tanstack/react-router"
 import { trpc } from "~/trpc"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
-import { Archive, CheckCircle2, Loader2, PanelBottomClose, Trash2 } from "lucide-react"
+import { Archive, CheckCircle2, Loader2, Paperclip, PanelBottomClose, Trash2, X } from "lucide-react"
 import { WizardChat } from "./wizard-chat"
 import { WizardCandidatePanel } from "./wizard-candidate-panel"
 import type { TransactionCandidate } from "@/ai/import-csv"
 import { validateImportCommit } from "@/lib/import-review"
 import { useWizardDock } from "@/lib/wizard-dock-context"
+
+type FileUploadResponse = {
+  success: boolean
+  error?: string
+  files?: Array<{ id: string; filename: string }>
+}
+
+async function uploadContextFile(file: File): Promise<string> {
+  const form = new FormData()
+  form.append("files", file)
+  const resp = await fetch("/api/files/upload", {
+    method: "POST",
+    body: form,
+    credentials: "include",
+  })
+  if (!resp.ok) {
+    throw new Error(`upload failed (${resp.status})`)
+  }
+  const json = (await resp.json()) as FileUploadResponse
+  const created = json.files?.[0]
+  if (!json.success || !created) {
+    throw new Error(json.error ?? "upload failed")
+  }
+  return created.id
+}
 
 type ViewMode = "split" | "chat" | "table"
 
@@ -27,6 +53,28 @@ export function WizardShell({ sessionId }: Props) {
   const [view, setView] = useState<ViewMode>("split")
   const [committing, setCommitting] = useState(false)
   const [commitError, setCommitError] = useState<string | null>(null)
+  const [attachingCount, setAttachingCount] = useState(0)
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
+
+  const addContextFile = trpc.wizard.addContextFile.useMutation({
+    onSuccess: () => utils.wizard.get.invalidate({ sessionId }),
+  })
+  const removeContextFile = trpc.wizard.removeContextFile.useMutation({
+    onSuccess: () => utils.wizard.get.invalidate({ sessionId }),
+  })
+  // Auto-turn kicked off after a successful context-file attach: the AI reads
+  // the new material and reclassifies proactively, instead of waiting for the
+  // user to send another message manually.
+  const sendTurn = trpc.wizard.sendTurn.useMutation({
+    onSuccess: () => utils.wizard.get.invalidate({ sessionId }),
+    onError: () => {
+      toast.error(t("contextFiles.analyzeFailed"))
+    },
+  })
+
+  const handleRemoveContext = (fileId: string) => {
+    removeContextFile.mutate({ sessionId, fileId })
+  }
 
   function handleDock() {
     dock.setSession(sessionId)
@@ -34,6 +82,85 @@ export function WizardShell({ sessionId }: Props) {
   }
 
   const { data, isLoading, isFetching, error } = trpc.wizard.get.useQuery({ sessionId })
+
+  const handleAttachContextFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const fileList = Array.from(e.target.files ?? [])
+    e.target.value = ""
+    if (fileList.length === 0) return
+    setAttachingCount(fileList.length)
+    const attachedNames: string[] = []
+    try {
+      for (const file of fileList) {
+        try {
+          const fileId = await uploadContextFile(file)
+          await addContextFile.mutateAsync({ sessionId, fileId })
+          attachedNames.push(file.name)
+        } catch (err) {
+          console.warn("Failed to attach context file:", file.name, err)
+          toast.error(t("contextFiles.attachFailed", { name: file.name }))
+        }
+      }
+    } finally {
+      setAttachingCount(0)
+    }
+
+    // After every attachment in the batch has been processed, fire ONE
+    // wizard turn so the AI ingests the new material and acts on it. If every
+    // attach failed we skip the turn — nothing new to analyze.
+    //
+    // Force ALL candidates into the focus window regardless of status — when a
+    // user attaches context specifically to re-evaluate the session, the AI
+    // needs to see every row, not just `needs_review` ones (otherwise already-
+    // classified rows get elided and the AI reports "no candidate rows loaded").
+    if (attachedNames.length > 0) {
+      const firstName = attachedNames[0]
+      const userMessage =
+        attachedNames.length === 1 && firstName !== undefined
+          ? t("contextFiles.autoAnalyzeOne", { name: firstName })
+          : t("contextFiles.autoAnalyzeMany", { names: attachedNames.join(", ") })
+      const candidates = (data?.candidates ?? []) as Array<{ rowIndex?: number }>
+      const focusRowIndexes = candidates
+        .map((c) => c.rowIndex)
+        .filter((i): i is number => typeof i === "number")
+      sendTurn.mutate({
+        sessionId,
+        userMessage,
+        ...(focusRowIndexes.length > 0 ? { focusRowIndexes } : {}),
+      })
+    }
+  }
+
+  // Auto-kick the first categorization turn when the session has ONLY the
+  // seeded opening message and no prior user input. Classifies eagerly instead
+  // of waiting for the user to say "go". Once-per-session via a ref so React
+  // strict-mode + refetches don't fire it twice.
+  const autoKickedRef = useRef(false)
+  useEffect(() => {
+    if (autoKickedRef.current) return
+    if (!data) return
+    if (data.messages.length !== 1) return
+    const only = data.messages[0]
+    if (!only || only.role !== "assistant") return
+    const candidates = (data.candidates ?? []) as Array<{ rowIndex?: number; status?: string }>
+    const hasReviewable = candidates.some(
+      (c) => !c.status || c.status === "needs_review",
+    )
+    if (!hasReviewable) return
+    if (sendTurn.isPending) return
+    autoKickedRef.current = true
+    const focusRowIndexes = candidates
+      .map((c) => c.rowIndex)
+      .filter((i): i is number => typeof i === "number")
+    sendTurn.mutate({
+      sessionId,
+      userMessage:
+        "Please classify all rows now. Propose rules when you spot patterns, " +
+        "surface any crypto rows that need cost basis, and flag anything " +
+        "ambiguous with a specific question rather than guessing.",
+      ...(focusRowIndexes.length > 0 ? { focusRowIndexes } : {}),
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data?.messages.length, sessionId])
 
   const abandonMutation = trpc.wizard.abandonSession.useMutation({
     onSuccess: () => {
@@ -72,6 +199,7 @@ export function WizardShell({ sessionId }: Props) {
 
   const candidates = (data.candidates as unknown[] as TransactionCandidate[]) ?? []
   const messages = data.messages ?? []
+  const contextFiles = data.contextFiles ?? []
 
   const selectedRows = candidates.filter((c) => c.selected)
   const validation = validateImportCommit(selectedRows)
@@ -96,12 +224,47 @@ export function WizardShell({ sessionId }: Props) {
         created?: number
         error?: string
         validationErrors?: unknown
+        deferredSessionId?: string | null
+        deferredCount?: number
+        rowErrors?: Array<{ rowIndex: number; message: string }>
       }
       if (!json.success) {
         throw new Error(json.error || "commit failed")
       }
       utils.wizard.listResumable.invalidate()
       utils.wizard.listArchived.invalidate()
+
+      // Surface partial per-row failures: the request succeeded overall but some
+      // rows couldn't be inserted (e.g. FK violation on a missing category).
+      // Toast a warning and log the offending rows so the user can correct them.
+      if (json.rowErrors && json.rowErrors.length > 0) {
+        const firstErr = json.rowErrors[0]
+        const firstMsg = firstErr ? firstErr.message : "unknown error"
+        const createdCount = json.created ?? 0
+        const totalAttempted = createdCount + json.rowErrors.length
+        console.error("[wizard/commit] per-row failures:", json.rowErrors)
+        toast.warning(
+          `Committed ${createdCount} of ${totalAttempted} rows. ` +
+            `${json.rowErrors.length} failed. First error: ${firstMsg}`,
+          { duration: 10_000 },
+        )
+      }
+
+      const deferredId = json.deferredSessionId
+      const deferredN = json.deferredCount ?? 0
+      if (deferredId && deferredN > 0) {
+        const message =
+          deferredN === 1
+            ? t("commitWithDeferredOne")
+            : t("commitWithDeferredMany", { count: deferredN })
+        toast.success(message, {
+          action: {
+            label: t("openDeferredSession"),
+            onClick: () => navigate({ to: `/wizard/${deferredId}` as string }),
+          },
+        })
+      }
+
       navigate({ to: `/wizard/${sessionId}/committed` as string })
     } catch (err) {
       setCommitError(err instanceof Error ? err.message : "commit failed")
@@ -209,6 +372,58 @@ export function WizardShell({ sessionId }: Props) {
         </div>
       </header>
 
+      <div className="flex flex-wrap items-center gap-1.5 mb-3 -mt-2">
+        {contextFiles.map((f) => (
+          <span
+            key={f.id}
+            className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-0.5 text-xs text-muted-foreground"
+          >
+            <Paperclip className="h-3 w-3" />
+            <span className="truncate max-w-[140px]" title={f.fileName}>
+              {f.fileName}
+            </span>
+            <button
+              type="button"
+              onClick={() => handleRemoveContext(f.id)}
+              className="rounded-sm hover:bg-destructive/10 hover:text-destructive disabled:opacity-40"
+              aria-label={t("contextFiles.remove")}
+              disabled={removeContextFile.isPending}
+            >
+              <X className="h-3 w-3" />
+            </button>
+          </span>
+        ))}
+        <button
+          type="button"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={attachingCount > 0}
+          className="inline-flex items-center gap-1 rounded-md border border-dashed border-muted-foreground/30 px-2 py-0.5 text-xs text-muted-foreground hover:text-foreground hover:border-foreground/40 disabled:opacity-40"
+        >
+          {attachingCount > 0 ? (
+            <Loader2 className="h-3 w-3 animate-spin" />
+          ) : (
+            <Paperclip className="h-3 w-3" />
+          )}
+          {attachingCount > 0
+            ? t("contextFiles.attaching", { count: attachingCount })
+            : t("contextFiles.attach")}
+        </button>
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          accept=".csv,.xlsx,.xls,.pdf,.txt,.md,.docx,.doc"
+          className="hidden"
+          onChange={handleAttachContextFiles}
+        />
+        {sendTurn.isPending ? (
+          <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground ml-1">
+            <Loader2 className="h-3 w-3 animate-spin" />
+            {t("contextFiles.analyzing")}
+          </span>
+        ) : null}
+      </div>
+
       {commitError ? (
         <div className="mb-2 rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-xs text-destructive">
           {commitError}
@@ -223,9 +438,10 @@ export function WizardShell({ sessionId }: Props) {
                 sessionId={sessionId}
                 messages={messages}
                 pendingTurnAt={data.pendingTurnAt}
+                externalTurnPending={sendTurn.isPending}
               />
             </Card>
-            <div className="lg:col-span-3 min-h-0 overflow-hidden">
+            <div className="lg:col-span-3 min-h-0 overflow-hidden flex flex-col">
               <WizardCandidatePanel sessionId={sessionId} candidates={candidates} />
             </div>
           </div>
@@ -237,12 +453,13 @@ export function WizardShell({ sessionId }: Props) {
               sessionId={sessionId}
               messages={messages}
               pendingTurnAt={data.pendingTurnAt}
+              externalTurnPending={sendTurn.isPending}
             />
           </Card>
         ) : null}
 
         {view === "table" ? (
-          <div className="flex-1 min-h-0 overflow-auto">
+          <div className="flex-1 min-h-0 flex flex-col">
             <WizardCandidatePanel sessionId={sessionId} candidates={candidates} />
           </div>
         ) : null}

@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto"
 import { requestLLM, type LLMResponse } from "./providers/llmProvider"
 import { buildWizardPrompt, getWizardReplySchema, WIZARD_PROMPT_VERSION } from "./wizard-prompt"
-import type { TransactionCandidate } from "./import-csv"
+import type { ProposedTransferLink, TransactionCandidate } from "./import-csv"
 import {
   wizardAssistantReplySchema,
   type BulkAction,
@@ -25,6 +25,7 @@ import {
   setBusinessContextSnapshot,
 } from "@/models/import-sessions"
 import { getUserById } from "@/models/users"
+import { loadContextFileText, type ContextFileText } from "@/lib/context-file-text"
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -77,6 +78,7 @@ export async function processWizardTurn(input: ProcessTurnInput): Promise<Proces
 
   const candidates = readSessionCandidates(session)
   const messages = readSessionMessages(session)
+  const contextFiles = await loadSessionContextFiles(session.contextFileIds, input.userId)
 
   const { prompt, promptVersion } = buildWizardPrompt({
     entityType: (user.entityType as EntityType | null) ?? null,
@@ -93,6 +95,7 @@ export async function processWizardTurn(input: ProcessTurnInput): Promise<Proces
     messages,
     userMessage: input.userMessage,
     defaultAccountId: session.accountId ?? null,
+    contextFiles,
   })
 
   const llmSettings = getLLMSettings(settings)
@@ -123,10 +126,28 @@ export async function processWizardTurn(input: ProcessTurnInput): Promise<Proces
   for (const link of parsed.proposedTransferLinks ?? []) {
     const a = candidates.find((c) => c.rowIndex === link.rowIndexA)
     if (!a) continue
-    a.extra = { ...(a.extra ?? {}), proposedTransferLink: link }
+    // Normalize the Zod-inferred `counterAccountId?: string | null | undefined`
+    // shape to `ProposedTransferLink`'s `counterAccountId?: string | null`
+    // (exactOptionalPropertyTypes forbids `undefined` on optional fields).
+    const normalized: ProposedTransferLink =
+      link.counterAccountId !== undefined
+        ? {
+            rowIndexA: link.rowIndexA,
+            rowIndexB: link.rowIndexB,
+            confidence: link.confidence,
+            reason: link.reason,
+            counterAccountId: link.counterAccountId,
+          }
+        : {
+            rowIndexA: link.rowIndexA,
+            rowIndexB: link.rowIndexB,
+            confidence: link.confidence,
+            reason: link.reason,
+          }
+    a.extra = { ...(a.extra ?? {}), proposedTransferLink: normalized }
     if (link.rowIndexB !== null) {
       const b = candidates.find((c) => c.rowIndex === link.rowIndexB)
-      if (b) b.extra = { ...(b.extra ?? {}), proposedTransferLink: link }
+      if (b) b.extra = { ...(b.extra ?? {}), proposedTransferLink: normalized }
     }
   }
 
@@ -304,6 +325,22 @@ export function makeFailureMessage(errorText: string): WizardMessage {
     status: "failed",
     error: errorText,
   }
+}
+
+/**
+ * Resolve the session's `context_file_ids` array into loaded text blobs. Each
+ * file is loaded in parallel; missing/deleted files are dropped silently so a
+ * broken attachment never blocks a turn.
+ */
+async function loadSessionContextFiles(
+  rawIds: unknown,
+  userId: string,
+): Promise<ContextFileText[]> {
+  if (!Array.isArray(rawIds) || rawIds.length === 0) return []
+  const ids = rawIds.filter((id): id is string => typeof id === "string")
+  if (ids.length === 0) return []
+  const loaded = await Promise.all(ids.map((id) => loadContextFileText(id, userId)))
+  return loaded.filter((f): f is ContextFileText => f !== null)
 }
 
 function readSessionCandidates(session: ImportSession): TransactionCandidate[] {

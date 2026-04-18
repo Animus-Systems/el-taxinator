@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { ChatPanel } from "@/components/chat/chat-panel"
 import { Button } from "@/components/ui/button"
+import { useConfirm } from "@/components/ui/confirm-dialog"
 import { cn } from "@/lib/utils"
-import { GripVertical, X } from "lucide-react"
+import { GripVertical, Trash2, X } from "lucide-react"
 import { useTranslations } from "next-intl"
+import { trpc } from "~/trpc"
 
 type Rect = { x: number; y: number; w: number; h: number }
 
@@ -63,6 +65,21 @@ type ChatFloatingPanelProps = {
 
 export function ChatFloatingPanel({ onClose }: ChatFloatingPanelProps) {
   const t = useTranslations("chat")
+  const tChat = t  // alias for the trash-button tooltip so future expansion is easy
+  const confirm = useConfirm()
+  const utils = trpc.useUtils()
+  const clearChat = trpc.chat.clear.useMutation({
+    onSuccess: () => void utils.chat.list.invalidate(),
+  })
+  const handleClear = async () => {
+    const ok = await confirm({
+      title: t("clearConfirmTitle"),
+      description: t("clearConfirmBody"),
+      confirmLabel: t("clearHistory"),
+      variant: "destructive",
+    })
+    if (ok) clearChat.mutate()
+  }
   const [rect, setRect] = useState<Rect>(() => {
     const stored = readStoredRect()
     return clampRect(stored ?? defaultRect())
@@ -168,6 +185,19 @@ export function ChatFloatingPanel({ onClose }: ChatFloatingPanelProps) {
           variant="ghost"
           size="icon"
           className="ml-auto h-7 w-7"
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={handleClear}
+          disabled={clearChat.isPending}
+          aria-label={tChat("clearHistory")}
+          title={tChat("clearHistory")}
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7"
+          onPointerDown={(e) => e.stopPropagation()}
           onClick={onClose}
           aria-label={t("close") || "Close"}
         >
@@ -175,7 +205,7 @@ export function ChatFloatingPanel({ onClose }: ChatFloatingPanelProps) {
         </Button>
       </div>
       <div className="min-h-0 flex-1">
-        <ChatPanel className="h-full" />
+        <ChatPanel className="h-full" hideHeader />
       </div>
       <div
         onPointerDown={startResize}

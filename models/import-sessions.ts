@@ -17,6 +17,7 @@ export type ImportSessionData = {
   businessContextSnapshot?: unknown
   promptVersion?: string | null
   title?: string | null
+  contextFileIds?: string[]
 }
 
 export const getImportSessions = cache(async (userId: string) => {

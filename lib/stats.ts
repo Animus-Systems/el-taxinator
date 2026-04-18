@@ -1,9 +1,14 @@
 import type { Field, Transaction } from "@/lib/db-types"
 
+function isPersonalStatus(status: string | null | undefined): boolean {
+  return status === "personal_ignored" || status === "personal_taxable"
+}
+
 export function calcTotalPerCurrency(transactions: Transaction[]): Record<string, number> {
   return transactions.reduce(
     (acc, transaction) => {
-      if (transaction.type === "transfer") return acc
+      if (transaction.type === "transfer" || transaction.type === "conversion") return acc
+      if (isPersonalStatus(transaction.status)) return acc
       if (transaction.convertedCurrencyCode) {
         acc[transaction.convertedCurrencyCode.toUpperCase()] =
           (acc[transaction.convertedCurrencyCode.toUpperCase()] || 0) + (transaction.convertedTotal || 0)
@@ -20,7 +25,8 @@ export function calcTotalPerCurrency(transactions: Transaction[]): Record<string
 export function calcNetTotalPerCurrency(transactions: Transaction[]): Record<string, number> {
   return transactions.reduce(
     (acc, transaction) => {
-      if (transaction.type === "transfer") return acc
+      if (transaction.type === "transfer" || transaction.type === "conversion") return acc
+      if (isPersonalStatus(transaction.status)) return acc
       let amount = 0
       let currency: string | undefined
       if (

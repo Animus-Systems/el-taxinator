@@ -9,7 +9,7 @@ import {
   deleteAccount,
 } from "@/models/accounts"
 import type { AccountData } from "@/models/accounts"
-import { bankAccountSchema } from "@/lib/db-types"
+import { accountTypeSchema, bankAccountSchema } from "@/lib/db-types"
 
 const accountInputSchema = z.object({
   name: z.string().min(1).max(256),
@@ -17,6 +17,7 @@ const accountInputSchema = z.object({
   currencyCode: z.string().min(1).max(10),
   accountNumber: z.string().max(64).nullish(),
   notes: z.string().max(1024).nullish(),
+  accountType: accountTypeSchema.optional(),
   isActive: z.boolean().optional(),
 })
 

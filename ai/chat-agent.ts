@@ -13,6 +13,7 @@ import { upsertBusinessFact, listBusinessFacts } from "@/models/business-facts"
 import { getCategories } from "@/models/categories"
 import { getProjects } from "@/models/projects"
 import { getActiveRules } from "@/models/rules"
+import { getActiveAccounts } from "@/models/accounts"
 import { getTransactionById, findSimilarByMerchant } from "@/models/transactions"
 import { getDashboardStats } from "@/models/stats"
 import { getUserById } from "@/models/users"
@@ -53,6 +54,7 @@ const turnReplySchema = {
                 "createProject",
                 "deleteTransaction",
                 "deleteRule",
+                "pairTransfersBulk",
               ],
             },
           },
@@ -262,12 +264,13 @@ export async function compactChatHistory(userId: string): Promise<void> {
 // ---------------------------------------------------------------------------
 
 async function buildTurnPrompt(opts: ProcessChatTurnOptions): Promise<string> {
-  const [user, facts, categories, projects, rules, history, summary, packs] = await Promise.all([
+  const [user, facts, categories, projects, rules, accounts, history, summary, packs] = await Promise.all([
     getUserById(opts.userId),
     listBusinessFacts(opts.userId),
     getCategories(opts.userId),
     getProjects(opts.userId),
     getActiveRules(opts.userId),
+    getActiveAccounts(opts.userId),
     listChatMessages(opts.userId),
     getChatSummary(opts.userId),
     listPacks(opts.userId),
@@ -316,6 +319,13 @@ async function buildTurnPrompt(opts: ProcessChatTurnOptions): Promise<string> {
     parts.push("[Active rules]")
     for (const r of rules) {
       parts.push(`- ${r.matchField} ${r.matchType} "${r.matchValue}" → category=${r.categoryCode ?? "-"}`)
+    }
+    parts.push("")
+  }
+  if (accounts.length > 0) {
+    parts.push("[Accounts] (id → name · currency · type)")
+    for (const a of accounts) {
+      parts.push(`- ${a.id} → ${a.name} · ${a.currencyCode} · ${a.accountType}`)
     }
     parts.push("")
   }
@@ -416,6 +426,15 @@ async function buildTurnPrompt(opts: ProcessChatTurnOptions): Promise<string> {
     "deleteTransaction / deleteRule (destructive, user will confirm):",
     '  { "kind": "deleteTransaction", "transactionId": "<uuid>", "reason": "why" }',
     '  { "kind": "deleteRule", "ruleId": "<uuid>", "reason": "why" }',
+    "",
+    "pairTransfersBulk (match transfer legs across two accounts; scans unpaired",
+    "rows for same-amount, same-currency, opposite-direction matches within ±1 day):",
+    '  { "kind": "pairTransfersBulk", "fromAccountId": "<uuid>", "toAccountId": "<uuid>", "sinceDate": "2025-01-01", "reason": "why" }',
+    "  - fromAccountId: account where the OUTGOING leg lives (money leaves). UUID from [Accounts].",
+    "  - toAccountId:   account where the INCOMING leg lives (money arrives). UUID from [Accounts].",
+    "  - sinceDate: optional ISO date YYYY-MM-DD if the user narrowed the window; else omit.",
+    "  Use this when the user asks things like 'match transfers between A and B' or 'pair withdrawals from X with deposits into Y'.",
+    "  Ambiguous and dust rows are skipped — only strict same-amount ±1-day unique matches are linked.",
     "",
     "Field rules:",
     "- Every action requires `reason` (string, ≤500 chars).",

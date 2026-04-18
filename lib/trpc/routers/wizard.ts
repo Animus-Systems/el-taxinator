@@ -31,6 +31,7 @@ import {
   deleteBusinessFact,
   hasAnyBusinessFacts,
 } from "@/models/business-facts"
+import { getFilesByIds } from "@/models/files"
 import {
   processWizardTurn,
   runOnboardingTurn,
@@ -65,6 +66,13 @@ const wizardGetOutputSchema = z.object({
   candidates: z.array(z.unknown()),
   businessFacts: z.array(businessFactSchema),
   pendingTurnAt: z.date().nullable(),
+  contextFiles: z.array(
+    z.object({
+      id: z.string().uuid(),
+      fileName: z.string(),
+      fileType: z.string(),
+    }),
+  ),
 })
 
 const wizardSendTurnOutputSchema = z.object({
@@ -120,12 +128,30 @@ export const wizardRouter = router({
       const businessFacts = await listBusinessFacts(ctx.user.id)
       const candidates = Array.isArray(session.data) ? (session.data as unknown[]) : []
       const messages = Array.isArray(session.messages) ? session.messages : []
+
+      // Bulk-fetch attached context files so the UI can render chips without a
+      // second round-trip. Preserve the attach order from `context_file_ids`
+      // (a simple re-index after the batch load).
+      const contextFileIds = readContextFileIds(session.contextFileIds)
+      const contextFiles =
+        contextFileIds.length === 0
+          ? []
+          : await (async () => {
+              const rows = await getFilesByIds(contextFileIds, ctx.user.id)
+              const byId = new Map(rows.map((r) => [r.id, r]))
+              return contextFileIds
+                .map((id) => byId.get(id))
+                .filter((f): f is NonNullable<typeof f> => f !== undefined)
+                .map((f) => ({ id: f.id, fileName: f.filename, fileType: f.mimetype }))
+            })()
+
       return {
         session,
         messages,
         candidates,
         businessFacts,
         pendingTurnAt: session.pendingTurnAt,
+        contextFiles,
       }
     }),
 
@@ -371,6 +397,10 @@ export const wizardRouter = router({
       sessionId: z.string(),
       rowIndexA: z.number().int(),
       rowIndexB: z.number().int().nullable(),
+      // User-picked counter-account for orphan transfers (rowIndexB === null).
+      // Ignored when rowIndexB is set because paired legs derive counter
+      // account from each other at commit time via the cross-populate sweep.
+      counterAccountId: z.string().uuid().nullable().optional(),
     }))
     .output(z.object({ ok: z.boolean() }))
     .mutation(async ({ ctx, input }) => {
@@ -387,6 +417,13 @@ export const wizardRouter = router({
         return "outgoing"
       }
 
+      // Only materialize the orphan counter-account pick when there's truly no
+      // partner row. For confirmed pairs, the cross-populate sweep at commit
+      // time derives counter_account_id from the partner's account, so keep
+      // the candidate field at null to avoid double-writes.
+      const orphanCounterAccountId =
+        input.rowIndexB === null ? input.counterAccountId ?? null : null
+
       const candidates = (session.data as TransactionCandidate[]).map((c) => {
         if (c.rowIndex !== input.rowIndexA && c.rowIndex !== input.rowIndexB) return c
         const nextExtra = { ...(c.extra ?? {}) }
@@ -398,10 +435,60 @@ export const wizardRouter = router({
           extra: nextExtra,
           transferId: sharedTransferId,
           transferDirection: deriveDirection(c.type),
+          counterAccountId: orphanCounterAccountId,
         } satisfies TransactionCandidate
       })
 
       await updateImportSession(input.sessionId, ctx.user.id, { data: candidates })
+      return { ok: true }
+    }),
+
+  setCandidateSelected: authedProcedure
+    .input(z.object({
+      sessionId: z.string(),
+      rowIndex: z.number().int(),
+      selected: z.boolean(),
+    }))
+    .output(z.object({ ok: z.boolean() }))
+    .mutation(async ({ ctx, input }) => {
+      const session = await getImportSessionById(input.sessionId, ctx.user.id)
+      if (!session) throw new TRPCError({ code: "NOT_FOUND", message: "Session not found" })
+      const candidates = (session.data as TransactionCandidate[]).map((c) =>
+        c.rowIndex === input.rowIndex ? { ...c, selected: input.selected } : c,
+      )
+      await updateImportSession(input.sessionId, ctx.user.id, { data: candidates })
+      return { ok: true }
+    }),
+
+  addContextFile: authedProcedure
+    .input(z.object({
+      sessionId: z.string(),
+      fileId: z.string().uuid(),
+    }))
+    .output(z.object({ ok: z.boolean() }))
+    .mutation(async ({ ctx, input }) => {
+      const session = await getImportSessionById(input.sessionId, ctx.user.id)
+      if (!session) throw new TRPCError({ code: "NOT_FOUND", message: "Session not found" })
+      const current = readContextFileIds(session.contextFileIds)
+      if (current.includes(input.fileId)) return { ok: true }
+      await updateImportSession(input.sessionId, ctx.user.id, {
+        contextFileIds: [...current, input.fileId],
+      })
+      return { ok: true }
+    }),
+
+  removeContextFile: authedProcedure
+    .input(z.object({
+      sessionId: z.string(),
+      fileId: z.string().uuid(),
+    }))
+    .output(z.object({ ok: z.boolean() }))
+    .mutation(async ({ ctx, input }) => {
+      const session = await getImportSessionById(input.sessionId, ctx.user.id)
+      if (!session) throw new TRPCError({ code: "NOT_FOUND", message: "Session not found" })
+      const current = readContextFileIds(session.contextFileIds)
+      const next = current.filter((id) => id !== input.fileId)
+      await updateImportSession(input.sessionId, ctx.user.id, { contextFileIds: next })
       return { ok: true }
     }),
 
@@ -454,6 +541,15 @@ function matchesBulkRule(
     default:
       return haystack.includes(needle)
   }
+}
+
+/**
+ * Narrow the jsonb `context_file_ids` column to `string[]`. Tolerant of the
+ * DB returning `null`, an untyped array, or the default empty array.
+ */
+function readContextFileIds(value: unknown): string[] {
+  if (!Array.isArray(value)) return []
+  return value.filter((id): id is string => typeof id === "string")
 }
 
 function formatTitleTimestamp(d: Date): string {

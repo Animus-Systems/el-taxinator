@@ -20,7 +20,7 @@ import type { WizardMessage } from "@/lib/db-types"
 import { randomUUID } from "node:crypto"
 import { buildSessionReport } from "@/ai/session-report"
 import { renderWizardSessionReportPdf } from "@/components/wizard/wizard-report-pdf"
-import { createTransaction } from "@/models/transactions"
+import { createTransaction, findDuplicateTransactions } from "@/models/transactions"
 import { maybePairNewTransaction } from "@/models/transfers"
 import { sql, execute } from "@/lib/sql"
 import { syncCryptoLedger } from "@/lib/crypto-hooks"
@@ -32,6 +32,7 @@ import {
   categorizeTransactions,
   categorizeTransactionsWithFeedback,
 } from "@/ai/import-csv"
+import { xlsxBufferToCsv, isXlsxFileName, isXlsxMimeType } from "@/lib/xlsx-to-csv"
 import type { TransactionCandidate } from "@/ai/import-csv"
 import { suggestNewCategories } from "@/ai/suggest-categories"
 import { detectPDFType, extractPDFTransactions } from "@/ai/import-pdf"
@@ -83,6 +84,43 @@ function parseCSVText(text: string): Promise<string[][]> {
     parser.write(text)
     parser.end()
   })
+}
+
+/**
+ * Flag candidates that already exist in the user's transaction ledger.
+ * Runs near the end of the import pipeline — after rules/account match have
+ * finalized the candidate shape, before the session is persisted. Duplicates
+ * get `extra.duplicateOfId` set and are auto-deselected so the user has to
+ * opt in via the Skip toggle to re-commit them.
+ */
+async function annotateDuplicates(
+  userId: string,
+  candidates: TransactionCandidate[],
+): Promise<void> {
+  if (candidates.length === 0) return
+  const duplicates = await findDuplicateTransactions(
+    userId,
+    candidates.map((c) => ({
+      rowIndex: c.rowIndex,
+      accountId: c.accountId ?? null,
+      total: c.total,
+      currencyCode: c.currencyCode,
+      issuedAt: c.issuedAt,
+      merchant: c.merchant,
+      name: c.name,
+    })),
+  )
+  if (duplicates.length === 0) return
+  const dupeByRowIndex = new Map(
+    duplicates.map((d) => [d.candidateRowIndex, d.existingTransactionId]),
+  )
+  for (const c of candidates) {
+    const existingId = dupeByRowIndex.get(c.rowIndex)
+    if (existingId) {
+      c.extra = { ...(c.extra ?? {}), duplicateOfId: existingId }
+      c.selected = false
+    }
+  }
 }
 
 function applySelectionToCandidates(
@@ -163,7 +201,7 @@ async function seedUploadOpeningMessage(
 
   const question =
     total > 0
-      ? " Want me to walk through the ambiguous rows, or should I run categorization on all of them first?"
+      ? " I'll go through the rows now — classifying what's clear, flagging anything that needs your input, and proposing rules for patterns I spot."
       : ""
 
   const message: WizardMessage = {
@@ -193,18 +231,25 @@ export async function importRoutes(app: FastifyInstance) {
 
       const accountId = fields["accountId"] || null
 
-      // 0. Persist the raw CSV to disk so it shows up in /files and survives
-      //    beyond this request. Reviewed=true — the wizard owns the review.
+      // 0. Persist the raw upload to disk so it shows up in /files and
+      //    survives beyond this request. Reviewed=true — the wizard owns the
+      //    review. For XLSX uploads we persist the original spreadsheet (not
+      //    the converted CSV) so /files shows what the user actually sent.
       const entityId = await getActiveEntityId()
+      const isXlsx = isXlsxFileName(fileName) || isXlsxMimeType(mimeType)
       const persistedFile = await persistUploadedFile(user.id, entityId, {
         fileName,
-        mimetype: mimeType || "text/csv",
+        mimetype: mimeType || (isXlsx ? "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" : "text/csv"),
         buffer: fileBuffer,
         isReviewed: true,
       })
 
-      // 1. Parse CSV
-      const text = fileBuffer.toString("utf-8")
+      // 1. Parse CSV. XLSX uploads are converted to CSV text server-side so
+      //    the rest of the pipeline (detect mapping → apply → categorize)
+      //    treats them identically to a CSV upload.
+      const text = isXlsx
+        ? xlsxBufferToCsv(fileBuffer)
+        : fileBuffer.toString("utf-8")
       const rows = await parseCSVText(text)
 
       const headers = rows[0]
@@ -241,6 +286,9 @@ export async function importRoutes(app: FastifyInstance) {
           if (c.accountId == null) c.accountId = resolvedAccountId
         }
       }
+
+      // 4c. Flag rows that look like duplicates of existing transactions.
+      await annotateDuplicates(user.id, candidates)
 
       // 5. Create import session
       const session = await createImportSession(user.id, {
@@ -363,6 +411,9 @@ export async function importRoutes(app: FastifyInstance) {
           if (c.accountId == null) c.accountId = resolvedAccountId
         }
       }
+
+      // Flag rows that look like duplicates of existing transactions.
+      await annotateDuplicates(user.id, result.candidates)
 
       // Suggest new categories
       const suggestedCategories = await suggestNewCategories(result.candidates, user.id)
@@ -653,6 +704,7 @@ export async function importRoutes(app: FastifyInstance) {
       // Create transactions
       let created = 0
       const ruleHitCounts = new Map<string, number>()
+      const rowErrors: Array<{ rowIndex: number; message: string }> = []
       for (const c of candidates) {
         try {
           const extraPayload = c.extra as Record<string, unknown> | undefined
@@ -670,12 +722,14 @@ export async function importRoutes(app: FastifyInstance) {
             status: c.status,
             appliedRuleId: c.matchedRuleId ?? null,
             // Transfer linking: `wizard.applyTransferLink` sets these on
-            // confirmed pairs. `counterAccountId` is populated AFTER the loop
-            // by the cross-populate sweep below, because the partner's DB id
-            // is not known until both legs are inserted.
+            // confirmed pairs. For paired legs `counterAccountId` is populated
+            // AFTER the loop by the cross-populate sweep below, because the
+            // partner's DB id is not known until both legs are inserted. For
+            // orphans the user picks the counter-account in the wizard and it
+            // flows through here directly.
             transferId: c.transferId ?? null,
             transferDirection: c.transferDirection ?? null,
-            counterAccountId: null,
+            counterAccountId: c.counterAccountId ?? null,
             // Carry the wizard's extra payload (crypto meta, etc.) through to
             // transactions.extra so /crypto-page queries can find it.
             ...(extraPayload ? { extra: extraPayload } : {}),
@@ -705,7 +759,9 @@ export async function importRoutes(app: FastifyInstance) {
 
           created++
         } catch (err) {
+          const message = err instanceof Error ? err.message : String(err)
           console.error(`[import/commit] Failed to create transaction row ${c.rowIndex}:`, err)
+          rowErrors.push({ rowIndex: c.rowIndex, message })
         }
       }
 
@@ -745,6 +801,60 @@ export async function importRoutes(app: FastifyInstance) {
       // Mark session as committed
       await updateImportSession(request.params.id, user.id, { status: "committed" })
 
+      // Spawn a follow-up pending session for any rows the user explicitly
+      // skipped during review. Committed sessions can't be reopened, so these
+      // deferred rows would otherwise be trapped — this gives them a review
+      // path. We reset `selected=true` so they're eligible to commit next
+      // time, renumber `rowIndex` 0..N-1, and preserve the original rowIndex
+      // in `extra.deferredFromRowIndex` for traceability.
+      const deferred = reviewedCandidates.filter((c) => !c.selected)
+      let deferredSessionId: string | null = null
+      let deferredCount = 0
+      if (deferred.length > 0) {
+        const today = new Date().toISOString().slice(0, 10)
+        const parentTitle = session.title ?? session.fileName ?? "session"
+        const deferredCandidates: TransactionCandidate[] = deferred.map((c, idx) => {
+          const existingExtra = (c.extra ?? {}) as Record<string, unknown>
+          return {
+            ...c,
+            rowIndex: idx,
+            selected: true,
+            extra: {
+              ...existingExtra,
+              deferredFromSessionId: session.id,
+              deferredFromRowIndex: c.rowIndex,
+            },
+          }
+        })
+        const openingMessage: WizardMessage = {
+          id: randomUUID(),
+          role: "assistant",
+          content:
+            `These ${deferredCandidates.length} row${deferredCandidates.length === 1 ? "" : "s"} ` +
+            `were deferred from a previous session. Resolve them here once the missing info arrives, ` +
+            `then commit to add them to your transactions.`,
+          createdAt: new Date().toISOString(),
+          clarifyingQuestions: [],
+          taxTips: [],
+          bulkActions: [],
+          candidateUpdates: [],
+        }
+        const newSession = await createImportSession(user.id, {
+          accountId: session.accountId ?? null,
+          fileName: session.fileName ?? null,
+          fileType: session.fileType ?? null,
+          rowCount: deferredCandidates.length,
+          data: deferredCandidates,
+          columnMapping: null,
+          status: "pending",
+          entryMode: "deferred",
+          title: `Deferred from ${parentTitle} · ${today}`,
+          messages: [openingMessage],
+        })
+        deferredSessionId = newSession?.id ?? null
+        deferredCount = deferredCandidates.length
+      }
+
       // Learn from the user's corrections — if they consistently re-
       // categorized several transactions the same way, turn that into a
       // "learned" rule that will pre-match similar rows on the next import.
@@ -766,7 +876,26 @@ export async function importRoutes(app: FastifyInstance) {
         console.error("[import/commit] learnFromImport failed:", err)
       }
 
-      return reply.send({ success: true, created, rulesLearned })
+      // If literally nothing landed, fail loudly so the UI can show the real
+      // cause instead of a silent success with `created: 0`.
+      if (created === 0 && rowErrors.length > 0) {
+        const first = rowErrors[0]
+        const firstMsg = first ? first.message : "unknown error"
+        return reply.code(500).send({
+          success: false,
+          error: `All ${rowErrors.length} rows failed to commit. First error: ${firstMsg}`,
+          rowErrors,
+        })
+      }
+
+      return reply.send({
+        success: true,
+        created,
+        rulesLearned,
+        deferredSessionId,
+        deferredCount,
+        rowErrors,
+      })
     } catch (error) {
       console.error("[import/commit] Error:", error)
       return reply.send({

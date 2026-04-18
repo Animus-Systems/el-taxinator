@@ -51,12 +51,13 @@ export async function extractPDFTransactions(
 - name/description
 - merchant (if identifiable)
 - amount (positive number in the currency's smallest unit, e.g. cents)
+- currency: the ISO-4217 3-letter code shown for THAT specific line (e.g. "EUR", "USD", "GBP", "PLN"). Multi-currency statements (e.g. Revolut) commonly list transactions in different currencies — do NOT assume the statement-level currency applies to every row. Leave currency null only when no per-row currency is discernible.
 - type: "expense" or "income"
 - suggested categoryCode from the list below (or null)
 - suggested projectCode from the list below (or null)
-- suggested status: "business", "business_non_deductible", "personal_ignored", or null if unsure
+- suggested status: "business", "business_non_deductible", "personal_taxable", "personal_ignored", or null if unsure. Use "personal_taxable" for crypto disposals / staking rewards / airdrops / stock dividends (personal but Modelo-100 taxable); use "personal_ignored" for own-account transfers, bank-side counter-legs of crypto disposals, mistaken deposits.
 
-Also identify the bank name from the document header/branding.
+Also identify the bank name from the document header/branding and the statement-level default currency.
 
 Categories:\n${categoryList || "(none - leave null)"}
 Projects:\n${projectList || "(none - leave null)"}
@@ -72,6 +73,7 @@ Return ONLY valid JSON:
       "name": "description",
       "merchant": "merchant or null",
       "amount": 1250,
+      "currency": "EUR",
       "type": "expense",
       "categoryCode": "code_or_null",
       "projectCode": "code_or_null",
@@ -96,12 +98,19 @@ Return ONLY valid JSON:
             name: { type: "string" },
             merchant: { type: ["string", "null"] },
             amount: { type: "number" },
+            currency: { type: ["string", "null"] },
             type: { type: "string" },
             categoryCode: { type: ["string", "null"] },
             projectCode: { type: ["string", "null"] },
             status: {
               type: ["string", "null"],
-              enum: ["business", "business_non_deductible", "personal_ignored", null],
+              enum: [
+                "business",
+                "business_non_deductible",
+                "personal_taxable",
+                "personal_ignored",
+                null,
+              ],
             },
             confidence: { type: "number" },
           },
@@ -119,13 +128,19 @@ Return ONLY valid JSON:
   const transactions = output["transactions"] as Array<Record<string, unknown>>
   const currency = (output["currency"] as string) || defaultCurrency
 
-  const candidates: TransactionCandidate[] = transactions.map((t, idx) => ({
+  const candidates: TransactionCandidate[] = transactions.map((t, idx) => {
+    const rawCurrency = t["currency"]
+    const rowCurrency =
+      typeof rawCurrency === "string" && /^[A-Za-z]{3}$/.test(rawCurrency)
+        ? rawCurrency.toUpperCase()
+        : null
+    return {
     rowIndex: idx,
     name: (t["name"] as string) || null,
     merchant: (t["merchant"] as string) || null,
     description: null,
     total: typeof t["amount"] === "number" ? Math.round(t["amount"] as number) : null,
-    currencyCode: currency,
+    currencyCode: rowCurrency ?? currency,
     type: (t["type"] as string) || "expense",
     categoryCode: (t["categoryCode"] as string) || null,
     projectCode: (t["projectCode"] as string) || null,
@@ -135,8 +150,13 @@ Return ONLY valid JSON:
     suggestedStatus:
       t["status"] === "business" ||
       t["status"] === "business_non_deductible" ||
+      t["status"] === "personal_taxable" ||
       t["status"] === "personal_ignored"
-        ? (t["status"] as "business" | "business_non_deductible" | "personal_ignored")
+        ? (t["status"] as
+            | "business"
+            | "business_non_deductible"
+            | "personal_taxable"
+            | "personal_ignored")
         : null,
     confidence: {
       category: (t["confidence"] as number) || 0.5,
@@ -145,7 +165,8 @@ Return ONLY valid JSON:
       overall: (t["confidence"] as number) || 0.5,
     },
     selected: true,
-  }))
+    }
+  })
 
   return {
     bank: (output["bank"] as string) || "Unknown",

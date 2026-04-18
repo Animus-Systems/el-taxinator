@@ -118,6 +118,30 @@ describe("proposedAction discriminated union", () => {
     expect(a.kind).toBe("deleteTransaction")
   })
 
+  it("parses pairTransfersBulk action", () => {
+    const a = proposedActionSchema.parse({
+      kind: "pairTransfersBulk",
+      fromAccountId: "11111111-1111-1111-8111-111111111111",
+      toAccountId: "22222222-2222-2222-8222-222222222222",
+      reason: "user asked to match SwissBorg -> N26",
+    })
+    if (a.kind !== "pairTransfersBulk") throw new Error("wrong kind")
+    expect(a.fromAccountId).toBe("11111111-1111-1111-8111-111111111111")
+    expect(a.toAccountId).toBe("22222222-2222-2222-8222-222222222222")
+  })
+
+  it("parses pairTransfersBulk with sinceDate", () => {
+    const a = proposedActionSchema.parse({
+      kind: "pairTransfersBulk",
+      fromAccountId: "11111111-1111-1111-8111-111111111111",
+      toAccountId: "22222222-2222-2222-8222-222222222222",
+      sinceDate: "2025-01-01",
+      reason: "narrow the window",
+    })
+    if (a.kind !== "pairTransfersBulk") throw new Error("wrong kind")
+    expect(a.sinceDate).toBe("2025-01-01")
+  })
+
   it("rejects unknown kind", () => {
     expect(() =>
       proposedActionSchema.parse({ kind: "launchRocket", reason: "r" }),

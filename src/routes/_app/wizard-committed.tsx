@@ -50,7 +50,8 @@ export function WizardCommittedPage() {
             {" · "}
             {report.totals.byStatus["business"]?.count ?? 0} deductible ·{" "}
             {report.totals.byStatus["business_non_deductible"]?.count ?? 0} non-deductible ·{" "}
-            {report.totals.byStatus["personal_ignored"]?.count ?? 0} personal
+            {report.totals.byStatus["personal_taxable"]?.count ?? 0} personal taxable ·{" "}
+            {report.totals.byStatus["personal_ignored"]?.count ?? 0} personal ignored
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -81,27 +82,131 @@ export function WizardCommittedPage() {
         </div>
       </header>
 
-      <section className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <section className="grid grid-cols-2 md:grid-cols-5 gap-3">
         <SummaryCard
           label={t("reportTotalsHeading") + " — deductible"}
           value={formatMoney(report.totals.deductibleTotal, ccy)}
           tone="emerald"
+          isZero={report.totals.deductibleTotal === 0}
         />
         <SummaryCard
           label={t("reportTotalsHeading") + " — non-deductible"}
           value={formatMoney(report.totals.nonDeductibleTotal, ccy)}
           tone="amber"
+          isZero={report.totals.nonDeductibleTotal === 0}
         />
         <SummaryCard
-          label={t("reportTotalsHeading") + " — personal"}
+          label={t("committed.personalTaxable")}
+          value={formatMoney(report.totals.personalTaxableTotal, ccy)}
+          tone="personalTaxable"
+          isZero={report.totals.personalTaxableTotal === 0}
+        />
+        <SummaryCard
+          label={t("reportTotalsHeading") + " — " + t("committed.personalIgnored")}
           value={formatMoney(report.totals.personalTotal, ccy)}
           tone="muted"
+          isZero={report.totals.personalTotal === 0}
         />
         <SummaryCard
           label={t("reportTotalsHeading") + " — grand"}
           value={formatMoney(report.totals.grandTotal, ccy)}
           tone="primary"
+          isZero={report.totals.grandTotal === 0}
         />
+      </section>
+
+      {report.totals.deductibleTotal === 0 &&
+        report.totals.nonDeductibleTotal === 0 &&
+        (report.totals.personalTaxableTotal > 0 || report.totals.personalTotal > 0) && (
+          <p className="-mt-3 text-xs text-muted-foreground italic">
+            {t("committed.noBusinessActivityHint")}
+          </p>
+        )}
+
+      {/* Tax-meaningful rollups */}
+      {(report.taxRollups.disposalCount > 0 ||
+        report.taxRollups.basisPurchases > 0 ||
+        report.taxRollups.stakingRewards > 0 ||
+        report.taxRollups.airdrops > 0) ? (
+        <section>
+          <h2 className="text-sm font-medium mb-2">{t("committed.taxRollups.title")}</h2>
+          <Card>
+            <CardContent className="py-2">
+              <div className="divide-y">
+                <RollupRow
+                  label={t("committed.taxRollups.disposalProceeds")}
+                  amount={formatMoney(report.taxRollups.disposalProceeds, ccy)}
+                  count={report.taxRollups.disposalCount}
+                  pending={report.taxRollups.pendingBasisCount}
+                  pendingLabel={
+                    report.taxRollups.pendingBasisCount > 0
+                      ? t("committed.taxRollups.pendingBasis", {
+                          count: report.taxRollups.pendingBasisCount,
+                        })
+                      : null
+                  }
+                />
+                {report.taxRollups.basisPurchases > 0 ? (
+                  <RollupRow
+                    label={t("committed.taxRollups.basisPurchases")}
+                    amount={formatMoney(report.taxRollups.basisPurchases, ccy)}
+                    count={null}
+                  />
+                ) : null}
+                {report.taxRollups.stakingRewards > 0 ? (
+                  <RollupRow
+                    label={t("committed.taxRollups.stakingRewards")}
+                    amount={formatMoney(report.taxRollups.stakingRewards, ccy)}
+                    count={null}
+                  />
+                ) : null}
+                {report.taxRollups.airdrops > 0 ? (
+                  <RollupRow
+                    label={t("committed.taxRollups.airdrops")}
+                    amount={formatMoney(report.taxRollups.airdrops, ccy)}
+                    count={null}
+                  />
+                ) : null}
+              </div>
+            </CardContent>
+          </Card>
+        </section>
+      ) : null}
+
+      {/* By status breakdown */}
+      <section>
+        <h2 className="text-sm font-medium mb-2">By status</h2>
+        <Card>
+          <CardContent className="py-2">
+            <div className="divide-y">
+              <StatusRow
+                label="Business (deductible)"
+                value={report.totals.byStatus["business"]}
+                ccy={ccy}
+              />
+              <StatusRow
+                label="Business (non-deductible)"
+                value={report.totals.byStatus["business_non_deductible"]}
+                ccy={ccy}
+              />
+              <StatusRow
+                label={t("committed.personalTaxable")}
+                value={report.totals.byStatus["personal_taxable"]}
+                ccy={ccy}
+              />
+              <StatusRow
+                label={t("committed.personalIgnored")}
+                value={report.totals.byStatus["personal_ignored"]}
+                ccy={ccy}
+              />
+              <StatusRow
+                label="Needs review"
+                value={report.totals.byStatus["needs_review"]}
+                ccy={ccy}
+              />
+            </div>
+          </CardContent>
+        </Card>
       </section>
 
       {/* Tax tips collected */}
@@ -194,24 +299,80 @@ function SummaryCard({
   label,
   value,
   tone,
+  isZero = false,
 }: {
   label: string
   value: string
-  tone: "emerald" | "amber" | "muted" | "primary"
+  tone: "emerald" | "amber" | "muted" | "primary" | "personalTaxable"
+  /** When true, render the value in the muted palette regardless of tone —
+   * so empty Deductible/Non-deductible cards on a personal session don't
+   * visually read as "something is wrong". */
+  isZero?: boolean
 }) {
   const toneClasses: Record<typeof tone, string> = {
     emerald: "text-emerald-700 dark:text-emerald-400",
     amber: "text-amber-600 dark:text-amber-400",
     muted: "text-muted-foreground",
     primary: "text-primary",
+    personalTaxable: "text-amber-700 dark:text-amber-300",
   }
+  const colorClass = isZero ? "text-muted-foreground/60" : toneClasses[tone]
   return (
     <Card>
       <CardContent className="py-3">
         <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</div>
-        <div className={`text-lg font-semibold mt-1 ${toneClasses[tone]}`}>{value}</div>
+        <div className={`text-lg font-semibold mt-1 ${colorClass}`}>{value}</div>
       </CardContent>
     </Card>
+  )
+}
+
+function RollupRow({
+  label,
+  amount,
+  count,
+  pending,
+  pendingLabel,
+}: {
+  label: string
+  amount: string
+  count: number | null
+  pending?: number
+  pendingLabel?: string | null
+}) {
+  return (
+    <div className="py-2 flex items-center gap-3 text-sm">
+      <span className="min-w-0 flex-1 truncate">{label}</span>
+      {count !== null ? <Badge variant="outline">{count}</Badge> : null}
+      <span className="w-28 text-right tabular-nums">{amount}</span>
+      {pending && pending > 0 && pendingLabel ? (
+        <span className="w-44 text-xs text-amber-600 dark:text-amber-400 truncate">
+          {pendingLabel}
+        </span>
+      ) : (
+        <span className="w-44 text-xs text-muted-foreground" />
+      )}
+    </div>
+  )
+}
+
+function StatusRow({
+  label,
+  value,
+  ccy,
+}: {
+  label: string
+  value: { count: number; amount: number } | undefined
+  ccy: string
+}) {
+  const count = value?.count ?? 0
+  const amount = value?.amount ?? 0
+  return (
+    <div className="py-2 flex items-center gap-3 text-sm">
+      <span className="min-w-0 flex-1 truncate">{label}</span>
+      <Badge variant="outline">{count}</Badge>
+      <span className="w-28 text-right tabular-nums">{formatMoney(amount, ccy)}</span>
+    </div>
   )
 }
 

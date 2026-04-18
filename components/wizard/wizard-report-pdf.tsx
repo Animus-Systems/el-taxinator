@@ -94,6 +94,7 @@ type Labels = {
   byCategoryHeading: string
   statusBusiness: string
   statusNonDeductible: string
+  statusPersonalTaxable: string
   statusPersonal: string
   statusNeedsReview: string
   countColumn: string
@@ -102,7 +103,14 @@ type Labels = {
   grandTotal: string
   deductibleTotal: string
   nonDeductibleTotal: string
+  personalTaxableTotal: string
   personalTotal: string
+  taxRollupsHeading: string
+  rollupDisposalProceeds: string
+  rollupBasisPurchases: string
+  rollupStakingRewards: string
+  rollupAirdrops: string
+  rollupPendingBasis: string
   taxTipsHeading: string
   noTaxTips: string
   factsHeading: string
@@ -122,6 +130,7 @@ const defaultLabels: Labels = {
   byCategoryHeading: "By category",
   statusBusiness: "Business (deductible)",
   statusNonDeductible: "Business — non-deductible",
+  statusPersonalTaxable: "Personal (taxable)",
   statusPersonal: "Personal (ignored)",
   statusNeedsReview: "Needs review",
   countColumn: "Count",
@@ -130,7 +139,14 @@ const defaultLabels: Labels = {
   grandTotal: "Grand total",
   deductibleTotal: "Deductible total",
   nonDeductibleTotal: "Non-deductible total",
-  personalTotal: "Personal total",
+  personalTaxableTotal: "Personal — taxable",
+  personalTotal: "Personal — ignored",
+  taxRollupsHeading: "Tax-meaningful rollups",
+  rollupDisposalProceeds: "Crypto disposal proceeds",
+  rollupBasisPurchases: "Crypto purchases (building basis)",
+  rollupStakingRewards: "Crypto staking rewards",
+  rollupAirdrops: "Crypto airdrops",
+  rollupPendingBasis: "{count} disposals need FIFO basis",
   taxTipsHeading: "Tax-optimization tips from this session",
   noTaxTips: "No tax tips were captured during this session.",
   factsHeading: "Business facts learned",
@@ -212,10 +228,66 @@ export function WizardSessionReportPDF({ report, labels: userLabels }: Props) {
             <Text style={styles.statValue}>{formatMoney(report.totals.nonDeductibleTotal, ccy)}</Text>
           </View>
           <View style={styles.statRow}>
+            <Text style={styles.statLabel}>{L.personalTaxableTotal}</Text>
+            <Text style={styles.statValue}>
+              {formatMoney(report.totals.personalTaxableTotal, ccy)}
+            </Text>
+          </View>
+          <View style={styles.statRow}>
             <Text style={styles.statLabel}>{L.personalTotal}</Text>
             <Text style={styles.statValue}>{formatMoney(report.totals.personalTotal, ccy)}</Text>
           </View>
         </View>
+
+        {/* Tax-meaningful rollups */}
+        {report.taxRollups.disposalCount > 0 ||
+        report.taxRollups.basisPurchases > 0 ||
+        report.taxRollups.stakingRewards > 0 ||
+        report.taxRollups.airdrops > 0 ? (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>{L.taxRollupsHeading}</Text>
+            {report.taxRollups.disposalCount > 0 ? (
+              <View style={styles.statRow}>
+                <Text style={styles.statLabel}>
+                  {L.rollupDisposalProceeds}
+                  {report.taxRollups.pendingBasisCount > 0
+                    ? ` · ${L.rollupPendingBasis.replace(
+                        "{count}",
+                        String(report.taxRollups.pendingBasisCount),
+                      )}`
+                    : ""}
+                </Text>
+                <Text style={styles.statValue}>
+                  {formatMoney(report.taxRollups.disposalProceeds, ccy)}
+                </Text>
+              </View>
+            ) : null}
+            {report.taxRollups.basisPurchases > 0 ? (
+              <View style={styles.statRow}>
+                <Text style={styles.statLabel}>{L.rollupBasisPurchases}</Text>
+                <Text style={styles.statValue}>
+                  {formatMoney(report.taxRollups.basisPurchases, ccy)}
+                </Text>
+              </View>
+            ) : null}
+            {report.taxRollups.stakingRewards > 0 ? (
+              <View style={styles.statRow}>
+                <Text style={styles.statLabel}>{L.rollupStakingRewards}</Text>
+                <Text style={styles.statValue}>
+                  {formatMoney(report.taxRollups.stakingRewards, ccy)}
+                </Text>
+              </View>
+            ) : null}
+            {report.taxRollups.airdrops > 0 ? (
+              <View style={styles.statRow}>
+                <Text style={styles.statLabel}>{L.rollupAirdrops}</Text>
+                <Text style={styles.statValue}>
+                  {formatMoney(report.taxRollups.airdrops, ccy)}
+                </Text>
+              </View>
+            ) : null}
+          </View>
+        ) : null}
 
         {/* By status */}
         <View style={styles.section}>
@@ -227,6 +299,7 @@ export function WizardSessionReportPDF({ report, labels: userLabels }: Props) {
           </View>
           {renderStatusRow(L.statusBusiness, report.totals.byStatus["business"], ccy)}
           {renderStatusRow(L.statusNonDeductible, report.totals.byStatus["business_non_deductible"], ccy)}
+          {renderStatusRow(L.statusPersonalTaxable, report.totals.byStatus["personal_taxable"], ccy)}
           {renderStatusRow(L.statusPersonal, report.totals.byStatus["personal_ignored"], ccy)}
           {renderStatusRow(L.statusNeedsReview, report.totals.byStatus["needs_review"], ccy)}
         </View>

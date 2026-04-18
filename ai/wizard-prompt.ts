@@ -8,11 +8,12 @@ import type {
   Project,
   WizardMessage,
 } from "@/lib/db-types"
+import type { ContextFileText } from "@/lib/context-file-text"
 import type { TransactionCandidate } from "./import-csv"
 
-export const WIZARD_PROMPT_VERSION = "2026-04-17.3"
+export const WIZARD_PROMPT_VERSION = "2026-04-17.9"
 
-const MAX_FOCUSED_CANDIDATES = 50
+const MAX_FOCUSED_CANDIDATES = 150
 
 export type WizardPromptInput = {
   entityType: EntityType | null
@@ -29,6 +30,7 @@ export type WizardPromptInput = {
   messages: WizardMessage[]
   userMessage: string
   defaultAccountId: string | null
+  contextFiles?: ContextFileText[]
 }
 
 const REPLY_SCHEMA = {
@@ -46,14 +48,21 @@ const REPLY_SCHEMA = {
           description: { type: ["string", "null"] },
           total: { type: ["number", "null"] },
           currencyCode: { type: ["string", "null"] },
-          type: { type: ["string", "null"], enum: ["expense", "income", "transfer", null] },
+          type: { type: ["string", "null"], enum: ["expense", "income", "transfer", "conversion", null] },
           categoryCode: { type: ["string", "null"] },
           projectCode: { type: ["string", "null"] },
           accountId: { type: ["string", "null"] },
           issuedAt: { type: ["string", "null"] },
           status: {
             type: ["string", "null"],
-            enum: ["needs_review", "business", "business_non_deductible", "personal_ignored", null],
+            enum: [
+              "needs_review",
+              "business",
+              "business_non_deductible",
+              "personal_taxable",
+              "personal_ignored",
+              null,
+            ],
           },
           reasoning: { type: "string" },
           confidence: {
@@ -90,7 +99,7 @@ const REPLY_SCHEMA = {
             properties: {
               categoryCode: { type: ["string", "null"] },
               projectCode: { type: ["string", "null"] },
-              type: { type: ["string", "null"], enum: ["expense", "income", "transfer", null] },
+              type: { type: ["string", "null"], enum: ["expense", "income", "transfer", "conversion", null] },
               status: { type: ["string", "null"] },
             },
           },
@@ -151,6 +160,7 @@ const REPLY_SCHEMA = {
           rowIndexB: { type: ["number", "null"] },
           confidence: { type: "number" },
           reason: { type: "string" },
+          counterAccountId: { type: ["string", "null"] },
         },
         required: ["rowIndexA", "rowIndexB", "confidence", "reason"],
       },
@@ -268,7 +278,7 @@ function formatAccounts(accounts: BankAccount[], defaultAccountId: string | null
       const bank = a.bankName ? ` [bank: ${a.bankName}]` : ""
       const currency = a.currencyCode ? ` [ccy: ${a.currencyCode}]` : ""
       const def = defaultAccountId && a.id === defaultAccountId ? " (session default)" : ""
-      return `- id="${a.id}" name="${a.name}"${bank}${currency}${def}`
+      return `- id="${a.id}" name="${a.name}"${bank}${currency} type=${a.accountType}${def}`
     })
     .join("\n")
 }
@@ -302,13 +312,92 @@ function formatRules(rules: CategorizationRule[]): string {
   return lines.join("\n")
 }
 
-function pickFocusedCandidates(
+// Stopwords excluded from name-hint tokenization. Keep the list short — we
+// only want to drop words that would match too broadly (currency codes,
+// generic English/Spanish filler). Adding a token here means users cannot
+// disambiguate rows by that token alone.
+const HINT_STOPWORDS = new Set<string>([
+  "from",
+  "the",
+  "this",
+  "that",
+  "with",
+  "transaction",
+  "pln",
+  "eur",
+  "usd",
+  "gbp",
+  "chf",
+  "transfer",
+  "payment",
+  "row",
+])
+
+/**
+ * Pull row indexes out of `candidates` that look like the user is referring
+ * to them in `message` (by amount or by merchant/name/description token).
+ * These rows are force-included in the prompt window even when they are
+ * already classified, so the AI can act on targeted requests like
+ * "the 254.25 PLN Ewelina transaction" without the row being elided.
+ *
+ * Exported for tests.
+ */
+export function collectHintedRowIndexes(
+  candidates: TransactionCandidate[],
+  message: string | null | undefined,
+): Set<number> {
+  const hinted = new Set<number>()
+  if (!message) return hinted
+
+  const amountRe = /\b\d{1,7}(?:[.,]\d{1,2})?\b/g
+  const amountCentsCandidates = new Set<number>()
+  for (const match of message.matchAll(amountRe)) {
+    const raw = match[0].replace(",", ".")
+    const num = Number(raw)
+    if (!Number.isFinite(num)) continue
+    if (/[.,]/.test(match[0])) {
+      amountCentsCandidates.add(Math.round(num * 100))
+    } else if (num >= 10) {
+      // bare integer — interpret as units (€254 → 25400 cents) AND as raw
+      // cents (254c) so "254" still matches the 254.25 row.
+      amountCentsCandidates.add(Math.round(num * 100))
+      amountCentsCandidates.add(num)
+    }
+  }
+
+  const tokenRe = /[A-Za-zÀ-ÿ]{3,}/g
+  const nameTokens: string[] = []
+  for (const match of message.matchAll(tokenRe)) {
+    const tok = match[0].toLowerCase()
+    if (HINT_STOPWORDS.has(tok)) continue
+    nameTokens.push(tok)
+  }
+
+  for (const c of candidates) {
+    if (c.total !== null && amountCentsCandidates.has(Math.abs(c.total))) {
+      hinted.add(c.rowIndex)
+      continue
+    }
+    if (nameTokens.length === 0) continue
+    const haystack = `${c.merchant ?? ""}\n${c.name ?? ""}\n${c.description ?? ""}`.toLowerCase()
+    if (nameTokens.some((tok) => haystack.includes(tok))) {
+      hinted.add(c.rowIndex)
+    }
+  }
+  return hinted
+}
+
+export function pickFocusedCandidates(
   candidates: TransactionCandidate[],
   focusRowIndexes: number[] | null,
+  userMessage: string | null | undefined,
 ): { focused: TransactionCandidate[]; elidedCount: number } {
   const focusSet = focusRowIndexes ? new Set(focusRowIndexes) : null
+  const hinted = collectHintedRowIndexes(candidates, userMessage ?? null)
+
   const eligible = candidates.filter((c) => {
     if (focusSet?.has(c.rowIndex)) return true
+    if (hinted.has(c.rowIndex)) return true
     return c.status === "needs_review"
   })
   const focused = eligible.slice(0, MAX_FOCUSED_CANDIDATES)
@@ -335,6 +424,28 @@ function formatCandidate(c: TransactionCandidate): string {
   return `- ${parts.join(" ")}`
 }
 
+/**
+ * Render any context files the user has attached to the session into a prompt
+ * block. Each file's text is already capped at `PER_FILE_CHAR_CAP` upstream in
+ * `lib/context-file-text.ts`. Intentionally terse framing so the LLM clearly
+ * understands these are cross-reference material, not rows to classify.
+ */
+export function formatContextFiles(files: ContextFileText[] | undefined): string {
+  if (!files || files.length === 0) return ""
+  const sections = files.map((f) => {
+    const body = f.text.length === 0 ? "[empty or unreadable]" : f.text
+    const trailer = f.truncated ? "\n\n[...truncated]" : ""
+    return `### ${f.fileName} (${f.fileType})\n\n${body}${trailer}`
+  })
+  return `## Supplementary context from attached files
+
+These files were attached by the user to give you cross-reference material. They are NOT candidate rows to classify — they exist so you can look up context when needed.
+
+${sections.join("\n\n")}
+
+`
+}
+
 function formatMessageHistory(messages: WizardMessage[]): string {
   if (messages.length === 0) return "(no prior turns — this is the first message)"
   const recent = messages.slice(-30)
@@ -355,7 +466,11 @@ export function buildWizardPrompt(input: WizardPromptInput): {
   focusedCount: number
   elidedCount: number
 } {
-  const { focused, elidedCount } = pickFocusedCandidates(input.candidates, input.focusRowIndexes)
+  const { focused, elidedCount } = pickFocusedCandidates(
+    input.candidates,
+    input.focusRowIndexes,
+    input.userMessage,
+  )
 
   const businessLine = input.businessName ? ` (${input.businessName})` : ""
   const localeLine =
@@ -395,13 +510,23 @@ ${formatProjects(input.projects)}
 ${formatAccounts(input.accounts, input.defaultAccountId)}
 When you know which account a transaction belongs to (matched bank, card mentioned in description, or user told you), set accountId on the candidateUpdate using one of the ids above. If the session has a default account the user can leave it as-is.
 
+## Proposing new accounts
+When you propose creating a new account for the user, infer its type from the name:
+- \`crypto_exchange\` for: Swissborg, Coinbase, Kraken, Binance, Bitstamp, Bit2Me, Bitpanda, Crypto.com, Nexo, KuCoin, Gemini, eToro crypto, Revolut Crypto (separate from the regular Revolut account).
+- \`crypto_wallet\` for: MetaMask, Ledger, Trezor, Trust Wallet, Phantom, Rainbow, and any self-custody wallet.
+- \`bank\` for clear bank names (BBVA, Santander, N26, Revolut, etc.).
+- \`credit_card\` when the row descriptions say "card ending in X", "Visa", "Mastercard", or the account name says card/tarjeta.
+- \`cash\` for cash journals or "caja" accounts.
+
+When you emit a proposal in your reply suggesting a new account, include the proposed accountType in your \`assistantMessage\` so the user sees it when confirming.
+
 ## Active categorization rules
 ${formatRules(input.rules)}
 
 ## Conversation so far
 ${formatMessageHistory(input.messages)}
 
-## Current candidate transactions you may update
+${formatContextFiles(input.contextFiles)}## Current candidate transactions you may update
 ${candidatesBlock}
 
 ## The user's latest message
@@ -419,12 +544,18 @@ A transaction looks crypto-related when any of these are true:
 - The source account's type is crypto_exchange or crypto_wallet.
 - Description mentions "withdrawal", "deposit", "trade", "sell", "buy" together with a token symbol (BTC, ETH, SOL, USDC, ...).
 
+Personal-bucket status assignment (CRITICAL — the two personal buckets mean very different things for tax):
+- status="personal_taxable" for: every crypto_disposal (ganancia/pérdida patrimonial, Art. 33 LIRPF), crypto_staking_reward (rendimientos capital mobiliario, Art. 25.2 LIRPF), crypto_airdrop, stock_disposal, stock_dividend, and any row that produces a taxable event on Modelo 100 base del ahorro or rendimientos. These are personal (not business activity) BUT feed Modelo 100 via the FIFO ledger and category-based tax queries.
+- status="personal_ignored" for: genuine own-account transfers (EUR withdrawal to the user's bank, crypto transfer between the user's exchanges/wallets), the counter-fiat-leg of a disposal on the bank statement (to avoid double-counting the gain), mistaken deposits, dust-sized conversions, fee-adjustment refunds.
+
+NEVER use personal_ignored on a disposal / reward / airdrop / dividend row. Those go to personal_taxable.
+
 Rules:
-- A bank deposit FROM a crypto exchange is NOT ordinary income. It is the fiat leg of a disposal. Set status="personal_ignored" (autónomo) or "business_non_deductible" (SL) on the bank row, and create/flag the matching disposal row.
-- A disposal (sell of crypto → fiat or crypto → crypto) is a taxable event. Set categoryCode="crypto_disposal". Ask the user for: asset ticker, quantity, and cost basis per unit in EUR. Emit the metadata in extra.crypto — see Output rules below.
-- A fiat→crypto transfer is a purchase. Set categoryCode="crypto_purchase" and capture asset + quantity + pricePerUnit in extra.crypto. Purchases are not taxable events; they build cost basis for later FIFO matching.
-- Staking rewards, lending interest, and yield-farming payouts go to categoryCode="crypto_staking_reward" (rendimiento del capital mobiliario, Modelo 100).
-- Airdrops/forks go to categoryCode="crypto_airdrop" with pricePerUnit = fair market value at receipt.
+- A bank deposit FROM a crypto exchange is NOT ordinary income. It is the fiat leg of a disposal, and the gain is already captured on the disposal row itself. Set status="personal_ignored" (autónomo) or "business_non_deductible" (SL) on the BANK row to avoid double-counting, and create/flag the matching disposal row with status="personal_taxable".
+- A disposal (sell of crypto → fiat or crypto → crypto) is a taxable event. Set categoryCode="crypto_disposal" and status="personal_taxable" (autónomo/individual) or "business_non_deductible" (SL). Ask the user for: asset ticker, quantity, and cost basis per unit in EUR. Emit the metadata in extra.crypto — see Output rules below.
+- A fiat→crypto transfer is a purchase. Set categoryCode="crypto_purchase" and capture asset + quantity + pricePerUnit in extra.crypto. Purchases are not taxable events; they build cost basis for later FIFO matching. Status="personal_ignored" is fine on purchases since they produce no taxable number on their own.
+- Staking rewards, lending interest, and yield-farming payouts go to categoryCode="crypto_staking_reward" with status="personal_taxable" (rendimiento del capital mobiliario, Modelo 100).
+- Airdrops/forks go to categoryCode="crypto_airdrop" with status="personal_taxable" and pricePerUnit = fair market value at receipt.
 - When cost basis is unknown, keep status="needs_review" and ask the user to paste it from their exchange records. Never guess.
 - Emit a taxTip citing "Art. 14.1.c LIRPF" (FIFO obligation) the first time a crypto disposal is classified in a session. Also surface Modelo 721 awareness if the user mentions foreign-exchange holdings over €50K at year-end.
 
@@ -433,7 +564,7 @@ A transaction looks broker-related when any of these are true:
 - Merchant/sender matches a known broker: Interactive Brokers, Trade Republic, DeGiro, Vanguard, eToro, Revolut Invest, Renta 4, Indexa, MyInvestor, XTB, Scalable Capital.
 - Description mentions a common ticker (AAPL, MSFT, VWCE, IWDA, SPY, ...) + BUY/SELL/BROKERAGE/DIVIDENDO keywords.
 
-Rules mirror crypto but use the "stock_" prefix: stock_purchase, stock_disposal, stock_dividend. extra.crypto is reused as the payload (asset=ticker, quantity, pricePerUnit, costBasisPerUnit) — asset_class on the ledger row distinguishes them at query time. Stock gains roll into the same ganancias patrimoniales bucket of Modelo 100 as crypto; dividends go to rendimientos del capital mobiliario (savings bracket).
+Rules mirror crypto but use the "stock_" prefix: stock_purchase, stock_disposal, stock_dividend. extra.crypto is reused as the payload (asset=ticker, quantity, pricePerUnit, costBasisPerUnit) — asset_class on the ledger row distinguishes them at query time. Stock gains roll into the same ganancias patrimoniales bucket of Modelo 100 as crypto; dividends go to rendimientos del capital mobiliario (savings bracket). Set status="personal_taxable" on stock_disposal and stock_dividend rows (autónomo/individual) or "business_non_deductible" (SL).
 
 ## Personal streams (individual filer or autónomo's personal side)
 Salary deposits from an employer (nómina): don't assign a crypto/stock category — instead set status="personal_income" and link an income_source via the /personal/employment page. The wizard only categorizes and flags these for the user to attach.
@@ -455,7 +586,29 @@ Telltales:
 
 When you see two candidate rows that look like two legs of one transfer (same amount, different accounts, close in time), emit one entry in proposedTransferLinks naming both rowIndex values. When only one leg is visible (user tells you or description clearly implies an off-Taxinator account), emit an entry with rowIndexB=null to mark the row as an orphan transfer.
 
+When proposing an ORPHAN transfer (rowIndexB is null), do your best to set counterAccountId to the UUID of one of the user's existing accounts if the description strongly implies which side is the counter-party. Examples:
+- A Swissborg row that says "Deposit ETH" or "from ETH Wallet" + the user has an account named "ETH Wallet" → set counterAccountId to that account's id.
+- A Swissborg row "Withdrawal EUR" + the user has BBVA/N26/Revolut → if the description names one specifically, use that; otherwise omit counterAccountId so the UI can ask.
+- When genuinely uncertain, omit counterAccountId entirely (the UI will let the user pick manually).
+
+Use the \`id=…\` field from the "Available bank accounts" list when referencing accounts.
+
 TRUST the user when they say "mistake" or "between my accounts" — apply type="transfer" even if the description looks like income.
+
+## Currency conversions within one account (IMPORTANT)
+
+Rows that move money between currencies inside a single account — e.g. Revolut's "Exchanged to EUR", "Exchanged to PLN", "Currency conversion", or similar — are NOT business income/expense. They're an in-account FX operation. Model them as:
+- type: "conversion"
+- status: "personal_ignored"
+
+Telltales:
+- Description contains "Exchanged to <CURRENCY>", "Converted to <CURRENCY>", "FX <PAIR>", "Currency conversion".
+- The counterparty field is blank or the same bank as the source account (e.g. "Revolut" on a Revolut statement).
+- Two rows on the same date, same account, opposite sign, different currencies.
+
+When you see two candidate rows that look like legs of one conversion (same account, same date, opposite sign, different currencies), emit one entry in proposedTransferLinks naming both rowIndex values — the same machinery that handles transfers also handles conversions once both legs are marked type="conversion". If only one leg is visible (the other side is off-statement or excluded), mark the single row type="conversion" + status="personal_ignored" and leave it orphan.
+
+FX gain/loss computation is pending — for now, just classify the rows correctly. Do NOT try to compute realized_fx_gain_cents yourself.
 
 ## Output rules
 Produce a single JSON object with these top-level fields:

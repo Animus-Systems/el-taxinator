@@ -36,6 +36,7 @@ vi.mock("@/models/settings", () => ({
 vi.mock("@/models/categories", () => ({ getCategories: vi.fn(async () => []) }))
 vi.mock("@/models/projects", () => ({ getProjects: vi.fn(async () => []) }))
 vi.mock("@/models/rules", () => ({ getActiveRules: vi.fn(async () => []) }))
+vi.mock("@/models/accounts", () => ({ getActiveAccounts: vi.fn(async () => []) }))
 vi.mock("@/models/transactions", () => ({
   getTransactionById: vi.fn(async () => null),
   findSimilarByMerchant: vi.fn(async () => []),

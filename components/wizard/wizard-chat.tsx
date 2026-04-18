@@ -12,10 +12,14 @@ type Props = {
   sessionId: string
   messages: WizardMessage[]
   pendingTurnAt: Date | null
+  /** True when some other caller (e.g. the shell's auto-kick turn or a context-file
+   * attach) is already running a turn for this session. Blocks sends so the user
+   * doesn't collide with the server-side turn lock. */
+  externalTurnPending?: boolean
   onAfterTurn?: () => void
 }
 
-export function WizardChat({ sessionId, messages, pendingTurnAt, onAfterTurn }: Props) {
+export function WizardChat({ sessionId, messages, pendingTurnAt, externalTurnPending = false, onAfterTurn }: Props) {
   const { t, i18n } = useTranslation("wizard")
   const utils = trpc.useUtils()
   const bottomRef = useRef<HTMLDivElement>(null)
@@ -70,7 +74,7 @@ export function WizardChat({ sessionId, messages, pendingTurnAt, onAfterTurn }: 
     bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" })
   }, [messages.length, sendTurn.isPending])
 
-  const isTurnPending = sendTurn.isPending || retryTurn.isPending
+  const isTurnPending = sendTurn.isPending || retryTurn.isPending || externalTurnPending
   const lastMessage = messages[messages.length - 1]
   const lastAssistantFailed = lastMessage?.role === "assistant" && lastMessage.status === "failed"
 
@@ -95,7 +99,10 @@ export function WizardChat({ sessionId, messages, pendingTurnAt, onAfterTurn }: 
   }
 
   function onKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
-    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+    // Enter sends, Shift+Enter inserts a newline. IME composition is skipped
+    // so pressing Enter to confirm e.g. a Japanese/Chinese candidate doesn't
+    // send a half-composed message.
+    if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
       e.preventDefault()
       onSend()
     }

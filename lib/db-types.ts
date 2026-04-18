@@ -138,7 +138,7 @@ export const fileSchema = z.object({
   createdAt: z.date(),
 })
 
-export const transactionTypeSchema = z.enum(["income", "expense", "transfer", "other"])
+export const transactionTypeSchema = z.enum(["income", "expense", "transfer", "conversion", "other"])
 export type TransactionType = z.infer<typeof transactionTypeSchema>
 
 export const transferDirectionSchema = z.enum(["outgoing", "incoming"]).nullable()
@@ -172,6 +172,7 @@ export const transactionSchema = z.object({
   transferId: z.string().uuid().nullable(),
   counterAccountId: z.string().uuid().nullable(),
   transferDirection: transferDirectionSchema,
+  realizedFxGainCents: z.number().int().nullable(),
 })
 
 export const currencySchema = z.object({
@@ -232,6 +233,7 @@ export const transactionReviewStatusSchema = z.enum([
   "needs_review",
   "business",
   "business_non_deductible",
+  "personal_taxable",
   "personal_ignored",
 ])
 export type TransactionReviewStatusValue = z.infer<typeof transactionReviewStatusSchema>
@@ -256,7 +258,7 @@ export const candidateUpdateSchema = z.object({
   description: z.string().nullable().optional(),
   total: z.number().nullable().optional(),
   currencyCode: z.string().nullable().optional(),
-  type: z.enum(["expense", "income", "transfer"]).nullable().optional(),
+  type: z.enum(["expense", "income", "transfer", "conversion"]).nullable().optional(),
   categoryCode: z.string().nullable().optional(),
   projectCode: z.string().nullable().optional(),
   accountId: z.string().nullable().optional(),
@@ -278,7 +280,7 @@ export const bulkActionSchema = z.object({
   apply: z.object({
     categoryCode: z.string().nullable().optional(),
     projectCode: z.string().nullable().optional(),
-    type: z.enum(["expense", "income", "transfer"]).nullable().optional(),
+    type: z.enum(["expense", "income", "transfer", "conversion"]).nullable().optional(),
     status: transactionReviewStatusSchema.nullable().optional(),
   }),
   affectedRowIndexes: z.array(z.number()).default([]),
@@ -489,6 +491,16 @@ export const deleteRuleActionSchema = z.object({
 })
 export type DeleteRuleAction = z.infer<typeof deleteRuleActionSchema>
 
+export const pairTransfersBulkActionSchema = z.object({
+  kind: z.literal("pairTransfersBulk"),
+  fromAccountId: z.string().uuid(),
+  toAccountId: z.string().uuid(),
+  /** Optional date window tightening: scan only rows issued on/after this date (YYYY-MM-DD). */
+  sinceDate: z.string().nullable().optional(),
+  reason: z.string().max(512),
+})
+export type PairTransfersBulkAction = z.infer<typeof pairTransfersBulkActionSchema>
+
 export const proposedActionSchema = z.discriminatedUnion("kind", [
   createRuleActionSchema,
   updateTransactionActionSchema,
@@ -498,6 +510,7 @@ export const proposedActionSchema = z.discriminatedUnion("kind", [
   createProjectActionSchema,
   deleteTransactionActionSchema,
   deleteRuleActionSchema,
+  pairTransfersBulkActionSchema,
 ])
 export type ProposedAction = z.infer<typeof proposedActionSchema>
 
@@ -546,6 +559,11 @@ export const wizardAssistantReplySchema = z.object({
         rowIndexB: z.number().int().nullable(),
         confidence: z.number().min(0).max(1),
         reason: z.string().min(1).max(500),
+        // When the AI can confidently identify which of the user's existing
+        // accounts is the other side of an orphan transfer (rowIndexB === null),
+        // it may set this to that account's id. The UI still lets the user
+        // override before confirming.
+        counterAccountId: z.string().uuid().nullable().optional(),
       }),
     )
     .optional()
@@ -553,7 +571,7 @@ export const wizardAssistantReplySchema = z.object({
 })
 export type WizardAssistantReply = z.infer<typeof wizardAssistantReplySchema>
 
-export const importSessionEntryModeSchema = z.enum(["csv", "pdf", "manual"])
+export const importSessionEntryModeSchema = z.enum(["csv", "pdf", "manual", "deferred"])
 export type ImportSessionEntryMode = z.infer<typeof importSessionEntryModeSchema>
 
 export const importSessionStatusSchema = z.enum(["pending", "committed", "abandoned"])
@@ -578,6 +596,7 @@ export const importSessionSchema = z.object({
   lastActivityAt: z.date(),
   pendingTurnAt: z.date().nullable(),
   fileId: z.string().nullable(),
+  contextFileIds: z.array(z.string().uuid()).default([]),
   createdAt: z.date(),
 })
 

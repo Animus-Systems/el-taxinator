@@ -128,6 +128,7 @@ CREATE TABLE transactions (
     transfer_id uuid,
     counter_account_id uuid REFERENCES accounts(id) ON DELETE SET NULL,
     transfer_direction text CHECK (transfer_direction IN ('outgoing', 'incoming') OR transfer_direction IS NULL),
+    realized_fx_gain_cents integer,
     FOREIGN KEY (category_code, user_id) REFERENCES categories(code, user_id) ON UPDATE CASCADE ON DELETE RESTRICT,
     FOREIGN KEY (project_code, user_id) REFERENCES projects(code, user_id) ON UPDATE CASCADE ON DELETE RESTRICT
 );
@@ -433,6 +434,7 @@ CREATE TABLE import_sessions (
     last_activity_at timestamp(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     pending_turn_at timestamp(3),
     file_id uuid REFERENCES files(id) ON DELETE SET NULL,
+    context_file_ids jsonb NOT NULL DEFAULT '[]'::jsonb,
     created_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
 CREATE INDEX import_sessions_user_id_idx ON import_sessions (user_id);

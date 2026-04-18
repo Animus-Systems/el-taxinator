@@ -6,18 +6,16 @@
 import { useTranslation } from "react-i18next"
 import type { ComponentProps } from "react"
 import { trpc } from "~/trpc"
-import { FilePreview } from "@/components/files/preview"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
-import { Card } from "@/components/ui/card"
 import { AnalyzeAllButton } from "@/components/unsorted/analyze-all-button"
 import AnalyzeForm from "@/components/unsorted/analyze-form"
+import { InboxFileRow } from "@/components/unsorted/inbox-file-row"
 import { WizardSessionsInline } from "@/components/wizard/wizard-sessions-inline"
 import config from "@/lib/config"
 import { hasAnyProviderConfigured } from "@/lib/llm-providers"
 import { Loader2, PartyPopper, Settings } from "lucide-react"
 import { Link } from "@/lib/navigation"
-import type { File } from "@/lib/db-types"
 
 type AnalyzeFormInvoice = NonNullable<ComponentProps<typeof AnalyzeForm>["invoices"]>[number]
 
@@ -90,31 +88,18 @@ export function UnsortedPage() {
           <h2 className="text-sm font-medium text-muted-foreground">
             {t("unreviewedFilesHeading", { count: fileList.length })}
           </h2>
-          <div className="flex flex-col gap-5">
+          <div className="flex flex-col gap-2">
             {fileList.map((file) => (
-              <Card
+              <InboxFileRow
                 key={file.id}
-                id={file.id}
-                className="flex flex-row flex-wrap md:flex-nowrap justify-center items-start gap-5 p-5 bg-gradient-to-br from-violet-50/80 via-indigo-50/80 to-white border-violet-200/60 rounded-2xl"
-              >
-                <div className="w-full max-w-[500px]">
-                  <Card>
-                    <FilePreview file={file} />
-                  </Card>
-                </div>
-
-                <div className="w-full">
-                  <AnalyzeForm
-                    file={file as File}
-                    categories={categories ?? []}
-                    projects={projects ?? []}
-                    currencies={currencies ?? []}
-                    fields={fields ?? []}
-                    settings={settings ?? {}}
-                    invoices={(invoices ?? []).map(normalizeInvoice)}
-                  />
-                </div>
-              </Card>
+                file={file}
+                categories={categories ?? []}
+                projects={projects ?? []}
+                currencies={currencies ?? []}
+                fields={fields ?? []}
+                settings={settings ?? {}}
+                invoices={(invoices ?? []).map(normalizeInvoice)}
+              />
             ))}
           </div>
         </section>

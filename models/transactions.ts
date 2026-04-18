@@ -317,6 +317,87 @@ export async function findSimilarByMerchant(
   )
 }
 
+export type DuplicateMatch = {
+  candidateRowIndex: number
+  existingTransactionId: string
+  matchedBy: "merchant" | "name"
+}
+
+export type DuplicateCheckCandidate = {
+  rowIndex: number
+  accountId: string | null
+  total: number | null
+  currencyCode: string | null
+  issuedAt: string | Date | null
+  merchant: string | null
+  name: string | null
+}
+
+function fingerprint(s: string | null): string | null {
+  if (!s) return null
+  const stripped = s.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]/g, "").trim()
+  return stripped.length === 0 ? null : stripped
+}
+
+/**
+ * Batch-check a set of import candidates against existing transactions.
+ * Returns one match per matched candidate. Safe for 50-200 candidates.
+ *
+ * Match criteria (conservative to avoid false positives):
+ *   - same user_id, account_id, currency_code
+ *   - ABS(total) equal
+ *   - issued_at on the same day
+ *   - merchant OR name fingerprint equal (lowercase, alnum-only)
+ */
+export async function findDuplicateTransactions(
+  userId: string,
+  candidates: DuplicateCheckCandidate[],
+): Promise<DuplicateMatch[]> {
+  if (candidates.length === 0) return []
+
+  const matches: DuplicateMatch[] = []
+  for (const c of candidates) {
+    if (
+      c.total === null ||
+      c.currencyCode === null ||
+      c.issuedAt === null ||
+      c.accountId === null
+    ) {
+      continue
+    }
+    const merchantFp = fingerprint(c.merchant)
+    const nameFp = fingerprint(c.name)
+    const fp = merchantFp ?? nameFp
+    if (!fp) continue
+
+    const issuedAtDate = typeof c.issuedAt === "string" ? new Date(c.issuedAt) : c.issuedAt
+
+    const rows = await queryMany<Transaction>(
+      sql`SELECT * FROM transactions
+          WHERE user_id = ${userId}
+            AND account_id = ${c.accountId}
+            AND currency_code = ${c.currencyCode}
+            AND ABS(total) = ${Math.abs(c.total)}
+            AND issued_at::date = ${issuedAtDate}::date
+            AND (
+              regexp_replace(LOWER(COALESCE(merchant, '')), '[^a-z0-9]', '', 'g') = ${fp}
+              OR
+              regexp_replace(LOWER(COALESCE(name, '')), '[^a-z0-9]', '', 'g') = ${fp}
+            )
+          LIMIT 1`,
+    )
+    const first = rows[0]
+    if (first) {
+      matches.push({
+        candidateRowIndex: c.rowIndex,
+        existingTransactionId: first.id,
+        matchedBy: merchantFp === fp ? "merchant" : "name",
+      })
+    }
+  }
+  return matches
+}
+
 export const createTransaction = async (
   userId: string,
   data: TransactionData,

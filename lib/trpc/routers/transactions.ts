@@ -21,7 +21,7 @@ import {
   type Transaction,
 } from "@/lib/db-types"
 import { getActiveEntityId } from "@/lib/entities"
-import { sql, queryMany } from "@/lib/sql"
+import { sql, queryMany, execute } from "@/lib/sql"
 
 // Transaction with joined category/project relations
 const transactionWithRelationsSchema = transactionSchema.extend({
@@ -206,6 +206,84 @@ export const transactionsRouter = router({
       return { ok: true }
     }),
 
+  /**
+   * Set `counter_account_id` on a transfer row. When a non-null account is
+   * supplied, also try to pair the row with an existing opposite-direction
+   * unpaired row on that account (strict matcher: same amount, currency,
+   * ±1 day). If a unique match is found, both rows get a shared transfer_id
+   * and the orphan state flips to paired. Otherwise counter_account_id is set
+   * but the row stays orphan (awaiting match).
+   */
+  setCounterAccount: authedProcedure
+    .input(z.object({
+      id: z.string().uuid(),
+      counterAccountId: z.string().uuid().nullable(),
+    }))
+    .output(z.object({ ok: z.boolean(), paired: z.boolean() }))
+    .mutation(async ({ ctx, input }) => {
+      // First: persist the user's choice regardless of pairing outcome.
+      await execute(
+        sql`UPDATE transactions
+            SET counter_account_id = ${input.counterAccountId}
+            WHERE id = ${input.id} AND user_id = ${ctx.user.id}`,
+      )
+
+      if (input.counterAccountId === null) return { ok: true, paired: false }
+
+      // Load the row we just updated so we can search for a matching leg.
+      const [row] = await queryMany<Transaction>(
+        sql`SELECT * FROM transactions WHERE id = ${input.id} AND user_id = ${ctx.user.id} LIMIT 1`,
+      )
+      if (!row) return { ok: true, paired: false }
+      if (row.transferId !== null) return { ok: true, paired: true }
+      if (row.type !== "transfer") return { ok: true, paired: false }
+      if (row.transferDirection === null || row.accountId === null) return { ok: true, paired: false }
+      if (row.total === null || row.currencyCode === null || row.issuedAt === null) {
+        return { ok: true, paired: false }
+      }
+
+      // Opposite direction of this leg — an "outgoing" leg needs an "incoming" partner.
+      const oppositeDirection = row.transferDirection === "outgoing" ? "incoming" : "outgoing"
+      const oneDayMs = 24 * 60 * 60 * 1000
+      const issuedAtDate = row.issuedAt instanceof Date ? row.issuedAt : new Date(row.issuedAt)
+      const lower = new Date(issuedAtDate.getTime() - oneDayMs)
+      const upper = new Date(issuedAtDate.getTime() + oneDayMs)
+
+      const candidates = await queryMany<Transaction>(
+        sql`SELECT * FROM transactions
+            WHERE user_id = ${ctx.user.id}
+              AND id <> ${row.id}
+              AND account_id = ${input.counterAccountId}
+              AND ABS(total) = ABS(${row.total})
+              AND currency_code = ${row.currencyCode}
+              AND issued_at >= ${lower}
+              AND issued_at <= ${upper}
+              AND transfer_id IS NULL
+              AND (
+                type = 'transfer' AND transfer_direction = ${oppositeDirection}
+                OR type = ${row.transferDirection === "outgoing" ? "income" : "expense"}
+              )
+            LIMIT 2`,
+      )
+      if (candidates.length !== 1) return { ok: true, paired: false }
+      const partner = candidates[0]!
+      if (partner.accountId === null) return { ok: true, paired: false }
+
+      // Pair them. outgoing = this row when direction=outgoing, else partner.
+      const outgoingId = row.transferDirection === "outgoing" ? row.id : partner.id
+      const outgoingAccount = row.transferDirection === "outgoing" ? row.accountId : partner.accountId
+      const incomingId = row.transferDirection === "outgoing" ? partner.id : row.id
+      const incomingAccount = row.transferDirection === "outgoing" ? partner.accountId : row.accountId
+      await linkTransferPair({
+        userId: ctx.user.id,
+        outgoingId,
+        outgoingAccountId: outgoingAccount,
+        incomingId,
+        incomingAccountId: incomingAccount,
+      })
+      return { ok: true, paired: true }
+    }),
+
   getPairedLeg: authedProcedure
     .input(z.object({
       transferId: z.string().uuid(),
@@ -221,5 +299,115 @@ export const transactionsRouter = router({
             LIMIT 1`,
       )
       return rows[0] ?? null
+    }),
+
+  /**
+   * Bulk-pair unpaired transfer candidates across two accounts.
+   *
+   * Strict matcher: same amount, same currency, ±1 day, opposite direction.
+   * - from-account contributes the OUTGOING leg (type='expense' OR
+   *   type='transfer' with direction='outgoing')
+   * - to-account contributes the INCOMING leg (type='income' OR
+   *   type='transfer' with direction='incoming')
+   *
+   * Ambiguous candidates (one outgoing matching multiple incomings or vice
+   * versa) are skipped — only the uniquely-closest-in-time pair is linked.
+   */
+  pairTransfersBulk: authedProcedure
+    .input(z.object({
+      fromAccountId: z.string().uuid(),
+      toAccountId: z.string().uuid(),
+      sinceDate: z.string().nullable().optional(),
+    }))
+    .output(z.object({ paired: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const sinceDate = input.sinceDate ? new Date(input.sinceDate) : null
+      // We build two branches so we can use the sql tagged template without
+      // nested sql`` values (the helper only supports parameter interpolation).
+      const query = sinceDate
+        ? sql`WITH candidates AS (
+                SELECT
+                  o.id AS from_id,
+                  i.id AS to_id,
+                  o.account_id AS from_account,
+                  i.account_id AS to_account,
+                  ROW_NUMBER() OVER (PARTITION BY o.id ORDER BY ABS(EXTRACT(EPOCH FROM (o.issued_at - i.issued_at))), i.id) AS rn_o,
+                  ROW_NUMBER() OVER (PARTITION BY i.id ORDER BY ABS(EXTRACT(EPOCH FROM (i.issued_at - o.issued_at))), o.id) AS rn_i
+                FROM transactions o
+                JOIN transactions i
+                  ON o.user_id = i.user_id
+                 AND ABS(o.total) = ABS(i.total)
+                 AND o.currency_code = i.currency_code
+                 AND o.issued_at BETWEEN i.issued_at - interval '1 day' AND i.issued_at + interval '1 day'
+                WHERE o.user_id = ${ctx.user.id}
+                  AND o.account_id = ${input.fromAccountId}
+                  AND i.account_id = ${input.toAccountId}
+                  AND o.transfer_id IS NULL
+                  AND i.transfer_id IS NULL
+                  -- The user's fromAccountId/toAccountId argument supplies the
+                  -- direction implicitly, so we accept transfer rows regardless
+                  -- of whether transfer_direction has been set. Rows classified
+                  -- type='other' are also candidates because Swissborg-style
+                  -- imports sometimes land withdrawals/deposits as 'other'.
+                  AND o.type IN ('expense', 'transfer', 'other')
+                  AND i.type IN ('income', 'transfer', 'other')
+                  AND o.issued_at >= ${sinceDate}
+                  AND i.issued_at >= ${sinceDate}
+              )
+              SELECT from_id, to_id, from_account, to_account FROM candidates
+              WHERE rn_o = 1 AND rn_i = 1`
+        : sql`WITH candidates AS (
+                SELECT
+                  o.id AS from_id,
+                  i.id AS to_id,
+                  o.account_id AS from_account,
+                  i.account_id AS to_account,
+                  ROW_NUMBER() OVER (PARTITION BY o.id ORDER BY ABS(EXTRACT(EPOCH FROM (o.issued_at - i.issued_at))), i.id) AS rn_o,
+                  ROW_NUMBER() OVER (PARTITION BY i.id ORDER BY ABS(EXTRACT(EPOCH FROM (i.issued_at - o.issued_at))), o.id) AS rn_i
+                FROM transactions o
+                JOIN transactions i
+                  ON o.user_id = i.user_id
+                 AND ABS(o.total) = ABS(i.total)
+                 AND o.currency_code = i.currency_code
+                 AND o.issued_at BETWEEN i.issued_at - interval '1 day' AND i.issued_at + interval '1 day'
+                WHERE o.user_id = ${ctx.user.id}
+                  AND o.account_id = ${input.fromAccountId}
+                  AND i.account_id = ${input.toAccountId}
+                  AND o.transfer_id IS NULL
+                  AND i.transfer_id IS NULL
+                  -- The user's fromAccountId/toAccountId argument supplies the
+                  -- direction implicitly, so we accept transfer rows regardless
+                  -- of whether transfer_direction has been set. Rows classified
+                  -- type='other' are also candidates because Swissborg-style
+                  -- imports sometimes land withdrawals/deposits as 'other'.
+                  AND o.type IN ('expense', 'transfer', 'other')
+                  AND i.type IN ('income', 'transfer', 'other')
+              )
+              SELECT from_id, to_id, from_account, to_account FROM candidates
+              WHERE rn_o = 1 AND rn_i = 1`
+
+      const pairs = await queryMany<{
+        fromId: string
+        toId: string
+        fromAccount: string
+        toAccount: string
+      }>(query)
+
+      let paired = 0
+      for (const p of pairs) {
+        try {
+          await linkTransferPair({
+            userId: ctx.user.id,
+            outgoingId: p.fromId,
+            outgoingAccountId: p.fromAccount,
+            incomingId: p.toId,
+            incomingAccountId: p.toAccount,
+          })
+          paired++
+        } catch (err) {
+          console.warn("[pairTransfersBulk] link failed:", err)
+        }
+      }
+      return { paired }
     }),
 })

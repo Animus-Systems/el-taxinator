@@ -6,6 +6,16 @@
 import { useTranslation } from "react-i18next"
 import { trpc } from "~/trpc"
 import { CrudTable } from "@/components/settings/crud"
+import { Badge } from "@/components/ui/badge"
+import type { AccountTypeValue } from "@/lib/db-types"
+
+const ACCOUNT_TYPES: AccountTypeValue[] = [
+  "bank",
+  "credit_card",
+  "crypto_exchange",
+  "crypto_wallet",
+  "cash",
+]
 
 export function AccountsSettingsPage() {
   const { t } = useTranslation("settings")
@@ -34,6 +44,28 @@ export function AccountsSettingsPage() {
 
   const currencyCodes = (currencies ?? []).map((c) => (c as Record<string, unknown>)["code"] as string)
 
+  const accountTypeLabels: Record<string, string> = Object.fromEntries(
+    ACCOUNT_TYPES.map((v) => [v, t(`accountTypes.${v}`)]),
+  )
+
+  const renderAccountTypeBadge = (value: unknown) => {
+    const v = (typeof value === "string" ? value : "bank") as AccountTypeValue
+    const label = accountTypeLabels[v] ?? v
+    const isCrypto = v === "crypto_exchange" || v === "crypto_wallet"
+    return (
+      <Badge
+        variant={isCrypto ? "default" : "secondary"}
+        className={
+          isCrypto
+            ? "bg-sky-600 hover:bg-sky-600/80 text-white border-transparent"
+            : ""
+        }
+      >
+        {label}
+      </Badge>
+    )
+  }
+
   const accountsWithActions = (accounts ?? []).map((account) => ({
     ...account,
     isEditable: true,
@@ -53,6 +85,16 @@ export function AccountsSettingsPage() {
         columns={[
           { key: "name", label: t("name"), editable: true },
           { key: "bankName", label: t("bankName"), editable: true },
+          {
+            key: "accountType",
+            label: t("accountType"),
+            type: "select",
+            options: ACCOUNT_TYPES,
+            optionLabels: accountTypeLabels,
+            defaultValue: "bank",
+            editable: true,
+            renderCell: renderAccountTypeBadge,
+          },
           { key: "currencyCode", label: t("code"), type: "select", options: currencyCodes, editable: true },
           { key: "accountNumber", label: t("accountNumber"), editable: true },
           { key: "isActive", label: t("accountActive"), type: "checkbox", editable: true, defaultValue: true },
@@ -73,11 +115,14 @@ export function AccountsSettingsPage() {
               bankName: (d["bankName"] as string) || undefined,
               currencyCode: d["currencyCode"] as string,
               accountNumber: (d["accountNumber"] as string) || undefined,
+              accountType: ((d["accountType"] as AccountTypeValue) || "bank"),
               isActive: d["isActive"] as boolean ?? true,
             })
             return { success: true }
-          } catch {
-            return { success: false, error: "Failed to create account" }
+          } catch (err) {
+            const message = err instanceof Error ? err.message : String(err)
+            console.error("createAccount failed:", err)
+            return { success: false, error: `Failed to create account: ${message}` }
           }
         }}
         onEdit={async (id, data) => {
@@ -89,11 +134,14 @@ export function AccountsSettingsPage() {
               bankName: (d["bankName"] as string) || undefined,
               currencyCode: (d["currencyCode"] as string) || undefined,
               accountNumber: (d["accountNumber"] as string) || undefined,
+              accountType: (d["accountType"] as AccountTypeValue) || undefined,
               isActive: d["isActive"] as boolean,
             })
             return { success: true }
-          } catch {
-            return { success: false, error: "Failed to update account" }
+          } catch (err) {
+            const message = err instanceof Error ? err.message : String(err)
+            console.error("updateAccount failed:", err)
+            return { success: false, error: `Failed to update account: ${message}` }
           }
         }}
       />

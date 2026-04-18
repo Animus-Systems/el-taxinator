@@ -116,6 +116,33 @@ const PRE_V21_SCHEMA = `
     status text NOT NULL DEFAULT 'business'
   );
 
+  -- Minimal import_sessions stub so post-v21 migrations that ALTER this table
+  -- (e.g. v24 adds context_file_ids) have something to attach to. The v21
+  -- migration itself does not touch this table.
+  CREATE TABLE import_sessions (
+    id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
+    user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    status text NOT NULL DEFAULT 'pending',
+    data jsonb NOT NULL DEFAULT '[]',
+    created_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL
+  );
+
+  -- Minimal categories stub so post-v21 migrations that INSERT into this table
+  -- (e.g. v25 backfills crypto_* defaults) have something to attach to. The
+  -- v21 migration itself does not touch this table.
+  CREATE TABLE categories (
+    id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
+    user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    code text NOT NULL,
+    name jsonb,
+    color text,
+    llm_prompt text,
+    tax_form_ref text,
+    is_default boolean DEFAULT false,
+    created_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    UNIQUE (user_id, code)
+  );
+
   CREATE TABLE schema_version (
     id integer PRIMARY KEY DEFAULT 1 CHECK (id = 1),
     version integer NOT NULL DEFAULT 1,

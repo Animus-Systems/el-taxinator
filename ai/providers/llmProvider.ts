@@ -146,7 +146,11 @@ async function requestCLI(
       args[1] = fullPrompt
     }
 
-    const effectiveTimeout = timeoutMs ?? (hasAttachments ? 300_000 : 240_000)
+    // Defaults: 10 min for text-only turns, 15 min when attachments are in play.
+    // Big AI Accountant sessions (50+ candidates + context file + knowledge packs)
+    // can genuinely take 4+ minutes on Opus with thinking=high, so a 240s cap was
+    // falling off the cliff for real-world imports.
+    const effectiveTimeout = timeoutMs ?? (hasAttachments ? 900_000 : 600_000)
 
     const approxTokens = Math.ceil(fullPrompt.length / 4)
     const modelSource = config.model

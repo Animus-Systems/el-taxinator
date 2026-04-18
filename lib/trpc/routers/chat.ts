@@ -17,6 +17,8 @@ import {
 import type { TransactionData } from "@/models/transactions"
 import { createCategory } from "@/models/categories"
 import { createProject } from "@/models/projects"
+import { linkTransferPair } from "@/models/transfers"
+import { sql, queryMany } from "@/lib/sql"
 import { getActiveEntityId } from "@/lib/entities"
 import {
   chatMessageSchema,
@@ -274,6 +276,91 @@ export const chatRouter = router({
             const deleted = await deleteRule(action.ruleId, ctx.user.id)
             if (!deleted) throw new TRPCError({ code: "NOT_FOUND", message: "Rule not found" })
             result = { deleted: true }
+            break
+          }
+          case "pairTransfersBulk": {
+            const sinceDate = action.sinceDate ? new Date(action.sinceDate) : null
+            const query = sinceDate
+              ? sql`WITH candidates AS (
+                      SELECT
+                        o.id AS from_id,
+                        i.id AS to_id,
+                        o.account_id AS from_account,
+                        i.account_id AS to_account,
+                        ROW_NUMBER() OVER (PARTITION BY o.id ORDER BY ABS(EXTRACT(EPOCH FROM (o.issued_at - i.issued_at))), i.id) AS rn_o,
+                        ROW_NUMBER() OVER (PARTITION BY i.id ORDER BY ABS(EXTRACT(EPOCH FROM (i.issued_at - o.issued_at))), o.id) AS rn_i
+                      FROM transactions o
+                      JOIN transactions i
+                        ON o.user_id = i.user_id
+                       AND ABS(o.total) = ABS(i.total)
+                       AND o.currency_code = i.currency_code
+                       AND o.issued_at BETWEEN i.issued_at - interval '1 day' AND i.issued_at + interval '1 day'
+                      WHERE o.user_id = ${ctx.user.id}
+                        AND o.account_id = ${action.fromAccountId}
+                        AND i.account_id = ${action.toAccountId}
+                        AND o.transfer_id IS NULL
+                        AND i.transfer_id IS NULL
+                        -- Direction is implicit in from/to account args, so we
+                        -- don't require transfer_direction (legacy rows may have
+                        -- it NULL). 'other' also admitted because crypto-exchange
+                        -- statements sometimes land withdrawals/deposits there.
+                        AND o.type IN ('expense', 'transfer', 'other')
+                        AND i.type IN ('income', 'transfer', 'other')
+                        AND o.issued_at >= ${sinceDate}
+                        AND i.issued_at >= ${sinceDate}
+                    )
+                    SELECT from_id, to_id, from_account, to_account FROM candidates
+                    WHERE rn_o = 1 AND rn_i = 1`
+              : sql`WITH candidates AS (
+                      SELECT
+                        o.id AS from_id,
+                        i.id AS to_id,
+                        o.account_id AS from_account,
+                        i.account_id AS to_account,
+                        ROW_NUMBER() OVER (PARTITION BY o.id ORDER BY ABS(EXTRACT(EPOCH FROM (o.issued_at - i.issued_at))), i.id) AS rn_o,
+                        ROW_NUMBER() OVER (PARTITION BY i.id ORDER BY ABS(EXTRACT(EPOCH FROM (i.issued_at - o.issued_at))), o.id) AS rn_i
+                      FROM transactions o
+                      JOIN transactions i
+                        ON o.user_id = i.user_id
+                       AND ABS(o.total) = ABS(i.total)
+                       AND o.currency_code = i.currency_code
+                       AND o.issued_at BETWEEN i.issued_at - interval '1 day' AND i.issued_at + interval '1 day'
+                      WHERE o.user_id = ${ctx.user.id}
+                        AND o.account_id = ${action.fromAccountId}
+                        AND i.account_id = ${action.toAccountId}
+                        AND o.transfer_id IS NULL
+                        AND i.transfer_id IS NULL
+                        -- Direction is implicit in from/to account args, so we
+                        -- don't require transfer_direction (legacy rows may have
+                        -- it NULL). 'other' also admitted because crypto-exchange
+                        -- statements sometimes land withdrawals/deposits there.
+                        AND o.type IN ('expense', 'transfer', 'other')
+                        AND i.type IN ('income', 'transfer', 'other')
+                    )
+                    SELECT from_id, to_id, from_account, to_account FROM candidates
+                    WHERE rn_o = 1 AND rn_i = 1`
+            const pairs = await queryMany<{
+              fromId: string
+              toId: string
+              fromAccount: string
+              toAccount: string
+            }>(query)
+            let paired = 0
+            for (const p of pairs) {
+              try {
+                await linkTransferPair({
+                  userId: ctx.user.id,
+                  outgoingId: p.fromId,
+                  outgoingAccountId: p.fromAccount,
+                  incomingId: p.toId,
+                  incomingAccountId: p.toAccount,
+                })
+                paired++
+              } catch (err) {
+                console.warn("[chat.pairTransfersBulk] link failed:", err)
+              }
+            }
+            result = { paired }
             break
           }
         }
