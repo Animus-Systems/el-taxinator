@@ -38,11 +38,19 @@ export type FilesListOptions = {
   pageSize: number
 }
 
+export type FileImportSessionRole = "source" | "context"
+
 export type FileWithLink = File & {
   linkedTransactionId: string | null
   linkedTransactionName: string | null
   linkedInvoiceId: string | null
   linkedInvoiceNumber: string | null
+  linkedImportSessionId: string | null
+  linkedImportSessionTitle: string | null
+  linkedImportSessionRole: FileImportSessionRole | null
+  linkedDeductionId: string | null
+  linkedDeductionKind: string | null
+  linkedDeductionTaxYear: number | null
 }
 
 export type FilesListResult = {
@@ -51,14 +59,22 @@ export type FilesListResult = {
 }
 
 /**
- * Paginated list of every file this user owns, plus the linked-transaction
- * and linked-invoice pointers (if any), and filtering by status.
+ * Paginated list of every file this user owns, plus pointers to whatever
+ * domain record references it, and filtering by status.
  *
- * A file is considered "linked" if either:
- *   - its id appears in any transaction's `files` jsonb array, OR
- *   - it is referenced by an invoice's `pdf_file_id`.
+ * A file is considered "linked" if ANY of these hold:
+ *   - its id appears in any transaction's `files` jsonb array
+ *   - it is referenced by an invoice's `pdf_file_id`
+ *   - it is the source file of an import_sessions row (`file_id`)
+ *   - it appears in an import_sessions row's `context_file_ids` array
+ *   - it is referenced by a personal_deductions row's `file_id`
  *
- * `orphan` = reviewed but not linked to any transaction nor invoice.
+ * Rationale for the last three: CSV source files, wizard context attachments,
+ * and deduction receipts all used to be reported as "orphan" because the
+ * query only looked at transactions and invoices. That was misleading — those
+ * files are linked, just not to a transaction.
+ *
+ * `orphan` = reviewed but not linked to any of the above.
  * `unreviewed` = `is_reviewed = false`.
  */
 export const getFiles = async (userId: string, options: FilesListOptions): Promise<FilesListResult> => {
@@ -77,19 +93,24 @@ export const getFiles = async (userId: string, options: FilesListOptions): Promi
     conditions.push(`f.filename ILIKE $${params.length}`)
   }
 
+  const anyLinkSql =
+    "(lt.id IS NOT NULL OR li.id IS NOT NULL OR lis_src.id IS NOT NULL OR lis_ctx.id IS NOT NULL OR lpd.id IS NOT NULL)"
+  const noLinkSql =
+    "(lt.id IS NULL AND li.id IS NULL AND lis_src.id IS NULL AND lis_ctx.id IS NULL AND lpd.id IS NULL)"
+
   if (status === "unreviewed") {
     conditions.push("f.is_reviewed = false")
   } else if (status === "linked") {
-    conditions.push("(lt.id IS NOT NULL OR li.id IS NOT NULL)")
+    conditions.push(anyLinkSql)
   } else if (status === "orphan") {
-    conditions.push("lt.id IS NULL AND li.id IS NULL AND f.is_reviewed = true")
+    conditions.push(`${noLinkSql} AND f.is_reviewed = true`)
   }
 
   const whereClause = conditions.join(" AND ")
 
-  // Two LATERAL joins: one for the transaction that references this file in
-  // its `files` jsonb array, and one for the invoice that has this file as
-  // its `pdf_file_id`. Either (or both) makes the file "linked".
+  // Five LATERAL joins, one per linkage domain. LEFT JOIN + LIMIT 1 keeps the
+  // outer row count stable when a file happens to be referenced by multiple
+  // entities of the same kind (e.g. shared across two transactions).
   const fromClause = `
     FROM files f
     LEFT JOIN LATERAL (
@@ -104,6 +125,24 @@ export const getFiles = async (userId: string, options: FilesListOptions): Promi
       WHERE i.user_id = f.user_id AND i.pdf_file_id = f.id
       LIMIT 1
     ) li ON TRUE
+    LEFT JOIN LATERAL (
+      SELECT s.id, s.title, s.file_name
+      FROM import_sessions s
+      WHERE s.user_id = f.user_id AND s.file_id = f.id
+      LIMIT 1
+    ) lis_src ON TRUE
+    LEFT JOIN LATERAL (
+      SELECT s.id, s.title, s.file_name
+      FROM import_sessions s
+      WHERE s.user_id = f.user_id AND s.context_file_ids ? f.id::text
+      LIMIT 1
+    ) lis_ctx ON TRUE
+    LEFT JOIN LATERAL (
+      SELECT pd.id, pd.kind, pd.tax_year
+      FROM personal_deductions pd
+      WHERE pd.user_id = f.user_id AND pd.file_id = f.id
+      LIMIT 1
+    ) lpd ON TRUE
     WHERE ${whereClause}
   `
 
@@ -115,7 +154,16 @@ export const getFiles = async (userId: string, options: FilesListOptions): Promi
   const rowsResult = await pool.query(
     `SELECT f.*,
             lt.id AS linked_transaction_id, lt.name AS linked_transaction_name,
-            li.id AS linked_invoice_id, li.number AS linked_invoice_number
+            li.id AS linked_invoice_id, li.number AS linked_invoice_number,
+            lis_src.id AS linked_source_session_id,
+            lis_src.title AS linked_source_session_title,
+            lis_src.file_name AS linked_source_session_file_name,
+            lis_ctx.id AS linked_context_session_id,
+            lis_ctx.title AS linked_context_session_title,
+            lis_ctx.file_name AS linked_context_session_file_name,
+            lpd.id AS linked_deduction_id,
+            lpd.kind AS linked_deduction_kind,
+            lpd.tax_year AS linked_deduction_tax_year
      ${fromClause}
      ORDER BY f.created_at DESC
      LIMIT ${limitPlaceholder} OFFSET ${offsetPlaceholder}`,
@@ -134,12 +182,51 @@ export const getFiles = async (userId: string, options: FilesListOptions): Promi
     const linkedTxName = row["linked_transaction_name"]
     const linkedInvId = row["linked_invoice_id"]
     const linkedInvNumber = row["linked_invoice_number"]
+
+    // Prefer "source" over "context" if both somehow match the same file —
+    // being the session's source file is a stronger link than being attached
+    // as context. In practice they're mutually exclusive.
+    const srcId = row["linked_source_session_id"]
+    const srcTitle = row["linked_source_session_title"]
+    const srcFileName = row["linked_source_session_file_name"]
+    const ctxId = row["linked_context_session_id"]
+    const ctxTitle = row["linked_context_session_title"]
+    const ctxFileName = row["linked_context_session_file_name"]
+    let linkedImportSessionId: string | null = null
+    let linkedImportSessionTitle: string | null = null
+    let linkedImportSessionRole: FileImportSessionRole | null = null
+    if (typeof srcId === "string") {
+      linkedImportSessionId = srcId
+      linkedImportSessionTitle =
+        (typeof srcTitle === "string" && srcTitle) ||
+        (typeof srcFileName === "string" && srcFileName) ||
+        null
+      linkedImportSessionRole = "source"
+    } else if (typeof ctxId === "string") {
+      linkedImportSessionId = ctxId
+      linkedImportSessionTitle =
+        (typeof ctxTitle === "string" && ctxTitle) ||
+        (typeof ctxFileName === "string" && ctxFileName) ||
+        null
+      linkedImportSessionRole = "context"
+    }
+
+    const deductionId = row["linked_deduction_id"]
+    const deductionKind = row["linked_deduction_kind"]
+    const deductionTaxYear = row["linked_deduction_tax_year"]
+
     return {
       ...file,
       linkedTransactionId: typeof linkedTxId === "string" ? linkedTxId : null,
       linkedTransactionName: typeof linkedTxName === "string" ? linkedTxName : null,
       linkedInvoiceId: typeof linkedInvId === "string" ? linkedInvId : null,
       linkedInvoiceNumber: typeof linkedInvNumber === "string" ? linkedInvNumber : null,
+      linkedImportSessionId,
+      linkedImportSessionTitle,
+      linkedImportSessionRole,
+      linkedDeductionId: typeof deductionId === "string" ? deductionId : null,
+      linkedDeductionKind: typeof deductionKind === "string" ? deductionKind : null,
+      linkedDeductionTaxYear: typeof deductionTaxYear === "number" ? deductionTaxYear : null,
     }
   })
 

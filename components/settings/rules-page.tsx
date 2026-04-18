@@ -1,7 +1,8 @@
 
 import { useMemo, useState, useTransition } from "react"
-import { useTranslations } from "next-intl"
+import { useLocale, useTranslations } from "next-intl"
 import Link from "next/link"
+import { getLocalizedValue } from "@/lib/i18n-db"
 import { useConfirm } from "@/components/ui/confirm-dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -51,6 +52,7 @@ type FormState = typeof EMPTY_FORM
 
 export function RulesPage({ rules, categories, projects }: RulesPageProps) {
   const t = useTranslations("settings")
+  const locale = useLocale()
   const confirm = useConfirm()
   const utils = trpc.useUtils()
   const invalidateRules = () => void utils.rules.list.invalidate()
@@ -81,7 +83,7 @@ export function RulesPage({ rules, categories, projects }: RulesPageProps) {
   const openEdit = (rule: CategorizationRule) => {
     setEditingRule(rule)
     setForm({
-      name: rule.name,
+      name: getLocalizedValue(rule.name, locale),
       matchField: rule.matchField as FormState["matchField"],
       matchType: rule.matchType as FormState["matchType"],
       matchValue: rule.matchValue,
@@ -245,6 +247,7 @@ export function RulesPage({ rules, categories, projects }: RulesPageProps) {
           <TableBody>
             {filteredRules.map(rule => {
               const lastUsed = relativeDays(rule.lastAppliedAt)
+              const ruleName = getLocalizedValue(rule.name, locale)
               return (
                 <TableRow
                   key={rule.id}
@@ -255,7 +258,7 @@ export function RulesPage({ rules, categories, projects }: RulesPageProps) {
                       href={`/settings/rules/${rule.id}`}
                       className="hover:underline"
                     >
-                      {rule.name}
+                      {ruleName}
                     </Link>
                   </TableCell>
                   <TableCell className="text-xs font-mono">{formatPattern(rule)}</TableCell>
@@ -309,7 +312,7 @@ export function RulesPage({ rules, categories, projects }: RulesPageProps) {
                         variant="ghost"
                         size="icon"
                         onClick={() => openEdit(rule)}
-                        title={t("editItem", { name: rule.name })}
+                        title={t("editItem", { name: ruleName })}
                       >
                         <Pencil className="h-4 w-4" />
                       </Button>
@@ -318,7 +321,7 @@ export function RulesPage({ rules, categories, projects }: RulesPageProps) {
                         size="icon"
                         onClick={() => handleDelete(rule)}
                         disabled={isPending}
-                        title={t("deleteItem", { name: rule.name })}
+                        title={t("deleteItem", { name: ruleName })}
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>

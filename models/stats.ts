@@ -71,6 +71,11 @@ export type DashboardAnalytics = {
   }>
   topMerchants: MerchantBreakdown[]
   profitTrend: ProfitTrendPoint[]
+  /** Currencies other than the chart's default that appeared in the filtered
+   * range but could not be plotted (no converted value available). Lets the UI
+   * surface an "X transactions in USD / GBP not shown" footnote instead of
+   * silently dropping them. */
+  otherCurrencies: Array<{ currency: string; transactionCount: number }>
 }
 
 // ---------------------------------------------------------------------------
@@ -303,7 +308,13 @@ export const getDashboardAnalytics = cache(
   ): Promise<DashboardAnalytics> => {
     const pool = await getPool()
     const timeSeries = await getTimeSeriesStats(userId, filters, defaultCurrency)
-    const { clause, values, nextIdx } = buildTransactionWhere(userId, filters, { alias: "t" })
+    const { clause, values, nextIdx } = buildTransactionWhere(userId, filters, {
+      alias: "t",
+      extraConditions: [
+        "(t.status IS NULL OR t.status NOT IN ('personal_ignored', 'personal_taxable'))",
+        "(t.type IS NULL OR t.type NOT IN ('transfer', 'conversion'))",
+      ],
+    })
     const currencyIdx = nextIdx
     const analyticsValues = [...values, defaultCurrency.toUpperCase()]
 
@@ -330,7 +341,7 @@ export const getDashboardAnalytics = cache(
 
     const merchantResult = await pool.query(
       `SELECT
-         COALESCE(NULLIF(TRIM(t.merchant), ''), NULLIF(TRIM(t.name), ''), 'Unknown') AS merchant,
+         COALESCE(NULLIF(TRIM(t.merchant), ''), NULLIF(TRIM(t.name), ''), '__unlabeled__') AS merchant,
          SUM(
            CASE
              WHEN UPPER(t.converted_currency_code) = $${currencyIdx} THEN COALESCE(t.converted_total, 0)
@@ -338,12 +349,33 @@ export const getDashboardAnalytics = cache(
              ELSE 0
            END
          )::float AS expenses,
-         COUNT(*)::int AS transaction_count
+         COUNT(*)::int AS transaction_count,
+         CASE
+           WHEN COALESCE(NULLIF(TRIM(t.merchant), ''), NULLIF(TRIM(t.name), ''), '') = '' THEN 1
+           ELSE 0
+         END AS is_unlabeled
        FROM transactions t
        ${clause} AND t.type = 'expense'
-       GROUP BY COALESCE(NULLIF(TRIM(t.merchant), ''), NULLIF(TRIM(t.name), ''), 'Unknown')
-       ORDER BY expenses DESC
+       GROUP BY COALESCE(NULLIF(TRIM(t.merchant), ''), NULLIF(TRIM(t.name), ''), '__unlabeled__'),
+                CASE
+                  WHEN COALESCE(NULLIF(TRIM(t.merchant), ''), NULLIF(TRIM(t.name), ''), '') = '' THEN 1
+                  ELSE 0
+                END
+       ORDER BY is_unlabeled ASC, expenses DESC
        LIMIT 8`,
+      analyticsValues,
+    )
+
+    const otherCurrenciesResult = await pool.query(
+      `SELECT
+         UPPER(COALESCE(t.converted_currency_code, t.currency_code)) AS currency,
+         COUNT(*)::int AS transaction_count
+       FROM transactions t
+       ${clause} AND t.type IN ('income','expense')
+         AND UPPER(COALESCE(t.converted_currency_code, t.currency_code)) IS DISTINCT FROM $${currencyIdx}
+         AND UPPER(COALESCE(t.converted_currency_code, t.currency_code)) IS NOT NULL
+       GROUP BY UPPER(COALESCE(t.converted_currency_code, t.currency_code))
+       ORDER BY transaction_count DESC`,
       analyticsValues,
     )
 
@@ -357,7 +389,7 @@ export const getDashboardAnalytics = cache(
         transactionCount: Number(row["transaction_count"] ?? 0),
       })),
       topMerchants: merchantResult.rows.map((row) => ({
-        merchant: String(row["merchant"] ?? "Unknown"),
+        merchant: String(row["merchant"] ?? "__unlabeled__"),
         expenses: Number(row["expenses"] ?? 0),
         transactionCount: Number(row["transaction_count"] ?? 0),
       })),
@@ -368,6 +400,10 @@ export const getDashboardAnalytics = cache(
           date: point.date,
         }
       }),
+      otherCurrencies: otherCurrenciesResult.rows.map((row) => ({
+        currency: String(row["currency"] ?? ""),
+        transactionCount: Number(row["transaction_count"] ?? 0),
+      })),
     }
   },
 )

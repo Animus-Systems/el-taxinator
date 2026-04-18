@@ -1,4 +1,5 @@
 import { getActiveRules, createRule, updateRule } from "@/models/rules"
+import { buildI18nRuleName } from "@/lib/rules-i18n-name"
 import type { TransactionCandidate } from "./import-csv"
 import type { CategorizationRule } from "@/lib/db-types"
 
@@ -183,7 +184,7 @@ export async function learnFromImport(
     } else {
       // Create new learned rule
       await createRule(userId, {
-        name: `Learned: ${commonPattern}`,
+        name: buildI18nRuleName("ruleLearnedPrefix", { pattern: commonPattern }),
         matchType: "contains",
         matchField: "name",
         matchValue: commonPattern,

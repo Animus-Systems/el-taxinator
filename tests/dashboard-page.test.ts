@@ -10,13 +10,13 @@ const dashboardTranslations: Record<string, string> = {
   netProfit: "Net Profit",
   processedTransactions: "Processed Transactions",
   cashFlowOverTime: "Cash flow over time",
-  cashFlowDescription: "Monthly income, expenses, and net cash flow in the selected range.",
+  cashFlowDescription: "Income, expenses, and net cash flow in the selected range.",
   expenseBreakdown: "Expense breakdown",
   expenseBreakdownDescription: "Where spend is concentrated across categories.",
   topMerchants: "Top merchants",
   topMerchantsDescription: "Largest spend vendors by transaction volume.",
-  monthlyProfitTrend: "Monthly profit trend",
-  monthlyProfitTrendDescription: "The direction of business profit over time.",
+  profitTrend: "Profit trend",
+  profitTrendDescription: "The direction of business profit over time.",
   emptyAnalyticsTitle: "No analytics yet",
   emptyAnalyticsDescription: "Once transactions are categorized, charts will appear here.",
   errorTitle: "Dashboard unavailable",
@@ -92,6 +92,7 @@ describe("DashboardPage", () => {
         categoryBreakdown: [],
         topMerchants: [],
         profitTrend: [],
+        otherCurrencies: [],
       },
       isLoading: false,
       error: null,
@@ -106,7 +107,7 @@ describe("DashboardPage", () => {
     expect(html).toContain("Cash flow over time")
     expect(html).toContain("Expense breakdown")
     expect(html).toContain("Top merchants")
-    expect(html).toContain("Monthly profit trend")
+    expect(html).toContain("Profit trend")
     expect(html).toContain("Total Income")
     expect(html).toContain("Processed Transactions")
   })

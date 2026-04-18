@@ -304,7 +304,7 @@ function formatRules(rules: CategorizationRule[]): string {
     ]
       .filter(Boolean)
       .join(", ")
-    return `- name="${r.name}" if ${r.matchField} ${r.matchType} "${r.matchValue}" → ${tgt} [conf=${r.confidence}, src=${r.source}]`
+    return `- name="${i18nToString(r.name)}" if ${r.matchField} ${r.matchType} "${r.matchValue}" → ${tgt} [conf=${r.confidence}, src=${r.source}]`
   })
   if (rules.length > limited.length) {
     lines.push(`(+${rules.length - limited.length} more rules elided for brevity)`)

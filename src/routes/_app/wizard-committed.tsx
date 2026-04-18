@@ -37,7 +37,7 @@ export function WizardCommittedPage() {
   const ccy = report.totals.currencyCode ?? "EUR"
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6 py-4">
+    <div className="mx-auto w-full max-w-4xl space-y-6 py-4">
       <header className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold flex items-center gap-2">

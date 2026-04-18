@@ -1,4 +1,4 @@
-import { addDays, format } from "date-fns"
+import { endOfMonth, format } from "date-fns"
 
 import { filtersToSearchParams } from "@/lib/transaction-filters"
 import type { TransactionFilters } from "@/models/transactions"
@@ -16,6 +16,9 @@ export type DashboardDrilldownFilters = {
 }
 
 export function getDashboardPeriodRange(period: string) {
+  // dateTo is treated as inclusive-of-that-day by the transactions model
+  // (WHERE issued_at < dateTo + 1 day), so return the true last day of the
+  // period here rather than the day after.
   if (period.includes("-") && period.split("-").length === 3) {
     const [year, month, day] = period.split("-").map(Number)
     if (!year || !month || !day) {
@@ -26,10 +29,8 @@ export function getDashboardPeriodRange(period: string) {
     }
 
     const date = new Date(year, month - 1, day)
-    return {
-      dateFrom: format(date, "yyyy-MM-dd"),
-      dateTo: format(addDays(date, 1), "yyyy-MM-dd"),
-    }
+    const ymd = format(date, "yyyy-MM-dd")
+    return { dateFrom: ymd, dateTo: ymd }
   }
 
   const [year, month] = period.split("-")
@@ -43,16 +44,18 @@ export function getDashboardPeriodRange(period: string) {
   const monthDate = new Date(Number(year), Number(month) - 1, 1)
   return {
     dateFrom: format(monthDate, "yyyy-MM-dd"),
-    dateTo: format(new Date(Number(year), Number(month), 1), "yyyy-MM-dd"),
+    dateTo: format(endOfMonth(monthDate), "yyyy-MM-dd"),
   }
 }
 
 export function buildDashboardDrilldownFilters(filters: DashboardDrilldownFilters): TransactionFilters {
+  // When a specific period is supplied (a click on a chart point), it is the
+  // more precise intent and MUST win over the dashboard's broader date range.
   const dateRange = filters.period ? getDashboardPeriodRange(filters.period) : undefined
   return {
     search: filters.search ?? "",
-    dateFrom: filters.dateFrom ?? dateRange?.dateFrom ?? "",
-    dateTo: filters.dateTo ?? dateRange?.dateTo ?? "",
+    dateFrom: dateRange?.dateFrom ?? filters.dateFrom ?? "",
+    dateTo: dateRange?.dateTo ?? filters.dateTo ?? "",
     categoryCode: filters.categoryCode ?? "",
     projectCode: filters.projectCode ?? "",
     accountId: filters.accountId ?? "",

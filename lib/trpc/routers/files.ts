@@ -17,6 +17,12 @@ const fileWithLinkSchema = fileSchema.extend({
   linkedTransactionName: z.string().nullable(),
   linkedInvoiceId: z.string().nullable(),
   linkedInvoiceNumber: z.string().nullable(),
+  linkedImportSessionId: z.string().nullable(),
+  linkedImportSessionTitle: z.string().nullable(),
+  linkedImportSessionRole: z.enum(["source", "context"]).nullable(),
+  linkedDeductionId: z.string().nullable(),
+  linkedDeductionKind: z.string().nullable(),
+  linkedDeductionTaxYear: z.number().int().nullable(),
 })
 
 const filesListOutputSchema = z.object({

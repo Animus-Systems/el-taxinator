@@ -12,7 +12,10 @@ import {
 import { categorizationRuleSchema, transactionSchema } from "@/lib/db-types"
 
 const ruleInputSchema = z.object({
-  name: z.string().min(1).max(128),
+  // Larger than a display label because auto-generated rules (import
+  // "always apply" checkbox, learned rules) serialize an i18n object like
+  // `{"en":"…","es":"…"}` into this field — roughly 2× a human name.
+  name: z.string().min(1).max(512),
   matchType: z.enum(["contains", "starts_with", "exact", "regex"]).default("contains"),
   matchField: z.enum(["name", "merchant", "description"]).default("name"),
   matchValue: z.string().min(1).max(256),

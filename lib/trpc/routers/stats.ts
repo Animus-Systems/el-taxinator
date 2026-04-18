@@ -7,13 +7,14 @@ import {
   getTimeSeriesStats,
 } from "@/models/stats"
 import type { TransactionFilters } from "@/models/transactions"
+import { transactionTypeSchema } from "@/lib/db-types"
 
 const statsFiltersSchema = z.object({
   dateFrom: z.string().optional(),
   dateTo: z.string().optional(),
   categoryCode: z.string().optional(),
   projectCode: z.string().optional(),
-  type: z.string().optional(),
+  type: transactionTypeSchema.optional(),
 })
 
 const dashboardStatsSchema = z.object({
@@ -57,11 +58,17 @@ const analyticsProfitTrendSchema = z.object({
   date: z.date(),
 })
 
+const otherCurrencySchema = z.object({
+  currency: z.string(),
+  transactionCount: z.number(),
+})
+
 const dashboardAnalyticsSchema = z.object({
   timeSeries: z.array(timeSeriesDataSchema),
   categoryBreakdown: z.array(analyticsCategoryBreakdownSchema),
   topMerchants: z.array(analyticsTopMerchantSchema),
   profitTrend: z.array(analyticsProfitTrendSchema),
+  otherCurrencies: z.array(otherCurrencySchema),
 })
 
 export const statsRouter = router({

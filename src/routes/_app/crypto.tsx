@@ -76,7 +76,7 @@ export function CryptoPage() {
   const isGain = gain >= 0
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6 py-4">
+    <div className="mx-auto w-full max-w-5xl space-y-6 py-4">
       <header className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-[17px] font-semibold tracking-tight flex items-center gap-2">

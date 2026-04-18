@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
 import { ArrowLeft } from "lucide-react"
 import Link from "next/link"
+import { getLocalizedValue } from "@/lib/i18n-db"
 import type { Transaction } from "@/lib/db-types"
 
 function relativeDays(date: Date | null): string {
@@ -28,7 +29,7 @@ function formatCurrency(value: number | null, code: string | null): string {
 }
 
 export function RuleDetailPage() {
-  const { t } = useTranslation("settings")
+  const { t, i18n } = useTranslation("settings")
   const { ruleId } = useParams({ strict: false }) as { ruleId: string }
 
   const { data, isLoading } = trpc.rules.getById.useQuery(
@@ -71,7 +72,7 @@ export function RuleDetailPage() {
 
       <header className="space-y-2">
         <div className="flex items-center gap-2 flex-wrap">
-          <h1 className="text-2xl font-semibold">{rule.name}</h1>
+          <h1 className="text-2xl font-semibold">{getLocalizedValue(rule.name, i18n.language)}</h1>
           {rule.source === "learned" ? (
             <Badge
               variant="secondary"

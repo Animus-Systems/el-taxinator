@@ -45,7 +45,9 @@ export function DashboardPage() {
     currency: defaultCurrency,
   })
 
-  if (settingsQuery.isLoading || statsQuery.isLoading || analyticsQuery.isLoading) {
+  if (statsQuery.isLoading || analyticsQuery.isLoading) {
+    // Settings query can still be in flight — we gracefully fall back to EUR
+    // for `defaultCurrency`, so there's no need to block first paint on it.
     return (
       <div className="flex min-h-[260px] items-center justify-center text-muted-foreground">
         {t("loading")}
@@ -88,8 +90,7 @@ export function DashboardPage() {
           <p className="max-w-3xl text-sm text-slate-600">{t("controlRoomSubtitle")}</p>
         </div>
         <DateRangePicker
-          defaultRange="last-12-months"
-          {...(range ? { defaultDate: range } : {})}
+          {...(range ? { defaultDate: range } : { defaultRange: "last-12-months" })}
           onChange={(nextRange) => setRange(nextRange)}
         />
       </header>
@@ -128,6 +129,7 @@ export function DashboardPage() {
         defaultCurrency={defaultCurrency}
         title={t("cashFlowOverTime")}
         description={t("cashFlowDescription")}
+        otherCurrencies={analytics.otherCurrencies}
         onPointClick={(point, series) => {
           router.push(
             buildDashboardDrilldownHref({
@@ -175,8 +177,8 @@ export function DashboardPage() {
           <DashboardProfitTrendChart
             data={analytics.profitTrend}
             defaultCurrency={defaultCurrency}
-            title={t("monthlyProfitTrend")}
-            description={t("monthlyProfitTrendDescription")}
+            title={t("profitTrend")}
+            description={t("profitTrendDescription")}
             onPointClick={(point) => {
               router.push(buildDashboardDrilldownHref({ period: point.period }))
             }}

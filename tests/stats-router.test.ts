@@ -81,6 +81,9 @@ describe("statsRouter.analytics", () => {
           date: new Date("2026-01-01T00:00:00.000Z"),
         },
       ],
+      otherCurrencies: [
+        { currency: "USD", transactionCount: 2 },
+      ],
     })
 
     const caller = createCaller({ user })
@@ -135,6 +138,7 @@ describe("statsRouter.analytics", () => {
       categoryBreakdown: [],
       topMerchants: [],
       profitTrend: [],
+      otherCurrencies: [],
     })
 
     const caller = createCaller({ user })

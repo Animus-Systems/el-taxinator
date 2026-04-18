@@ -69,6 +69,29 @@ type TransactionRow = Transaction & {
   project?: Project | null
 }
 
+const YMD_RE = /^\d{4}-\d{2}-\d{2}$/
+
+/** Start of the given calendar day as a naive-local timestamp string. */
+function startOfDayTimestamp(input: string): string {
+  if (YMD_RE.test(input)) return `${input} 00:00:00`
+  // Fallback: preserve the caller's timestamp if they passed one through.
+  return input
+}
+
+/** Start of the day AFTER the given calendar day (half-open end of range). */
+function nextDayTimestamp(input: string): string {
+  if (YMD_RE.test(input)) {
+    // Parse as UTC to avoid DST edge cases, then advance one day.
+    const d = new Date(`${input}T00:00:00Z`)
+    d.setUTCDate(d.getUTCDate() + 1)
+    const y = d.getUTCFullYear()
+    const m = String(d.getUTCMonth() + 1).padStart(2, "0")
+    const day = String(d.getUTCDate()).padStart(2, "0")
+    return `${y}-${m}-${day} 00:00:00`
+  }
+  return input
+}
+
 /**
  * Builds a WHERE clause and parameter list from the given filters.
  *
@@ -106,13 +129,15 @@ export function buildTransactionWhere(
 
     if (filters.dateFrom) {
       conditions.push(`${col("issued_at")} >= $${idx}`)
-      values.push(new Date(filters.dateFrom))
+      values.push(startOfDayTimestamp(filters.dateFrom))
       idx++
     }
 
     if (filters.dateTo) {
-      conditions.push(`${col("issued_at")} <= $${idx}`)
-      values.push(new Date(filters.dateTo))
+      // Half-open range: include the whole of the selected end day by
+      // comparing against the start of the NEXT day with `<`.
+      conditions.push(`${col("issued_at")} < $${idx}`)
+      values.push(nextDayTimestamp(filters.dateTo))
       idx++
     }
 

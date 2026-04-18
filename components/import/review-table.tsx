@@ -8,6 +8,7 @@ import {
   saveReviewSessionAction,
 } from "@/actions/ai-import"
 import { addRuleAction } from "@/actions/rules"
+import { buildI18nRuleName } from "@/lib/rules-i18n-name"
 import { summarizeImportCandidates, validateImportCommit } from "@/lib/import-review"
 import { formatCurrency } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -338,7 +339,10 @@ export function ReviewTable({
       return
     }
     await addRuleAction({
-      name: `${categoryName} for "${matchValue}"`,
+      name: buildI18nRuleName("ruleNameForCategory", {
+        category: categoryName,
+        value: matchValue,
+      }),
       matchType: "contains",
       matchField,
       matchValue,

@@ -54,6 +54,7 @@ import { DangerSettingsPage } from "./routes/_app/settings/danger"
 import { ImportSettingsPage } from "./routes/_app/settings/import"
 import { ProfileSettingsPage } from "./routes/_app/settings/profile"
 import { KnowledgeSettingsPage } from "./routes/_app/settings/knowledge"
+import { AiMemorySettingsPage } from "./routes/_app/settings/ai-memory"
 
 // Pages — outside app layout
 import { EntityPickerPage } from "./routes/index"
@@ -373,6 +374,12 @@ const settingsKnowledgeRoute = createRoute({
   component: KnowledgeSettingsPage,
 })
 
+const settingsAiMemoryRoute = createRoute({
+  getParentRoute: () => settingsRoute,
+  path: "/ai-memory",
+  component: AiMemorySettingsPage,
+})
+
 // ---------------------------------------------------------------------------
 // Wire the route tree
 // ---------------------------------------------------------------------------
@@ -394,6 +401,7 @@ const settingsChildren = settingsRoute.addChildren([
   settingsImportRoute,
   settingsProfileRoute,
   settingsKnowledgeRoute,
+  settingsAiMemoryRoute,
 ])
 
 const appChildren = appLayoutRoute.addChildren([

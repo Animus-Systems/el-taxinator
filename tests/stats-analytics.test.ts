@@ -48,14 +48,19 @@ describe("getDashboardAnalytics", () => {
       })
       .mockResolvedValueOnce({
         rows: [
-          { merchant: "Google Workspace", expenses: 210, transaction_count: 2 },
-          { merchant: "Mercadona", expenses: 180, transaction_count: 4 },
+          { merchant: "Google Workspace", expenses: 210, transaction_count: 2, is_unlabeled: 0 },
+          { merchant: "Mercadona", expenses: 180, transaction_count: 4, is_unlabeled: 0 },
+        ],
+      })
+      .mockResolvedValueOnce({
+        rows: [
+          { currency: "USD", transaction_count: 2 },
         ],
       })
 
     const analytics = await getDashboardAnalytics("user-1", { dateFrom: "2026-01-01", dateTo: "2026-02-29" }, "EUR")
 
-    expect(mockQuery).toHaveBeenCalledTimes(4)
+    expect(mockQuery).toHaveBeenCalledTimes(5)
     expect(mockQuery.mock.calls[2]?.[0]).not.toContain("issued_at IS NOT NULL")
     expect(mockQuery.mock.calls[3]?.[0]).not.toContain("issued_at IS NOT NULL")
     expect(analytics.timeSeries).toHaveLength(2)
@@ -72,5 +77,26 @@ describe("getDashboardAnalytics", () => {
       { period: "2026-01", profit: 600, date: new Date("2026-01-01") },
       { period: "2026-02", profit: 600, date: new Date("2026-02-01") },
     ])
+    expect(analytics.otherCurrencies).toEqual([{ currency: "USD", transactionCount: 2 }])
+  })
+
+  it("excludes personal rows and transfer/conversion types from category and merchant breakdowns", async () => {
+    mockQuery
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] })
+
+    await getDashboardAnalytics("user-1", {}, "EUR")
+
+    const categorySql = mockQuery.mock.calls[2]?.[0] ?? ""
+    const merchantSql = mockQuery.mock.calls[3]?.[0] ?? ""
+    for (const sql of [categorySql, merchantSql]) {
+      expect(sql).toContain("personal_ignored")
+      expect(sql).toContain("personal_taxable")
+      expect(sql).toContain("'transfer'")
+      expect(sql).toContain("'conversion'")
+    }
   })
 })

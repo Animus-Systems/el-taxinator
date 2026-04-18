@@ -2,6 +2,7 @@
 
 import type { ActiveElement, ChartData, ChartOptions, TooltipItem } from "chart.js"
 import { Line } from "react-chartjs-2"
+import { useTranslation } from "react-i18next"
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { DashboardEmptyPanel } from "./dashboard-empty-panel"
@@ -16,12 +17,18 @@ import { cn, formatCurrency } from "@/lib/utils"
 
 registerDashboardChartJs()
 
+export type DashboardOtherCurrency = {
+  currency: string
+  transactionCount: number
+}
+
 export type DashboardHeroChartProps = {
   data: DashboardTimeSeriesPoint[]
   defaultCurrency: string
   title?: string
   description?: string
   className?: string
+  otherCurrencies?: DashboardOtherCurrency[]
   onPointClick?: (point: DashboardTimeSeriesPoint, series: "income" | "expenses" | "net") => void
 }
 
@@ -40,21 +47,32 @@ function getLatestSummary(data: DashboardTimeSeriesPoint[]) {
 export function DashboardHeroChart({
   data,
   defaultCurrency,
-  title = "Cash flow over time",
-  description = "Monthly income, expenses, and net cash flow in the selected range.",
+  title,
+  description,
   className,
+  otherCurrencies = [],
   onPointClick,
 }: DashboardHeroChartProps) {
+  const { t } = useTranslation("dashboard")
+  const resolvedTitle = title ?? t("cashFlowOverTime")
+  const resolvedDescription = description ?? t("cashFlowDescription")
+  const incomeLabel = t("seriesIncome")
+  const expensesLabel = t("seriesExpenses")
+  const netLabel = t("seriesNet")
   const hasData = data.length > 0
   const hasMovement = data.some((point) => point.income !== 0 || point.expenses !== 0)
   const latest = getLatestSummary(data)
+  const otherCurrenciesTotalCount = otherCurrencies.reduce(
+    (sum, entry) => sum + entry.transactionCount,
+    0,
+  )
 
   if (!hasData || !hasMovement) {
     return (
       <DashboardEmptyPanel
         className={className}
-        title={title}
-        description={description}
+        title={resolvedTitle}
+        description={resolvedDescription}
       />
     )
   }
@@ -64,7 +82,7 @@ export function DashboardHeroChart({
     labels,
     datasets: [
       {
-        label: "Income",
+        label: incomeLabel,
         data: data.map((point) => point.income),
         borderColor: dashboardChartTheme.colors.positive,
         backgroundColor: dashboardChartTheme.colors.positiveSoft,
@@ -74,7 +92,7 @@ export function DashboardHeroChart({
         fill: true,
       },
       {
-        label: "Expenses",
+        label: expensesLabel,
         data: data.map((point) => point.expenses),
         borderColor: dashboardChartTheme.colors.expense,
         backgroundColor: dashboardChartTheme.colors.expenseSoft,
@@ -84,7 +102,7 @@ export function DashboardHeroChart({
         fill: true,
       },
       {
-        label: "Net cash flow",
+        label: netLabel,
         data: data.map((point) => point.income - point.expenses),
         borderColor: dashboardChartTheme.colors.slate,
         backgroundColor: "rgba(51, 65, 85, 0.12)",
@@ -116,7 +134,7 @@ export function DashboardHeroChart({
         ...baseOptions.plugins?.tooltip,
         callbacks: {
           label: (tooltipItem: TooltipItem<"line">) => {
-            const series = (tooltipItem.dataset.label ?? "Net cash flow") as "Income" | "Expenses" | "Net cash flow"
+            const series = tooltipItem.dataset.label ?? netLabel
             return `${series}: ${formatCurrency(Number(tooltipItem.parsed["y"] ?? 0), defaultCurrency)}`
           },
         },
@@ -143,15 +161,15 @@ export function DashboardHeroChart({
       <CardHeader className="space-y-3">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="space-y-1">
-            <CardTitle className="text-xl text-slate-950">{title}</CardTitle>
-            <CardDescription>{description}</CardDescription>
+            <CardTitle className="text-xl text-slate-950">{resolvedTitle}</CardTitle>
+            <CardDescription>{resolvedDescription}</CardDescription>
           </div>
           {latest ? (
             <div className="rounded-xl border border-slate-200 bg-white/80 px-3 py-2 text-right shadow-sm">
-              <div className="text-xs uppercase tracking-wide text-slate-500">Latest period</div>
+              <div className="text-xs uppercase tracking-wide text-slate-500">{t("latestPeriod")}</div>
               <div className="text-sm font-medium text-slate-900">{latest.label}</div>
               <div className="mt-1 text-xs text-slate-500">
-                Net {formatCurrency(latest.net, defaultCurrency)}
+                {netLabel} {formatCurrency(latest.net, defaultCurrency)}
               </div>
             </div>
           ) : null}
@@ -159,21 +177,29 @@ export function DashboardHeroChart({
         {latest ? (
           <div className="flex flex-wrap gap-2 text-xs">
             <span className="rounded-full bg-emerald-50 px-2.5 py-1 font-medium text-emerald-700">
-              Income {formatCurrency(latest.income, defaultCurrency)}
+              {incomeLabel} {formatCurrency(latest.income, defaultCurrency)}
             </span>
             <span className="rounded-full bg-rose-50 px-2.5 py-1 font-medium text-rose-700">
-              Expenses {formatCurrency(latest.expenses, defaultCurrency)}
+              {expensesLabel} {formatCurrency(latest.expenses, defaultCurrency)}
             </span>
             <span className="rounded-full bg-slate-100 px-2.5 py-1 font-medium text-slate-700">
-              Net {formatCurrency(latest.net, defaultCurrency)}
+              {netLabel} {formatCurrency(latest.net, defaultCurrency)}
             </span>
           </div>
         ) : null}
       </CardHeader>
-      <CardContent>
+      <CardContent className="space-y-2">
         <div className="h-[360px] w-full">
           <Line data={chartData} options={options} />
         </div>
+        {otherCurrenciesTotalCount > 0 ? (
+          <p className="text-xs text-slate-500">
+            {t("otherCurrenciesNote", {
+              count: otherCurrenciesTotalCount,
+              currencies: otherCurrencies.map((entry) => entry.currency).join(", "),
+            })}
+          </p>
+        ) : null}
       </CardContent>
     </Card>
   )

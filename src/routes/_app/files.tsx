@@ -84,6 +84,12 @@ export function FilesPage() {
     linkedTransactionName: string | null
     linkedInvoiceId: string | null
     linkedInvoiceNumber: string | null
+    linkedImportSessionId: string | null
+    linkedImportSessionTitle: string | null
+    linkedImportSessionRole: "source" | "context" | null
+    linkedDeductionId: string | null
+    linkedDeductionKind: string | null
+    linkedDeductionTaxYear: number | null
   }) {
     const targets: string[] = []
     if (file.linkedInvoiceId) {
@@ -95,6 +101,24 @@ export function FilesPage() {
     }
     if (file.linkedTransactionId) {
       targets.push(file.linkedTransactionName ?? t("linkedToTransaction"))
+    }
+    if (file.linkedImportSessionId) {
+      const label = file.linkedImportSessionTitle ?? t("linkedToImportGeneric")
+      targets.push(
+        file.linkedImportSessionRole === "context"
+          ? t("linkedToImportContext", { title: label })
+          : t("linkedToImportSource", { title: label }),
+      )
+    }
+    if (file.linkedDeductionId) {
+      targets.push(
+        file.linkedDeductionKind && file.linkedDeductionTaxYear
+          ? t("linkedToDeduction", {
+              kind: file.linkedDeductionKind,
+              year: file.linkedDeductionTaxYear,
+            })
+          : t("linkedToDeductionGeneric"),
+      )
     }
     const description =
       targets.length > 0
@@ -111,7 +135,7 @@ export function FilesPage() {
   }
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6 py-4">
+    <div className="mx-auto w-full max-w-5xl space-y-6 py-4">
       <header className="flex flex-col gap-1">
         <div className="flex items-center gap-2">
           <h1 className="text-2xl font-semibold tracking-tight">{t("title")}</h1>
@@ -206,13 +230,50 @@ export function FilesPage() {
                         </Link>
                       </>
                     )}
-                    {!file.linkedTransactionId && !file.linkedInvoiceId && !file.isReviewed && (
+                    {file.linkedImportSessionId && (
+                      <>
+                        <span>·</span>
+                        <span className="inline-flex items-center gap-1 text-muted-foreground">
+                          <Link2 className="h-3 w-3" />
+                          {file.linkedImportSessionRole === "context"
+                            ? t("linkedToImportContext", {
+                                title: file.linkedImportSessionTitle ?? t("linkedToImportGeneric"),
+                              })
+                            : t("linkedToImportSource", {
+                                title: file.linkedImportSessionTitle ?? t("linkedToImportGeneric"),
+                              })}
+                        </span>
+                      </>
+                    )}
+                    {file.linkedDeductionId && (
+                      <>
+                        <span>·</span>
+                        <span className="inline-flex items-center gap-1 text-muted-foreground">
+                          <Link2 className="h-3 w-3" />
+                          {file.linkedDeductionKind && file.linkedDeductionTaxYear
+                            ? t("linkedToDeduction", {
+                                kind: file.linkedDeductionKind,
+                                year: file.linkedDeductionTaxYear,
+                              })
+                            : t("linkedToDeductionGeneric")}
+                        </span>
+                      </>
+                    )}
+                    {!file.linkedTransactionId &&
+                      !file.linkedInvoiceId &&
+                      !file.linkedImportSessionId &&
+                      !file.linkedDeductionId &&
+                      !file.isReviewed && (
                       <>
                         <span>·</span>
                         <Badge variant="outline" className="text-[10px]">{t("unreviewedBadge")}</Badge>
                       </>
                     )}
-                    {!file.linkedTransactionId && !file.linkedInvoiceId && file.isReviewed && (
+                    {!file.linkedTransactionId &&
+                      !file.linkedInvoiceId &&
+                      !file.linkedImportSessionId &&
+                      !file.linkedDeductionId &&
+                      file.isReviewed && (
                       <>
                         <span>·</span>
                         <Badge variant="outline" className="text-[10px]">{t("orphanBadge")}</Badge>

@@ -657,7 +657,7 @@ export type AiAnalysisResult = z.infer<typeof aiAnalysisResultSchema>
 export const categorizationRuleSchema = z.object({
   id: z.string(),
   userId: z.string(),
-  name: z.string(),
+  name: i18nText,
   matchType: z.string(),
   matchField: z.string(),
   matchValue: z.string(),

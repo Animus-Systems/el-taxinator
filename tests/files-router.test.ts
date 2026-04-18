@@ -107,6 +107,10 @@ describe("getFiles", () => {
     await getFiles(USER_ID, { status: "linked", search: "", page: 1, pageSize: 50 })
     const [sqlText] = mockQuery.mock.calls[0] ?? []
     expect(sqlText).toContain("lt.id IS NOT NULL")
+    expect(sqlText).toContain("li.id IS NOT NULL")
+    expect(sqlText).toContain("lis_src.id IS NOT NULL")
+    expect(sqlText).toContain("lis_ctx.id IS NOT NULL")
+    expect(sqlText).toContain("lpd.id IS NOT NULL")
     expect(sqlText).not.toContain("f.is_reviewed = false")
   })
 
@@ -114,7 +118,107 @@ describe("getFiles", () => {
     await getFiles(USER_ID, { status: "orphan", search: "", page: 1, pageSize: 50 })
     const [sqlText] = mockQuery.mock.calls[0] ?? []
     expect(sqlText).toContain("lt.id IS NULL")
+    expect(sqlText).toContain("lis_src.id IS NULL")
+    expect(sqlText).toContain("lis_ctx.id IS NULL")
+    expect(sqlText).toContain("lpd.id IS NULL")
     expect(sqlText).toContain("f.is_reviewed = true")
+  })
+
+  it("joins import_sessions (source + context) and personal_deductions", async () => {
+    await getFiles(USER_ID, { status: "all", search: "", page: 1, pageSize: 50 })
+    const [sqlText] = mockQuery.mock.calls[0] ?? []
+    expect(sqlText).toContain("import_sessions s")
+    expect(sqlText).toContain("s.file_id = f.id")
+    expect(sqlText).toContain("s.context_file_ids ? f.id::text")
+    expect(sqlText).toContain("personal_deductions pd")
+    expect(sqlText).toContain("pd.file_id = f.id")
+  })
+
+  it("reports an import-session source link in the row shape", async () => {
+    mockQuery.mockReset()
+    mockQuery.mockResolvedValueOnce({
+      rows: [
+        {
+          id: "f1",
+          userId: "user-1",
+          filename: "bbva-q1.csv",
+          path: "/tmp/bbva-q1.csv",
+          mimetype: "text/csv",
+          metadata: { size: 2048 },
+          isReviewed: true,
+          isSplitted: false,
+          cachedParseResult: null,
+          createdAt: new Date("2026-04-16T00:00:00.000Z"),
+          linked_source_session_id: "imp-1",
+          linked_source_session_title: "BBVA Q1 import",
+          linked_source_session_file_name: "bbva-q1.csv",
+        },
+      ],
+    })
+    mockQuery.mockResolvedValueOnce({ rows: [{ count: 1 }] })
+
+    const { files } = await getFiles(USER_ID, { status: "linked", search: "", page: 1, pageSize: 50 })
+    expect(files).toHaveLength(1)
+    expect(files[0]?.linkedImportSessionId).toBe("imp-1")
+    expect(files[0]?.linkedImportSessionTitle).toBe("BBVA Q1 import")
+    expect(files[0]?.linkedImportSessionRole).toBe("source")
+  })
+
+  it("falls back to file_name when the import session has no title", async () => {
+    mockQuery.mockReset()
+    mockQuery.mockResolvedValueOnce({
+      rows: [
+        {
+          id: "f2",
+          userId: "user-1",
+          filename: "receipts.pdf",
+          path: "/tmp/receipts.pdf",
+          mimetype: "application/pdf",
+          metadata: {},
+          isReviewed: true,
+          isSplitted: false,
+          cachedParseResult: null,
+          createdAt: new Date("2026-04-16T00:00:00.000Z"),
+          linked_context_session_id: "imp-ctx-1",
+          linked_context_session_title: null,
+          linked_context_session_file_name: "invoice-packet.pdf",
+        },
+      ],
+    })
+    mockQuery.mockResolvedValueOnce({ rows: [{ count: 1 }] })
+
+    const { files } = await getFiles(USER_ID, { status: "linked", search: "", page: 1, pageSize: 50 })
+    expect(files[0]?.linkedImportSessionRole).toBe("context")
+    expect(files[0]?.linkedImportSessionTitle).toBe("invoice-packet.pdf")
+  })
+
+  it("reports a personal-deduction link in the row shape", async () => {
+    mockQuery.mockReset()
+    mockQuery.mockResolvedValueOnce({
+      rows: [
+        {
+          id: "f3",
+          userId: "user-1",
+          filename: "mortgage.pdf",
+          path: "/tmp/mortgage.pdf",
+          mimetype: "application/pdf",
+          metadata: {},
+          isReviewed: true,
+          isSplitted: false,
+          cachedParseResult: null,
+          createdAt: new Date("2026-04-16T00:00:00.000Z"),
+          linked_deduction_id: "pd-1",
+          linked_deduction_kind: "mortgage",
+          linked_deduction_tax_year: 2026,
+        },
+      ],
+    })
+    mockQuery.mockResolvedValueOnce({ rows: [{ count: 1 }] })
+
+    const { files } = await getFiles(USER_ID, { status: "linked", search: "", page: 1, pageSize: 50 })
+    expect(files[0]?.linkedDeductionId).toBe("pd-1")
+    expect(files[0]?.linkedDeductionKind).toBe("mortgage")
+    expect(files[0]?.linkedDeductionTaxYear).toBe(2026)
   })
 
   it("passes a %...% pattern to ILIKE when searching", async () => {

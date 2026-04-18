@@ -3,6 +3,7 @@
 import type { ActiveElement, ChartData, ChartOptions, TooltipItem } from "chart.js"
 import { Line } from "react-chartjs-2"
 import { TrendingUp } from "lucide-react"
+import { useTranslation } from "react-i18next"
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { DashboardEmptyPanel } from "./dashboard-empty-panel"
@@ -29,19 +30,23 @@ export type DashboardProfitTrendChartProps = {
 export function DashboardProfitTrendChart({
   data,
   defaultCurrency,
-  title = "Monthly profit trend",
-  description = "The direction of business profit over time.",
+  title,
+  description,
   className,
   onPointClick,
 }: DashboardProfitTrendChartProps) {
+  const { t } = useTranslation("dashboard")
+  const resolvedTitle = title ?? t("profitTrend")
+  const resolvedDescription = description ?? t("profitTrendDescription")
+  const profitLabel = t("seriesProfit")
   const hasData = data.length > 0 && data.some((item) => item.profit !== 0)
 
   if (!hasData) {
     return (
       <DashboardEmptyPanel
         className={className}
-        title={title}
-        description={description}
+        title={resolvedTitle}
+        description={resolvedDescription}
         icon={<TrendingUp className="h-5 w-5" />}
       />
     )
@@ -51,7 +56,7 @@ export function DashboardProfitTrendChart({
     labels: data.map((point) => formatDashboardPeriodLabel(point.period, point.date)),
     datasets: [
       {
-        label: "Profit",
+        label: profitLabel,
         data: data.map((point) => point.profit),
         borderColor: dashboardChartTheme.colors.slate,
         backgroundColor: "rgba(51, 65, 85, 0.12)",
@@ -83,7 +88,7 @@ export function DashboardProfitTrendChart({
         callbacks: {
           label: (tooltipItem: TooltipItem<"line">) => {
             const value = Number(tooltipItem.parsed["y"] ?? 0)
-            return `Profit: ${formatCurrency(value, defaultCurrency)}`
+            return `${profitLabel}: ${formatCurrency(value, defaultCurrency)}`
           },
         },
       },
@@ -107,12 +112,12 @@ export function DashboardProfitTrendChart({
       <CardHeader className="space-y-2">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="space-y-1">
-            <CardTitle className="text-xl text-slate-950">{title}</CardTitle>
-            <CardDescription>{description}</CardDescription>
+            <CardTitle className="text-xl text-slate-950">{resolvedTitle}</CardTitle>
+            <CardDescription>{resolvedDescription}</CardDescription>
           </div>
           {latest ? (
             <div className="rounded-xl border border-slate-200 bg-white/80 px-3 py-2 text-right shadow-sm">
-              <div className="text-xs uppercase tracking-wide text-slate-500">Latest profit</div>
+              <div className="text-xs uppercase tracking-wide text-slate-500">{t("latestProfit")}</div>
               <div
                 className={cn(
                   "text-sm font-semibold",

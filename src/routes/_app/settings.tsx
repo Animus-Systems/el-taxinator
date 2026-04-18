@@ -23,6 +23,7 @@ export function SettingsLayout() {
     { title: t("currencies"), href: "/settings/currencies" },
     { title: t("accounts"), href: "/settings/accounts" },
     { title: t("knowledgePacks", { defaultValue: "Knowledge packs" }), href: "/settings/knowledge" },
+    { title: t("aiMemory", { defaultValue: "AI memory" }), href: "/settings/ai-memory" },
     { title: t("backups"), href: "/settings/backups" },
     { title: t("accountant"), href: "/settings/accountant" },
     { title: t("danger"), href: "/settings/danger" },
