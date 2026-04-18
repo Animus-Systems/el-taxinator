@@ -143,6 +143,22 @@ const PRE_V21_SCHEMA = `
     UNIQUE (user_id, code)
   );
 
+  -- Minimal tax_filings stub so post-v21 migrations that ALTER this table
+  -- (e.g. v26 adds filed_amount_cents / confirmation_number / filing_source)
+  -- have something to attach to. The v21 migration itself does not touch it.
+  CREATE TABLE tax_filings (
+    id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
+    user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    year int NOT NULL,
+    quarter int NULL,
+    modelo_code text NOT NULL,
+    filed_at timestamp(3) NULL,
+    checklist jsonb NOT NULL DEFAULT '{}'::jsonb,
+    notes text NULL,
+    created_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL
+  );
+
   CREATE TABLE schema_version (
     id integer PRIMARY KEY DEFAULT 1 CHECK (id = 1),
     version integer NOT NULL DEFAULT 1,

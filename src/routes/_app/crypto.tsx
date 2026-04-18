@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { Link } from "@tanstack/react-router"
 import { trpc } from "~/trpc"
@@ -15,6 +15,7 @@ import {
   TrendingUp,
   TrendingDown,
   RotateCw,
+  Info,
 } from "lucide-react"
 import { formatCurrency } from "@/lib/utils"
 
@@ -41,7 +42,23 @@ export function CryptoPage() {
   const { t } = useTranslation("crypto")
   const utils = trpc.useUtils()
   const [year, setYear] = useState<number>(new Date().getFullYear())
+  const [userPickedYear, setUserPickedYear] = useState(false)
   const [suggestionsOpen, setSuggestionsOpen] = useState(false)
+
+  // Years that actually contain crypto-tagged transactions — used to rescue
+  // the year picker from defaulting to an empty current year when all data
+  // was imported for a previous tax year.
+  const { data: availableYears = [] } = trpc.crypto.availableYears.useQuery({})
+
+  // One-shot auto-correct: if the user hasn't manually picked a year yet and
+  // the current default is empty, jump to the latest year with real data.
+  useEffect(() => {
+    if (userPickedYear) return
+    if (availableYears.length === 0) return
+    if (availableYears.includes(year)) return
+    const latestWithData = availableYears[0]
+    if (typeof latestWithData === "number") setYear(latestWithData)
+  }, [availableYears, year, userPickedYear])
 
   const { data: summary, isLoading: summaryLoading } = trpc.crypto.summary.useQuery({ year })
   const { data: disposals = [], isLoading: listLoading } = trpc.crypto.listDisposals.useQuery({ year })
@@ -67,9 +84,13 @@ export function CryptoPage() {
     },
   })
 
+  // Merge a rolling 4-year window with whatever years the user actually has
+  // data for, then sort descending. Keeps the current year visible (even if
+  // empty) while always exposing years with real data.
   const yearOptions = (() => {
     const now = new Date().getFullYear()
-    return [now, now - 1, now - 2, now - 3]
+    const set = new Set<number>([now, now - 1, now - 2, now - 3, ...availableYears])
+    return [...set].sort((a, b) => b - a).slice(0, 6)
   })()
 
   const gain = summary?.realizedGainCents ?? 0
@@ -86,21 +107,33 @@ export function CryptoPage() {
           <p className="text-[11px] text-muted-foreground mt-0.5">{t("subtitle")}</p>
         </div>
         <div className="inline-flex items-center rounded-lg bg-muted/60 p-0.5 text-[11px] flex-shrink-0">
-          {yearOptions.map((y) => (
-            <button
-              key={y}
-              type="button"
-              onClick={() => setYear(y)}
-              className={[
-                "px-3 py-1 rounded-md transition-colors tabular-nums",
-                y === year
-                  ? "bg-background shadow-sm text-foreground font-medium"
-                  : "text-muted-foreground hover:text-foreground",
-              ].join(" ")}
-            >
-              {y}
-            </button>
-          ))}
+          {yearOptions.map((y) => {
+            const hasData = availableYears.includes(y)
+            return (
+              <button
+                key={y}
+                type="button"
+                onClick={() => {
+                  setUserPickedYear(true)
+                  setYear(y)
+                }}
+                title={hasData ? undefined : t("yearNoDataHint")}
+                className={[
+                  "px-3 py-1 rounded-md transition-colors tabular-nums",
+                  y === year
+                    ? "bg-background shadow-sm text-foreground font-medium"
+                    : hasData
+                      ? "text-muted-foreground hover:text-foreground"
+                      : "text-muted-foreground/50 hover:text-muted-foreground",
+                ].join(" ")}
+              >
+                {y}
+                {hasData && y !== year ? (
+                  <span className="ml-1 inline-block h-1.5 w-1.5 rounded-full bg-sky-500 align-middle" />
+                ) : null}
+              </button>
+            )
+          })}
         </div>
       </header>
 
@@ -145,6 +178,8 @@ export function CryptoPage() {
             ))}
           </div>
         ) : null}
+
+        {summary ? <DiagnosticStrip summary={summary} availableYears={availableYears} year={year} onJumpYear={(y) => { setUserPickedYear(true); setYear(y) }} onReplay={() => replayFifo.mutate({})} replayPending={replayFifo.isPending} /> : null}
 
         {summary && summary.untrackedDisposalsCount > 0 ? (
           <div className="mt-3 rounded-lg border border-amber-300/60 bg-amber-50 dark:bg-amber-950/30 px-3 py-2 text-[12px] text-amber-900 dark:text-amber-200 flex items-center gap-2">
@@ -332,6 +367,101 @@ export function CryptoPage() {
       </footer>
     </div>
   )
+}
+
+type SummaryShape = {
+  year: number
+  totalProceedsCents: number
+  totalCostBasisCents: number
+  realizedGainCents: number
+  disposalRowCount: number
+  disposalRowsWithFifoMatch: number
+  disposalRowsMissingPrice: number
+  untrackedDisposalsCount: number
+}
+
+function DiagnosticStrip({
+  summary,
+  availableYears,
+  year,
+  onJumpYear,
+  onReplay,
+  replayPending,
+}: {
+  summary: SummaryShape
+  availableYears: number[]
+  year: number
+  onJumpYear: (y: number) => void
+  onReplay: () => void
+  replayPending: boolean
+}) {
+  const { t } = useTranslation("crypto")
+  const totalsAreZero =
+    summary.totalProceedsCents === 0 &&
+    summary.totalCostBasisCents === 0 &&
+    summary.realizedGainCents === 0
+
+  // Case 1: no disposals at all in the selected year.
+  if (summary.disposalRowCount === 0) {
+    const suggestion = availableYears.find((y) => y !== year)
+    return (
+      <div className="mt-3 rounded-lg border border-border/50 bg-muted/30 px-3 py-2 text-[12px] text-muted-foreground flex flex-wrap items-center gap-2">
+        <Info className="h-3.5 w-3.5 flex-shrink-0" />
+        <span>{t("diagNoDisposals", { year })}</span>
+        {suggestion !== undefined ? (
+          <button
+            type="button"
+            onClick={() => onJumpYear(suggestion)}
+            className="underline underline-offset-2 hover:text-foreground"
+          >
+            {t("diagJumpYear", { year: suggestion })}
+          </button>
+        ) : (
+          <span>{t("diagNoDataAnywhere")}</span>
+        )}
+      </div>
+    )
+  }
+
+  // Case 2: we have disposal rows but totals are zero — usually because the
+  // FIFO ledger is empty (no replay yet) AND no fallback pricePerUnit exists.
+  if (totalsAreZero && summary.disposalRowsWithFifoMatch === 0) {
+    return (
+      <div className="mt-3 rounded-lg border border-sky-300/60 bg-sky-50 dark:bg-sky-950/30 px-3 py-2 text-[12px] text-sky-900 dark:text-sky-200 flex flex-wrap items-center gap-2">
+        <Info className="h-3.5 w-3.5 flex-shrink-0" />
+        <span className="flex-1">
+          {t("diagFifoEmpty", { count: summary.disposalRowCount })}
+        </span>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={onReplay}
+          disabled={replayPending}
+          className="h-7 text-[11px]"
+        >
+          {replayPending ? (
+            <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+          ) : (
+            <RotateCw className="h-3.5 w-3.5 mr-1.5" />
+          )}
+          {t("replayFifo")}
+        </Button>
+      </div>
+    )
+  }
+
+  // Case 3: some disposals can't be summed because they lack both FIFO
+  // matches AND a fallback pricePerUnit.
+  if (summary.disposalRowsMissingPrice > 0) {
+    return (
+      <div className="mt-3 rounded-lg border border-amber-300/60 bg-amber-50 dark:bg-amber-950/30 px-3 py-2 text-[12px] text-amber-900 dark:text-amber-200 flex items-center gap-2">
+        <AlertCircle className="h-3.5 w-3.5 flex-shrink-0" />
+        <span>{t("diagMissingPrice", { count: summary.disposalRowsMissingPrice })}</span>
+      </div>
+    )
+  }
+
+  return null
 }
 
 function SummaryCard({

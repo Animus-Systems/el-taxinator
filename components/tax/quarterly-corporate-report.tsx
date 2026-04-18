@@ -3,6 +3,7 @@ import { CasillaTable, type CasillaGroup, type CasillaRow } from "@/components/t
 import { FilingChecklist, type ChecklistItem } from "@/components/tax/filing-checklist"
 import { ModeloHero } from "@/components/tax/modelo-hero"
 import type { TaxFiling } from "@/lib/db-types"
+import type { EntityType } from "@/lib/entities"
 import type { Modelo420Result, Quarter } from "@/models/tax"
 import type { Modelo202Result } from "@/models/tax-sl"
 import { format } from "date-fns"
@@ -15,6 +16,7 @@ type Props = {
   modelo202: Modelo202Result
   year: number
   quarter: Quarter
+  entityType: EntityType
 }
 
 const ATC_PORTAL_URL = "https://sede.gobiernodecanarias.org/tributos/"
@@ -86,7 +88,7 @@ function exportCSV202(m: Modelo202Result): void {
   URL.revokeObjectURL(url)
 }
 
-export function QuarterlyCorporateReport({ modelo420, modelo202, year, quarter }: Props) {
+export function QuarterlyCorporateReport({ modelo420, modelo202, year, quarter, entityType }: Props) {
   const t = useTranslations("tax")
   const { data: filingList } = trpc.taxFilings.list.useQuery({ year })
 
@@ -351,6 +353,7 @@ export function QuarterlyCorporateReport({ modelo420, modelo202, year, quarter }
           filing={filing420}
           year={year}
           quarter={quarter}
+          entityType={entityType}
           onExportCsv={() => exportCSV420(modelo420)}
           portalUrl={ATC_PORTAL_URL}
           knowledgeSlug="filing-modelo-420"
@@ -384,6 +387,7 @@ export function QuarterlyCorporateReport({ modelo420, modelo202, year, quarter }
           filing={filing202}
           year={year}
           quarter={quarter}
+          entityType={entityType}
           onExportCsv={() => exportCSV202(modelo202)}
           portalUrl={AEAT_PORTAL_URL}
           knowledgeSlug="filing-modelo-202"

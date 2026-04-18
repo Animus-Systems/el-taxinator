@@ -2,6 +2,7 @@ import { useParams } from "@tanstack/react-router"
 import { QuarterlyReport } from "@/components/tax/quarterly-report"
 import { QuarterlyCorporateReport } from "@/components/tax/quarterly-corporate-report"
 import { TaxBackLink } from "@/components/tax/tax-back-link"
+import type { EntityType } from "@/lib/entities"
 import { trpc } from "~/trpc"
 
 export function TaxQuarterPage() {
@@ -61,6 +62,8 @@ export function TaxQuarterPage() {
     )
   }
 
+  const resolvedEntityType: EntityType = (entityType?.type as EntityType | undefined) ?? "autonomo"
+
   if (entityType?.type === "sl") {
     if (!modelo202) {
       return (
@@ -78,6 +81,7 @@ export function TaxQuarterPage() {
           quarter={quarter as 1 | 2 | 3 | 4}
           modelo420={modelo420}
           modelo202={modelo202}
+          entityType={resolvedEntityType}
         />
       </div>
     )
@@ -94,7 +98,13 @@ export function TaxQuarterPage() {
   return (
     <div className="space-y-4">
       <TaxBackLink year={year} />
-      <QuarterlyReport year={year} quarter={quarter as 1 | 2 | 3 | 4} modelo420={modelo420} modelo130={modelo130} />
+      <QuarterlyReport
+        year={year}
+        quarter={quarter as 1 | 2 | 3 | 4}
+        modelo420={modelo420}
+        modelo130={modelo130}
+        entityType={resolvedEntityType}
+      />
     </div>
   )
 }

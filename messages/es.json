@@ -782,7 +782,10 @@
       "markAsUnfiled": "Desmarcar presentación",
       "filedOn": "Presentado el {date}",
       "viewDetail": "Ver detalle",
-      "periodLabel": "Periodo"
+      "periodLabel": "Periodo",
+      "recordExternally": "Registrar externamente",
+      "recordedExternally": "Registrada externamente",
+      "confirmationNumber": "Justificante"
     },
     "timeline": {
       "filed": "Presentado",
@@ -815,6 +818,25 @@
     "yearTotals": "Totales del año",
     "entityAutonomo": "Autónomo",
     "entitySL": "Sociedad Limitada",
+    "recordPastFiling": "Registrar presentación pasada",
+    "recordPastFilingTitle": "Registrar presentación pasada",
+    "recordPastFilingDescription": "Registra un modelo que ya presentaste por otro sistema. El importe y el número de justificante son opcionales pero ayudan a mantener tu historial completo.",
+    "recordPastFilingModeloLabel": "Modelo",
+    "recordPastFilingYearLabel": "Año",
+    "recordPastFilingQuarterLabel": "Trimestre",
+    "recordPastFilingFiledOnLabel": "Fecha de presentación",
+    "recordPastFilingAmountLabel": "Importe (EUR)",
+    "recordPastFilingAmountPlaceholder": "ej. 800,00 o -50,25",
+    "recordPastFilingAmountHelp": "Positivo = pagado, negativo = devuelto. Déjalo vacío si no aplica.",
+    "recordPastFilingNrcLabel": "Justificante / NRC",
+    "recordPastFilingNrcPlaceholder": "ej. NRC ABC123XYZ",
+    "recordPastFilingNotesLabel": "Notas",
+    "recordPastFilingNotesPlaceholder": "Cualquier otra cosa que merezca la pena recordar\u2026",
+    "recordPastFilingCancel": "Cancelar",
+    "recordPastFilingSubmit": "Registrar",
+    "recordPastFilingAmountInvalid": "El importe debe ser un número válido.",
+    "recordPastFilingToastSuccess": "Presentación registrada",
+    "recordPastFilingToastError": "No se pudo registrar la presentación",
     "personal": {
       "title": "Rentas personales",
       "subtitle": "Ingresos y deducciones que se consolidan en tu Modelo 100.",
@@ -1599,7 +1621,13 @@
     "replayFifo": "Recalcular FIFO",
     "replayResult": "Lotes: {lots}, disposiciones emparejadas: {disposals}",
     "matchedLotsHeading": "Lotes FIFO emparejados",
-    "matchedLotsEmpty": "Aún sin lotes emparejados — ejecuta Recalcular FIFO en /crypto si parece erróneo."
+    "matchedLotsEmpty": "Aún sin lotes emparejados — ejecuta Recalcular FIFO en /crypto si parece erróneo.",
+    "yearNoDataHint": "Aún no hay transacciones cripto en este año.",
+    "diagNoDisposals": "No hay disposiciones cripto registradas para {year}.",
+    "diagJumpYear": "Ir a {year}",
+    "diagNoDataAnywhere": "Importa exportaciones de exchanges cripto para rellenar esta página.",
+    "diagFifoEmpty": "Se encontraron {count} disposiciones pero el libro FIFO está vacío. Ejecuta Recalcular FIFO para calcular la base de coste y las ganancias.",
+    "diagMissingPrice": "{count} disposiciones no tienen metadatos de precio y no pueden sumarse."
   },
   "accountType": {
     "bank": "Banco",

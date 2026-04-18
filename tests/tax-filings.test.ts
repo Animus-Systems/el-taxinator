@@ -172,6 +172,44 @@ describe("models/tax-filings", () => {
       // quarter passed in as null
       expect(q.values).toContain(null)
     })
+
+    it("persists past-filing fields (amount, confirmation, source) in the SET clause", async () => {
+      seedRows([
+        filingRow({
+          filed_at: new Date("2024-07-18T12:00:00.000Z"),
+          filed_amount_cents: 80000,
+          confirmation_number: "ABC123XYZ",
+          filing_source: "external",
+        }),
+      ])
+      const row = await upsertFiling(USER_ID, 2024, 2, "130", {
+        filedAt: new Date("2024-07-18T12:00:00.000Z"),
+        filedAmountCents: 80000,
+        confirmationNumber: "ABC123XYZ",
+        filingSource: "external",
+      })
+      expect(row.filedAmountCents).toBe(80000)
+      expect(row.confirmationNumber).toBe("ABC123XYZ")
+      expect(row.filingSource).toBe("external")
+      const q = lastQuery()
+      expect(q.text).toMatch(/filed_amount_cents = EXCLUDED\.filed_amount_cents/)
+      expect(q.text).toMatch(/confirmation_number = EXCLUDED\.confirmation_number/)
+      expect(q.text).toMatch(/filing_source = EXCLUDED\.filing_source/)
+      expect(q.values).toContain(80000)
+      expect(q.values).toContain("ABC123XYZ")
+      expect(q.values).toContain("external")
+    })
+
+    it("omits past-filing SET clauses when fields are not in the patch (preserves existing values)", async () => {
+      seedRows([filingRow({ filed_at: null })])
+      // Simulate the existing "mark as unfiled" toggle: only filedAt in the patch.
+      await upsertFiling(USER_ID, 2024, 2, "130", { filedAt: null })
+      const q = lastQuery()
+      expect(q.text).toMatch(/filed_at = EXCLUDED\.filed_at/)
+      expect(q.text).not.toMatch(/filed_amount_cents = EXCLUDED/)
+      expect(q.text).not.toMatch(/confirmation_number = EXCLUDED/)
+      expect(q.text).not.toMatch(/filing_source = EXCLUDED/)
+    })
   })
 
   describe("clearFiling", () => {

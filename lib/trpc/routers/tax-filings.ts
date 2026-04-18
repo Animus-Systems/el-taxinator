@@ -23,6 +23,9 @@ const upsertInputSchema = z.object({
   filedAt: filedAtInputSchema.optional(),
   checklist: z.record(z.string(), z.boolean()).optional(),
   notes: z.string().max(2000).nullable().optional(),
+  filedAmountCents: z.number().int().nullable().optional(),
+  confirmationNumber: z.string().max(128).nullable().optional(),
+  filingSource: z.enum(["app", "external"]).nullable().optional(),
 })
 
 export const taxFilingsRouter = router({
@@ -58,6 +61,9 @@ export const taxFilingsRouter = router({
         ...(input.filedAt !== undefined && { filedAt: input.filedAt }),
         ...(input.checklist !== undefined && { checklist: input.checklist }),
         ...(input.notes !== undefined && { notes: input.notes }),
+        ...(input.filedAmountCents !== undefined && { filedAmountCents: input.filedAmountCents }),
+        ...(input.confirmationNumber !== undefined && { confirmationNumber: input.confirmationNumber }),
+        ...(input.filingSource !== undefined && { filingSource: input.filingSource }),
       }
       return upsertFiling(
         ctx.user.id,

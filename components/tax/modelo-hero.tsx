@@ -1,13 +1,16 @@
+import { useState } from "react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import type { TaxFiling } from "@/lib/db-types"
+import type { EntityType } from "@/lib/entities"
 import { Link } from "@/lib/navigation"
 import { cn } from "@/lib/utils"
 import { format } from "date-fns"
-import { BookOpen, Calendar, Check, ExternalLink, FileDown, Loader2, X } from "lucide-react"
+import { BookOpen, Calendar, Check, ExternalLink, FileDown, FileText, Loader2, X } from "lucide-react"
 import { useTranslations } from "next-intl"
 import { trpc } from "~/trpc"
+import { RecordPastFilingDialog } from "./record-past-filing-dialog"
 
 export type ModeloAgency = "aeat" | "atc"
 
@@ -24,6 +27,7 @@ export type ModeloHeroProps = {
   filing: TaxFiling | null
   year: number
   quarter: number | null
+  entityType: EntityType
   onExportCsv?: () => void
   portalUrl?: string
   knowledgeSlug?: string
@@ -54,6 +58,7 @@ export function ModeloHero({
   filing,
   year,
   quarter,
+  entityType,
   onExportCsv,
   portalUrl,
   knowledgeSlug,
@@ -65,25 +70,35 @@ export function ModeloHero({
       await utils.taxFilings.list.invalidate({ year })
     },
   })
+  const [recordDialogOpen, setRecordDialogOpen] = useState(false)
 
   const isFiled = Boolean(filing?.filedAt)
   const days = daysUntil(deadline)
   const isOverdue = !isFiled && days < 0
   const isSoon = !isFiled && days >= 0 && days < 30
 
+  // When the user recorded a past filing with an explicit amount, that number
+  // is the source of truth for the hero display (it's the actual filed figure
+  // from an external system). Fall back to the transaction-aggregated amount
+  // passed in via props otherwise.
+  const displayAmountCents =
+    filing?.filedAmountCents !== null && filing?.filedAmountCents !== undefined
+      ? filing.filedAmountCents
+      : amountCents
+
   const amountTone =
-    amountCents === null || amountCents === 0
+    displayAmountCents === null || displayAmountCents === 0
       ? "muted"
-      : amountCents > 0
+      : displayAmountCents > 0
         ? "positive"
         : "negative"
 
   const amountLabel =
-    amountCents === null
+    displayAmountCents === null
       ? zeroLabel
-      : amountCents > 0
+      : displayAmountCents > 0
         ? positiveLabel
-        : amountCents < 0
+        : displayAmountCents < 0
           ? negativeLabel
           : zeroLabel
 
@@ -129,6 +144,11 @@ export function ModeloHero({
                   {t("pending")}
                 </Badge>
               )}
+              {filing?.filingSource === "external" ? (
+                <Badge variant="outline" className="text-[10px] text-muted-foreground">
+                  {t("hero.recordedExternally")}
+                </Badge>
+              ) : null}
             </div>
             {subtitle ? (
               <p className="text-sm text-muted-foreground">{subtitle}</p>
@@ -152,6 +172,15 @@ export function ModeloHero({
                 </span>
               ) : null}
             </p>
+            {filing?.confirmationNumber ? (
+              <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <FileText className="h-3 w-3" />
+                <span>
+                  {t("hero.confirmationNumber")}:{" "}
+                  <span className="font-mono">{filing.confirmationNumber}</span>
+                </span>
+              </p>
+            ) : null}
           </div>
 
           <div className="text-left md:text-right">
@@ -159,7 +188,7 @@ export function ModeloHero({
               {amountLabel}
             </p>
             <p className={cn("text-3xl font-semibold tabular-nums", amountColor)}>
-              {amountCents === null ? "—" : formatEUR(Math.abs(amountCents))}
+              {displayAmountCents === null ? "—" : formatEUR(Math.abs(displayAmountCents))}
             </p>
             <p className="text-xs text-muted-foreground mt-1">
               Modelo {modeloCode} · {t(`agency.${agency}`)}
@@ -200,6 +229,14 @@ export function ModeloHero({
               {t("hero.markAsFiled")}
             </Button>
           )}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setRecordDialogOpen(true)}
+          >
+            <FileText className="mr-1 h-4 w-4" />
+            {t("hero.recordExternally")}
+          </Button>
           {onExportCsv ? (
             <Button variant="outline" size="sm" onClick={onExportCsv}>
               <FileDown className="mr-1 h-4 w-4" />
@@ -225,6 +262,15 @@ export function ModeloHero({
           ) : null}
         </div>
       </CardContent>
+      <RecordPastFilingDialog
+        open={recordDialogOpen}
+        onOpenChange={setRecordDialogOpen}
+        entityType={entityType}
+        defaultYear={year}
+        defaultQuarter={quarter}
+        defaultModeloCode={modeloCode}
+        lockedToModelo
+      />
     </Card>
   )
 }

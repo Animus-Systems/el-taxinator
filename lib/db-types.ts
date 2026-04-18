@@ -817,6 +817,9 @@ export const taxFilingSchema = z.object({
   filedAt: z.date().nullable(),
   checklist: z.record(z.string(), z.boolean()),
   notes: z.string().nullable(),
+  filedAmountCents: z.number().int().nullable(),
+  confirmationNumber: z.string().nullable(),
+  filingSource: z.enum(["app", "external"]).nullable(),
   createdAt: z.date(),
   updatedAt: z.date(),
 })

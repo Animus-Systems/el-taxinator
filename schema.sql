@@ -345,6 +345,9 @@ CREATE TABLE tax_filings (
     filed_at timestamp(3) NULL,
     checklist jsonb NOT NULL DEFAULT '{}'::jsonb,
     notes text NULL,
+    filed_amount_cents bigint NULL,
+    confirmation_number text NULL,
+    filing_source text NULL,
     created_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updated_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL
 );

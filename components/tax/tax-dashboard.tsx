@@ -1,3 +1,4 @@
+import { useState } from "react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -6,10 +7,11 @@ import { Link, useRouter } from "@/lib/navigation"
 import { cn } from "@/lib/utils"
 import { trpc } from "~/trpc"
 import { useTranslations } from "next-intl"
-import { ChevronRight, FileText } from "lucide-react"
+import { ChevronRight, FileText, Plus } from "lucide-react"
 import { NextDeadlineHero } from "./next-deadline-hero"
 import { QuarterTimeline, type QuarterTimelineStep } from "./quarter-timeline"
 import { pickNextDeadline, quarterStatus, type QuarterStatus } from "./quarter-status"
+import { RecordPastFilingDialog } from "./record-past-filing-dialog"
 
 type SummaryItem = {
   quarter: number
@@ -67,6 +69,7 @@ export function TaxDashboard({ year, summary, deadlines: _deadlines, entityType 
   const t = useTranslations("tax")
   const { data: filings } = trpc.taxFilings.list.useQuery({ year })
   const filingsList = filings ?? []
+  const [recordDialogOpen, setRecordDialogOpen] = useState(false)
 
   function changeYear(delta: number): void {
     router.push(`/tax?year=${year + delta}`)
@@ -107,6 +110,15 @@ export function TaxDashboard({ year, summary, deadlines: _deadlines, entityType 
           {entityType === "sl" ? t("entitySL") : t("entityAutonomo")}
         </span>
         <div className="ml-auto flex items-center gap-1.5">
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-8 gap-1.5 text-xs"
+            onClick={() => setRecordDialogOpen(true)}
+          >
+            <Plus className="h-3.5 w-3.5" />
+            {t("recordPastFiling")}
+          </Button>
           <Link href={`/tax/${year}`}>
             <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs">
               <FileText className="h-3.5 w-3.5" />
@@ -115,6 +127,13 @@ export function TaxDashboard({ year, summary, deadlines: _deadlines, entityType 
           </Link>
         </div>
       </div>
+
+      <RecordPastFilingDialog
+        open={recordDialogOpen}
+        onOpenChange={setRecordDialogOpen}
+        entityType={entityType}
+        defaultYear={year}
+      />
 
       {nextDeadline && nextSummary ? (
         <NextDeadlineHero

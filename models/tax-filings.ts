@@ -9,6 +9,9 @@ export type TaxFilingPatch = {
   filedAt?: Date | null
   checklist?: Record<string, boolean>
   notes?: string | null
+  filedAmountCents?: number | null
+  confirmationNumber?: string | null
+  filingSource?: "app" | "external" | null
 }
 
 // ---------------------------------------------------------------------------
@@ -81,6 +84,9 @@ export async function upsertFiling(
   if (patch.filedAt !== undefined) setClauses.push("filed_at = EXCLUDED.filed_at")
   if (patch.checklist !== undefined) setClauses.push("checklist = EXCLUDED.checklist")
   if (patch.notes !== undefined) setClauses.push("notes = EXCLUDED.notes")
+  if (patch.filedAmountCents !== undefined) setClauses.push("filed_amount_cents = EXCLUDED.filed_amount_cents")
+  if (patch.confirmationNumber !== undefined) setClauses.push("confirmation_number = EXCLUDED.confirmation_number")
+  if (patch.filingSource !== undefined) setClauses.push("filing_source = EXCLUDED.filing_source")
   setClauses.push("updated_at = CURRENT_TIMESTAMP")
 
   // Values in the INSERT VALUES list. For fields not in `patch`, fall back to
@@ -90,10 +96,14 @@ export async function upsertFiling(
   const filedAt = patch.filedAt ?? null
   const checklist = patch.checklist ?? {}
   const notes = patch.notes ?? null
+  const filedAmountCents = patch.filedAmountCents ?? null
+  const confirmationNumber = patch.confirmationNumber ?? null
+  const filingSource = patch.filingSource ?? null
 
   const text = `INSERT INTO tax_filings
-      (user_id, year, quarter, modelo_code, filed_at, checklist, notes)
-    VALUES ($1, $2, $3, $4, $5, $6, $7)
+      (user_id, year, quarter, modelo_code, filed_at, checklist, notes,
+       filed_amount_cents, confirmation_number, filing_source)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
     ON CONFLICT (user_id, year, COALESCE(quarter, -1), modelo_code)
     DO UPDATE SET ${setClauses.join(", ")}
     RETURNING *`
@@ -105,6 +115,9 @@ export async function upsertFiling(
     filedAt,
     JSON.stringify(checklist),
     notes,
+    filedAmountCents,
+    confirmationNumber,
+    filingSource,
   ]
   const row = await queryOne<TaxFiling>({ text, values })
   if (!row) throw new Error("upsertFiling: no row returned")

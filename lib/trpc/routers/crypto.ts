@@ -43,6 +43,10 @@ const cryptoSummarySchema = z.object({
     }),
   ),
   untrackedDisposalsCount: z.number(),
+  // Diagnostic counters — surfaced on /crypto to explain zero totals.
+  disposalRowCount: z.number(),
+  disposalRowsWithFifoMatch: z.number(),
+  disposalRowsMissingPrice: z.number(),
 })
 
 const holdingSchema = z.object({
@@ -217,6 +221,8 @@ export const cryptoRouter = router({
       let totalCostBasisCents = 0
       let realizedGainCents = 0
       let untrackedDisposalsCount = 0
+      let disposalRowsWithFifoMatch = 0
+      let disposalRowsMissingPrice = 0
       const perAsset = new Map<string, { quantity: number; realizedGainCents: number; disposalCount: number }>()
 
       for (const r of rows) {
@@ -231,6 +237,7 @@ export const cryptoRouter = router({
         // Prefer FIFO-authoritative numbers; fall back to the candidate meta
         // when the ledger hasn't been populated yet (e.g. before first replay).
         const fifo = fifoByTx.get(r.id)
+        if (fifo !== undefined) disposalRowsWithFifoMatch += 1
         const proceedsForRow =
           fifo?.proceeds ?? (price !== null ? Math.round(price * qty) : null)
         const costForRow =
@@ -238,6 +245,7 @@ export const cryptoRouter = router({
         const gainForRow = fifo?.gain ?? candidateGain
 
         if (costForRow === null) untrackedDisposalsCount += 1
+        if (proceedsForRow === null) disposalRowsMissingPrice += 1
         if (proceedsForRow !== null) totalProceedsCents += proceedsForRow
         if (costForRow !== null) totalCostBasisCents += costForRow
         if (gainForRow !== null) realizedGainCents += gainForRow
@@ -265,7 +273,34 @@ export const cryptoRouter = router({
         realizedGainCents,
         byAsset,
         untrackedDisposalsCount,
+        disposalRowCount: rows.length,
+        disposalRowsWithFifoMatch,
+        disposalRowsMissingPrice,
       }
+    }),
+
+  /**
+   * Distinct years in which this user has any crypto-tagged transactions.
+   * Used by /crypto to default the year picker to the most recent year with
+   * real data, instead of the current year (which is usually empty for new
+   * users who just imported historical exchange exports).
+   */
+  availableYears: authedProcedure
+    .input(z.object({}).optional())
+    .output(z.array(z.number().int()))
+    .query(async ({ ctx }) => {
+      type Row = { year: number }
+      const rows = await queryMany<Row>(
+        sql`
+          SELECT DISTINCT EXTRACT(YEAR FROM issued_at)::int AS year
+          FROM transactions
+          WHERE user_id = ${ctx.user.id}
+            AND (extra ? 'crypto')
+            AND issued_at IS NOT NULL
+          ORDER BY year DESC
+        `,
+      )
+      return rows.map((r) => r.year)
     }),
 
   /**

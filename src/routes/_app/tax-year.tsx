@@ -2,6 +2,7 @@ import { useParams } from "@tanstack/react-router"
 import { trpc } from "~/trpc"
 import { AnualReport } from "@/components/tax/anual-report"
 import { TaxBackLink } from "@/components/tax/tax-back-link"
+import type { EntityType } from "@/lib/entities"
 
 export function TaxYearPage() {
   const { year: yearParam } = useParams({ strict: false }) as { year?: string }
@@ -11,6 +12,8 @@ export function TaxYearPage() {
     { year },
     { enabled: Number.isInteger(year) },
   )
+  const { data: entityType } = trpc.tax.entityType.useQuery({})
+  const resolvedEntityType: EntityType = (entityType?.type as EntityType | undefined) ?? "autonomo"
 
   if (!Number.isInteger(year)) {
     return (
@@ -39,7 +42,7 @@ export function TaxYearPage() {
   return (
     <div className="space-y-4">
       <TaxBackLink year={year} />
-      <AnualReport modelo425={modelo425} />
+      <AnualReport modelo425={modelo425} entityType={resolvedEntityType} />
     </div>
   )
 }

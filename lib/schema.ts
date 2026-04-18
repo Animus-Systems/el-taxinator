@@ -15,7 +15,7 @@ import path from "path"
 // 2. Add a migration entry here with the next version number
 // 3. The migration SQL should be idempotent (use IF NOT EXISTS, etc.)
 
-export const SCHEMA_VERSION = 25 // bump this when adding a migration
+export const SCHEMA_VERSION = 26 // bump this when adding a migration
 
 export const migrations: { version: number; description: string; sql: string }[] = [
   {
@@ -687,6 +687,16 @@ export const migrations: { version: number; description: string; sql: string }[]
          'Ganancia patrimonial sin valor de adquisición')
       ) AS c(code, name, llm_prompt, tax_form_ref)
       ON CONFLICT (user_id, code) DO NOTHING;
+    `,
+  },
+  {
+    version: 26,
+    description: "Add structured past-filing fields to tax_filings (amount, confirmation, source)",
+    sql: `
+      ALTER TABLE tax_filings
+        ADD COLUMN IF NOT EXISTS filed_amount_cents bigint,
+        ADD COLUMN IF NOT EXISTS confirmation_number text,
+        ADD COLUMN IF NOT EXISTS filing_source text;
     `,
   },
 ]

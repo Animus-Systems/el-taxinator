@@ -5,6 +5,7 @@
  * The year is read from URL search params (defaults to current year).
  */
 import { useTranslation } from "react-i18next"
+import { useRouterState } from "@tanstack/react-router"
 import { trpc } from "~/trpc"
 import { TaxDashboard } from "@/components/tax/tax-dashboard"
 import { CryptoTaxCards } from "@/components/tax/crypto-tax-cards"
@@ -37,9 +38,17 @@ type TaxSummaryItem = {
 export function TaxPage() {
   const { t } = useTranslation("tax")
 
-  // Read year from URL search params
-  const searchParams = new URLSearchParams(window.location.search)
-  const year = parseInt(searchParams.get("year") ?? "") || new Date().getFullYear()
+  // Subscribe to search-param changes reactively so the year prev/next
+  // buttons (which call router.push("/tax?year=...")) actually re-render
+  // the dashboard with fresh data.
+  const yearParam = useRouterState({
+    select: (s) => {
+      const search = s.location.search as Record<string, unknown>
+      const raw = search["year"]
+      return typeof raw === "string" ? raw : null
+    },
+  })
+  const year = (yearParam ? parseInt(yearParam, 10) : NaN) || new Date().getFullYear()
 
   // Determine locale for tax data
   const locale = document.documentElement.lang || "en"

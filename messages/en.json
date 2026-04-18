@@ -782,7 +782,10 @@
       "markAsUnfiled": "Mark as unfiled",
       "filedOn": "Filed on {date}",
       "viewDetail": "View detail",
-      "periodLabel": "Period"
+      "periodLabel": "Period",
+      "recordExternally": "Record externally",
+      "recordedExternally": "Recorded externally",
+      "confirmationNumber": "Confirmation"
     },
     "timeline": {
       "filed": "Filed",
@@ -815,6 +818,25 @@
     "yearTotals": "Year totals",
     "entityAutonomo": "Aut\u00f3nomo",
     "entitySL": "Sociedad Limitada",
+    "recordPastFiling": "Record past filing",
+    "recordPastFilingTitle": "Record past filing",
+    "recordPastFilingDescription": "Log a modelo you already filed through another system. The amount and confirmation number are optional but help your history stay complete.",
+    "recordPastFilingModeloLabel": "Modelo",
+    "recordPastFilingYearLabel": "Year",
+    "recordPastFilingQuarterLabel": "Quarter",
+    "recordPastFilingFiledOnLabel": "Filed on",
+    "recordPastFilingAmountLabel": "Amount (EUR)",
+    "recordPastFilingAmountPlaceholder": "e.g. 800.00 or -50.25",
+    "recordPastFilingAmountHelp": "Positive = paid, negative = refund received. Leave empty if not applicable.",
+    "recordPastFilingNrcLabel": "Confirmation / NRC",
+    "recordPastFilingNrcPlaceholder": "e.g. NRC ABC123XYZ",
+    "recordPastFilingNotesLabel": "Notes",
+    "recordPastFilingNotesPlaceholder": "Anything else worth remembering\u2026",
+    "recordPastFilingCancel": "Cancel",
+    "recordPastFilingSubmit": "Record",
+    "recordPastFilingAmountInvalid": "Amount must be a valid number.",
+    "recordPastFilingToastSuccess": "Filing recorded",
+    "recordPastFilingToastError": "Could not record filing",
     "personal": {
       "title": "Personal income",
       "subtitle": "Extras that fold into your Modelo 100.",
@@ -1599,7 +1621,13 @@
     "replayFifo": "Replay FIFO",
     "replayResult": "Lots: {lots}, disposals matched: {disposals}",
     "matchedLotsHeading": "Matched FIFO lots",
-    "matchedLotsEmpty": "No lots matched yet — run Replay FIFO on /crypto if this looks wrong."
+    "matchedLotsEmpty": "No lots matched yet — run Replay FIFO on /crypto if this looks wrong.",
+    "yearNoDataHint": "No crypto transactions in this year yet.",
+    "diagNoDisposals": "No crypto disposals recorded for {year}.",
+    "diagJumpYear": "Jump to {year}",
+    "diagNoDataAnywhere": "Import crypto exchange exports to populate this page.",
+    "diagFifoEmpty": "{count} disposals found but the FIFO ledger is empty. Run Replay FIFO to compute cost basis and gains.",
+    "diagMissingPrice": "{count} disposals are missing price metadata and can't be summed."
   },
   "accountType": {
     "bank": "Bank",

@@ -2,12 +2,14 @@ import { CasillaTable, type CasillaGroup, type CasillaRow } from "@/components/t
 import { FilingChecklist, type ChecklistItem } from "@/components/tax/filing-checklist"
 import { ModeloHero } from "@/components/tax/modelo-hero"
 import type { TaxFiling } from "@/lib/db-types"
+import type { EntityType } from "@/lib/entities"
 import type { Modelo425Result } from "@/models/tax"
 import { useTranslations } from "next-intl"
 import { trpc } from "~/trpc"
 
 type Props = {
   modelo425: Modelo425Result
+  entityType: EntityType
 }
 
 const ATC_PORTAL_URL = "https://sede.gobiernodecanarias.org/tributos/"
@@ -64,7 +66,7 @@ function exportCSV425(m: Modelo425Result): void {
   URL.revokeObjectURL(url)
 }
 
-export function AnualReport({ modelo425 }: Props) {
+export function AnualReport({ modelo425, entityType }: Props) {
   const t = useTranslations("tax")
   const { year } = modelo425
   const { data: filingList } = trpc.taxFilings.list.useQuery({ year })
@@ -139,6 +141,7 @@ export function AnualReport({ modelo425 }: Props) {
         filing={filing425}
         year={year}
         quarter={null}
+        entityType={entityType}
         onExportCsv={() => exportCSV425(modelo425)}
         portalUrl={ATC_PORTAL_URL}
         knowledgeSlug="filing-modelo-425"
