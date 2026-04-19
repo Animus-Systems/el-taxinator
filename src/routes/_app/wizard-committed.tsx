@@ -5,7 +5,7 @@ import { trpc } from "~/trpc"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Download, PartyPopper, FileText, PlusCircle, Lightbulb, Sparkles, Loader2, History } from "lucide-react"
+import { Download, PartyPopper, FileText, PlusCircle, Lightbulb, Sparkles, Loader2, History, UserRound } from "lucide-react"
 import type { SessionReport } from "@/ai/session-report"
 
 export function WizardCommittedPage() {
@@ -67,6 +67,14 @@ export function WizardCommittedPage() {
               {t("startNewSession")}
             </Link>
           </Button>
+          {(report.totals.byStatus["personal_taxable"]?.count ?? 0) > 0 ? (
+            <Button asChild variant="outline">
+              <Link to={"/personal" as string}>
+                <UserRound className="h-4 w-4 mr-1" />
+                {t("committed.viewInPersonal")}
+              </Link>
+            </Button>
+          ) : null}
           <Button asChild variant="outline">
             <Link to={"/transactions" as string}>
               <FileText className="h-4 w-4 mr-1" />

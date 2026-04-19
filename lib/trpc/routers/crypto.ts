@@ -10,6 +10,7 @@ import {
   getDisposalMatches,
   replayFromTransactions,
 } from "@/models/crypto-fifo"
+import { backfillCryptoMetadataFromImportFiles } from "@/models/crypto-backfill"
 
 // ---------------------------------------------------------------------------
 // Output schemas
@@ -503,5 +504,30 @@ export const cryptoRouter = router({
     .output(replayResultSchema)
     .mutation(async ({ ctx }) => {
       return replayFromTransactions(ctx.user.id)
+    }),
+
+  /**
+   * Re-derive `extra.crypto` on already-committed transactions whose
+   * metadata was dropped at import time. Reads each import session's
+   * original upload from disk and stamps structured {asset, quantity,
+   * pricePerUnit} onto the matching transactions, then replays FIFO.
+   *
+   * Safe to run repeatedly — the UPDATE skips rows that already have
+   * `extra.crypto` set.
+   */
+  backfillMetadata: authedProcedure
+    .input(z.object({}).optional())
+    .output(
+      z.object({
+        sessionsScanned: z.number(),
+        sessionsWithMissingFile: z.number(),
+        candidatesConsidered: z.number(),
+        transactionsUpdated: z.number(),
+        transactionsSkipped: z.number(),
+        fifoReplay: replayResultSchema.nullable(),
+      }),
+    )
+    .mutation(async ({ ctx }) => {
+      return backfillCryptoMetadataFromImportFiles(ctx.user.id)
     }),
 })

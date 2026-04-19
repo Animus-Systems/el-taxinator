@@ -7,28 +7,19 @@ import { Card, CardContent } from "@/components/ui/card"
 import { formatCurrency } from "@/lib/utils"
 import { AlertTriangle, Check, FileText, Link as LinkIcon, Loader2, Unlink } from "lucide-react"
 
+export type IncomeSourceKind = "salary" | "rental" | "dividend" | "interest" | "other"
+
 type Props = {
   sourceId: string
   year: number
+  kind: IncomeSourceKind
 }
 
 const MONTH_KEYS = [
-  "jan",
-  "feb",
-  "mar",
-  "apr",
-  "may",
-  "jun",
-  "jul",
-  "aug",
-  "sep",
-  "oct",
-  "nov",
-  "dec",
+  "jan", "feb", "mar", "apr", "may", "jun",
+  "jul", "aug", "sep", "oct", "nov", "dec",
 ] as const
 
-// One hue per month so a row's leading stripe matches the month tile it came
-// from. Offset by 15° and stepped by 30° gives 12 distinct but calm colours.
 function monthHue(month: number): number {
   return ((month - 1) * 30 + 15) % 360
 }
@@ -58,10 +49,14 @@ function monthColor(month: number, hasData: boolean): MonthStyle {
   }
 }
 
-export function EmployerDetailPanel({ sourceId, year }: Props) {
+export function IncomeSourceDetailPanel({ sourceId, year, kind }: Props) {
   const { t } = useTranslation("tax")
   const utils = trpc.useUtils()
   const [selectedMonth, setSelectedMonth] = useState<number | null>(null)
+
+  const docLabel = t(`personal.incomeSource.detail.docLabel.${kind}`)
+  const colDocLabel = t(`personal.incomeSource.detail.colDoc.${kind}`)
+  const retentionLabel = t(`personal.incomeSource.detail.colRetention.${kind}`)
 
   const { data, isLoading } = trpc.incomeSources.detail.useQuery({ id: sourceId, year })
   const { data: suggestions = [] } = trpc.incomeSources.suggestLinks.useQuery({
@@ -99,15 +94,16 @@ export function EmployerDetailPanel({ sourceId, year }: Props) {
   if (completeness.missingNif) {
     completenessChips.push({
       key: "nif",
-      label: t("personal.employment.detail.chipMissingNif"),
+      label: t("personal.incomeSource.detail.chipMissingNif"),
       tone: "warn",
     })
   }
   if (completeness.monthsMissingPayslip > 0) {
     completenessChips.push({
       key: "months",
-      label: t("personal.employment.detail.chipMonthsMissingPayslip", {
+      label: t("personal.incomeSource.detail.chipMonthsMissingDoc", {
         count: completeness.monthsMissingPayslip,
+        doc: docLabel,
       }),
       tone: "warn",
     })
@@ -115,31 +111,33 @@ export function EmployerDetailPanel({ sourceId, year }: Props) {
   if (completeness.depositsMissingPayslip > 0) {
     completenessChips.push({
       key: "deposits",
-      label: t("personal.employment.detail.chipDepositsMissingPayslip", {
+      label: t("personal.incomeSource.detail.chipDepositsMissingDoc", {
         count: completeness.depositsMissingPayslip,
+        doc: docLabel,
       }),
       tone: "warn",
     })
   }
-  if (!completeness.totalIrpfExtracted && transactions.length > 0) {
+  if (!completeness.totalIrpfExtracted && transactions.length > 0 && kind === "salary") {
     completenessChips.push({
       key: "irpf",
-      label: t("personal.employment.detail.chipNoIrpf"),
+      label: t("personal.incomeSource.detail.chipNoIrpf"),
       tone: "warn",
     })
   }
   if (completenessChips.length === 0 && transactions.length > 0) {
     completenessChips.push({
       key: "ok",
-      label: t("personal.employment.detail.chipComplete"),
+      label: t("personal.incomeSource.detail.chipComplete"),
       tone: "ok",
     })
   }
 
+  const showRetentionColumn = kind === "salary" || kind === "dividend" || kind === "interest"
+
   return (
     <div className="border-t bg-muted/30">
       <div className="mx-auto max-w-5xl space-y-4 px-4 py-4">
-        {/* Completeness strip */}
         {completenessChips.length > 0 ? (
           <div className="flex flex-wrap items-center gap-1.5">
             {completenessChips.map((chip) => (
@@ -163,15 +161,14 @@ export function EmployerDetailPanel({ sourceId, year }: Props) {
           </div>
         ) : null}
 
-        {/* 12-month grid */}
         <div>
           <h3 className="text-xs font-medium text-muted-foreground mb-2">
-            {t("personal.employment.detail.monthlyOverview", { year })}
+            {t("personal.incomeSource.detail.monthlyOverview", { year })}
           </h3>
           <div className="grid grid-cols-6 md:grid-cols-12 gap-1.5">
             {monthly.map((m, i) => {
               const monthKey = MONTH_KEYS[i]
-              const monthLabel = monthKey ? t(`personal.employment.detail.month.${monthKey}`) : String(m.month)
+              const monthLabel = monthKey ? t(`personal.incomeSource.detail.month.${monthKey}`) : String(m.month)
               const hasData = m.depositCount > 0
               const color = monthColor(m.month, hasData)
               const incomplete = hasData && m.withPayslipCount < m.depositCount
@@ -193,12 +190,13 @@ export function EmployerDetailPanel({ sourceId, year }: Props) {
                   }}
                   title={
                     hasData
-                      ? t("personal.employment.detail.monthTooltip", {
+                      ? t("personal.incomeSource.detail.monthTooltip", {
                           deposits: m.depositCount,
-                          payslips: m.withPayslipCount,
+                          withDoc: m.withPayslipCount,
                           gross: formatCurrency(m.grossCents, "EUR"),
+                          doc: docLabel,
                         })
-                      : t("personal.employment.detail.monthEmpty")
+                      : t("personal.incomeSource.detail.monthEmpty")
                   }
                 >
                   {incomplete ? (
@@ -210,26 +208,25 @@ export function EmployerDetailPanel({ sourceId, year }: Props) {
                   ) : null}
                   <div className="font-medium uppercase tracking-wide">{monthLabel}</div>
                   <div className="tabular-nums mt-0.5">
-                    {hasData ? `${m.withPayslipCount}/${m.depositCount}` : "—"}
+                    {hasData ? `${m.withPayslipCount}/${m.depositCount}` : "\u2014"}
                   </div>
                 </button>
               )
             })}
           </div>
           <p className="mt-1.5 text-[10px] text-muted-foreground">
-            {t("personal.employment.detail.monthLegendColor")}
+            {t("personal.incomeSource.detail.monthLegendColor")}
           </p>
         </div>
 
-        {/* Linked transactions */}
         <div>
           <h3 className="text-xs font-medium text-muted-foreground mb-2">
-            {t("personal.employment.detail.linkedTransactions", { count: transactions.length })}
+            {t("personal.incomeSource.detail.linkedTransactions", { count: transactions.length })}
           </h3>
           {transactions.length === 0 ? (
             <Card>
               <CardContent className="py-4 text-center text-xs text-muted-foreground">
-                {t("personal.employment.detail.noLinkedYet")}
+                {t("personal.incomeSource.detail.noLinkedYet")}
               </CardContent>
             </Card>
           ) : (
@@ -239,23 +236,21 @@ export function EmployerDetailPanel({ sourceId, year }: Props) {
                   <tr>
                     <th className="w-1 p-0"></th>
                     <th className="px-2 py-1.5 text-left font-medium">
-                      {t("personal.employment.detail.colDate")}
+                      {t("personal.incomeSource.detail.colDate")}
                     </th>
                     <th className="px-2 py-1.5 text-left font-medium">
-                      {t("personal.employment.detail.colDescription")}
+                      {t("personal.incomeSource.detail.colDescription")}
                     </th>
                     <th className="px-2 py-1.5 text-right font-medium">
-                      {t("personal.employment.detail.colGross")}
+                      {t("personal.incomeSource.detail.colGross")}
                     </th>
+                    {showRetentionColumn && (
+                      <th className="px-2 py-1.5 text-right font-medium">{retentionLabel}</th>
+                    )}
                     <th className="px-2 py-1.5 text-right font-medium">
-                      {t("personal.employment.detail.colIrpf")}
+                      {t("personal.incomeSource.detail.colNet")}
                     </th>
-                    <th className="px-2 py-1.5 text-right font-medium">
-                      {t("personal.employment.detail.colNet")}
-                    </th>
-                    <th className="px-2 py-1.5 text-center font-medium">
-                      {t("personal.employment.detail.colPayslip")}
-                    </th>
+                    <th className="px-2 py-1.5 text-center font-medium">{colDocLabel}</th>
                     <th className="px-2 py-1.5 text-right font-medium"></th>
                   </tr>
                 </thead>
@@ -278,14 +273,14 @@ export function EmployerDetailPanel({ sourceId, year }: Props) {
                         <td
                           className="w-1 p-0"
                           style={{ backgroundColor: color.stripe }}
-                          title={t(`personal.employment.detail.month.${MONTH_KEYS[month - 1]}`)}
+                          title={t(`personal.incomeSource.detail.month.${MONTH_KEYS[month - 1]}`)}
                         ></td>
                         <td className="px-2 py-1.5 tabular-nums">
                           {tx.issuedAt.slice(0, 10)}
                         </td>
                         <td className="px-2 py-1.5">
                           <div className="truncate max-w-[280px]">
-                            {tx.merchant ?? tx.name ?? tx.description ?? "—"}
+                            {tx.merchant ?? tx.name ?? tx.description ?? "\u2014"}
                           </div>
                         </td>
                         <td className="px-2 py-1.5 text-right tabular-nums">
@@ -293,11 +288,13 @@ export function EmployerDetailPanel({ sourceId, year }: Props) {
                             ? formatCurrency(tx.grossCents, tx.currencyCode)
                             : formatCurrency(tx.total, tx.currencyCode)}
                         </td>
-                        <td className="px-2 py-1.5 text-right tabular-nums text-muted-foreground">
-                          {tx.irpfWithheldCents != null && tx.irpfWithheldCents > 0
-                            ? formatCurrency(tx.irpfWithheldCents, tx.currencyCode)
-                            : "—"}
-                        </td>
+                        {showRetentionColumn && (
+                          <td className="px-2 py-1.5 text-right tabular-nums text-muted-foreground">
+                            {tx.irpfWithheldCents != null && tx.irpfWithheldCents > 0
+                              ? formatCurrency(tx.irpfWithheldCents, tx.currencyCode)
+                              : "\u2014"}
+                          </td>
+                        )}
                         <td className="px-2 py-1.5 text-right tabular-nums">
                           {formatCurrency(tx.total, tx.currencyCode)}
                         </td>
@@ -310,7 +307,7 @@ export function EmployerDetailPanel({ sourceId, year }: Props) {
                               className="inline-flex items-center gap-1 text-primary hover:underline"
                             >
                               <FileText className="h-3 w-3" />
-                              {t("personal.employment.detail.viewPayslip")}
+                              {t("personal.incomeSource.detail.viewDoc")}
                             </a>
                           ) : (
                             <span className="text-muted-foreground">—</span>
@@ -324,7 +321,7 @@ export function EmployerDetailPanel({ sourceId, year }: Props) {
                             className="h-6 px-1.5 text-[10px] text-muted-foreground hover:text-destructive"
                             onClick={() => unlink.mutate({ transactionId: tx.id })}
                             disabled={unlink.isPending}
-                            title={t("personal.employment.detail.unlink")}
+                            title={t("personal.incomeSource.detail.unlink")}
                           >
                             <Unlink className="h-3 w-3" />
                           </Button>
@@ -338,11 +335,10 @@ export function EmployerDetailPanel({ sourceId, year }: Props) {
           )}
         </div>
 
-        {/* Suggested links */}
         {suggestions.length > 0 ? (
           <div>
             <h3 className="text-xs font-medium text-muted-foreground mb-2">
-              {t("personal.employment.detail.suggestedLinksTitle", { count: suggestions.length })}
+              {t("personal.incomeSource.detail.suggestedLinksTitle", { count: suggestions.length })}
             </h3>
             <Card>
               <CardContent className="p-0">
@@ -353,10 +349,10 @@ export function EmployerDetailPanel({ sourceId, year }: Props) {
                         {s.issuedAt.slice(0, 10)}
                       </span>
                       <span className="flex-1 truncate">
-                        {s.merchant ?? s.description ?? "—"}
+                        {s.merchant ?? s.description ?? "\u2014"}
                       </span>
                       <Badge variant="secondary" className="text-[10px]">
-                        {t(`personal.employment.detail.matchReason.${s.matchReason}`)}
+                        {t(`personal.incomeSource.detail.matchReason.${s.matchReason}`)}
                       </Badge>
                       <span className="tabular-nums font-medium">
                         {formatCurrency(s.total, s.currencyCode)}
@@ -370,7 +366,7 @@ export function EmployerDetailPanel({ sourceId, year }: Props) {
                         disabled={link.isPending}
                       >
                         <LinkIcon className="h-3 w-3" />
-                        {t("personal.employment.detail.linkAction")}
+                        {t("personal.incomeSource.detail.linkAction")}
                       </Button>
                     </li>
                   ))}

@@ -28,6 +28,7 @@ import { receiptsRouter } from "./routers/receipts"
 import { incomeSourcesRouter } from "./routers/income-sources"
 import { deductionsRouter } from "./routers/deductions"
 import { taxFilingsRouter } from "./routers/tax-filings"
+import { personalTaxRouter } from "./routers/personal-tax"
 
 export const appRouter = router({
   transactions: transactionsRouter,
@@ -59,6 +60,7 @@ export const appRouter = router({
   incomeSources: incomeSourcesRouter,
   deductions: deductionsRouter,
   taxFilings: taxFilingsRouter,
+  personalTax: personalTaxRouter,
 })
 
 export type AppRouter = typeof appRouter

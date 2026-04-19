@@ -192,18 +192,29 @@ ${projects.length > 0 ? formatProjectList(projects) : "(none defined)"}
 Analyze this CSV and determine:
 1. Which bank or institution this CSV likely comes from
 2. How each CSV column maps to our transaction fields: name, merchant, description, total, currencyCode, type, issuedAt
+   PLUS — when this is a crypto exchange statement — the crypto-specific fields:
+   cryptoAsset, cryptoQuantity, cryptoGrossAmountEur, cryptoFeeEur
 
 Crypto exchanges (Swissborg, Kraken, Coinbase, Binance, Bitstamp, Bit2Me, Revolut Crypto) use different column shapes than banks. Typical columns:
 - "Type" — values like "Sell", "Buy", "Deposit", "Withdrawal", "Payouts", "Fee Adjustment", "Redemption".
 - "Currency" — the crypto asset ticker (BORG, ETH, BTC, SOL, etc.) — NOT an ISO fiat code.
 - "Gross amount", "Net amount" — in the asset currency.
 - "Gross amount (EUR)", "Net amount (EUR)" — EUR-equivalent for tax reporting.
+- "Fee", "Fee (EUR)" — transaction fees.
 - "Note" — free-text description like "Exchanged to EUR", "Alpha redemption".
 
-When the CSV is a crypto-exchange statement:
-- Map the EUR-denominated amount column (e.g. "Net amount (EUR)") to \`total\`.
-- Set currencyCode to the string "EUR" explicitly by returning "const:EUR" as the mapping value for currencyCode (see "Constant / synthesized values" below).
-- If there's no natural "name" or "merchant" column, use synthesized values (see below) to produce something readable in the UI.
+When the CSV is a crypto-exchange statement, in addition to the regular bank mappings you MUST capture crypto-specific data by mapping these extra fields:
+- The asset ticker column ("Currency" in SwissBorg) → \`cryptoAsset\`
+- The per-asset quantity column ("Gross amount" in SwissBorg) → \`cryptoQuantity\`
+- The EUR-equivalent of the gross amount ("Gross amount (EUR)") → \`cryptoGrossAmountEur\`
+- The EUR fee column ("Fee (EUR)") → \`cryptoFeeEur\` (optional, skip if not present)
+
+These feed the FIFO cost-basis ledger and /crypto page. Without them, crypto tax reporting silently breaks.
+
+Also:
+- Map the EUR-denominated net amount column (e.g. "Net amount (EUR)") to \`total\`.
+- Set currencyCode to the literal "EUR" via the const: synthesized-value form (see below) — the \`Currency\` column is the asset ticker, NOT the fiat code.
+- If there's no natural "name" or "merchant" column, use synthesized values (below) to produce something readable in the UI.
 
 Constant / synthesized values. When a field value isn't in a single column, you may return one of these special forms as the mapping value:
 - "const:<literal>" — use the literal string for every row. E.g. \`"merchant": "const:SwissBorg"\` sets merchant to "SwissBorg" on every row.
@@ -228,7 +239,11 @@ Good mapping:
   "Net amount (EUR)": "total",
   "Note": "description",
   "Type": "type",
-  "Currency": "const:EUR",
+  "Currency": "cryptoAsset",
+  "Gross amount": "cryptoQuantity",
+  "Gross amount (EUR)": "cryptoGrossAmountEur",
+  "Fee (EUR)": "cryptoFeeEur",
+  "currencyCode": "const:EUR",
   "name": "concat:Type+Currency",
   "merchant": "const:SwissBorg"
 }
@@ -246,7 +261,7 @@ Note the last three entries are "virtual" mappings — the key side of the mappi
       columnMapping: {
         type: "object",
         description:
-          "Maps CSV column names to transaction fields (name, merchant, description, total, currencyCode, type, issuedAt). For separate_columns amount format, use total:expense and total:income as values. Values may also be synthesized directives: 'const:<literal>' (fixed value for every row) or 'concat:<ColA>+<ColB>' (joins two columns with a space). When using const: or concat:, the key side may be the literal field name (e.g. 'merchant', 'currencyCode', 'name') since there's no corresponding CSV column.",
+          "Maps CSV column names to transaction fields (name, merchant, description, total, currencyCode, type, issuedAt). For separate_columns amount format, use total:expense and total:income as values. For crypto exchange statements, ALSO map these fields when present: cryptoAsset (ticker column), cryptoQuantity (asset-denominated amount), cryptoGrossAmountEur (EUR-denominated gross), cryptoFeeEur (EUR fee). Values may also be synthesized directives: 'const:<literal>' (fixed value for every row) or 'concat:<ColA>+<ColB>' (joins two columns with a space). When using const: or concat:, the key side may be the literal field name (e.g. 'merchant', 'currencyCode', 'name') since there's no corresponding CSV column.",
         additionalProperties: { type: "string" },
       },
       dateFormat: {
@@ -467,6 +482,37 @@ export function applyCSVMapping(
         overall: 0.5,
       },
       selected: true,
+    }
+
+    // Crypto columns → candidate.extra.crypto. When the mapping captured the
+    // asset ticker column, derive partial FIFO metadata at mapping time so
+    // the wizard and the /crypto page have structured data even if the AI
+    // never thinks to emit extra.crypto itself. pricePerUnit is the EUR-per-
+    // unit ratio; costBasisPerUnit stays null for disposals (FIFO populates
+    // it later) and is set equal to pricePerUnit for purchases.
+    const cryptoAsset = getValue("cryptoAsset")
+    const cryptoQuantityRaw = getValue("cryptoQuantity")
+    const cryptoGrossEurRaw = getValue("cryptoGrossAmountEur")
+    const cryptoFeeEurRaw = getValue("cryptoFeeEur")
+    if (cryptoAsset && cryptoAsset.trim() !== "") {
+      const qtyParsed = cryptoQuantityRaw ? Number(cryptoQuantityRaw.replace(",", ".")) : null
+      const grossEurCents = cryptoGrossEurRaw ? parseAmount(cryptoGrossEurRaw) : null
+      const feeEurCents = cryptoFeeEurRaw ? parseAmount(cryptoFeeEurRaw) : null
+      const pricePerUnitCents =
+        qtyParsed !== null && grossEurCents !== null && qtyParsed > 0
+          ? Math.round(grossEurCents / qtyParsed)
+          : null
+      candidate.extra = {
+        ...(candidate.extra ?? {}),
+        crypto: {
+          asset: cryptoAsset.trim().toUpperCase(),
+          ...(qtyParsed !== null && Number.isFinite(qtyParsed)
+            ? { quantity: String(qtyParsed) }
+            : {}),
+          ...(pricePerUnitCents !== null ? { pricePerUnit: pricePerUnitCents } : {}),
+          ...(feeEurCents !== null ? { feesCents: feeEurCents } : {}),
+        } as Record<string, unknown>,
+      }
     }
 
     candidates.push(candidate)

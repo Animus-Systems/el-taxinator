@@ -1,5 +1,6 @@
 import { useTranslation } from "react-i18next"
 import { PersonalTaxSection } from "@/components/personal/personal-tax-section"
+import { PersonalTaxSummary } from "@/components/personal/personal-tax-summary"
 
 export function PersonalIndexPage() {
   const { t } = useTranslation("tax")
@@ -11,6 +12,7 @@ export function PersonalIndexPage() {
         <h1 className="text-2xl font-bold">{t("personal.title")}</h1>
         <p className="text-sm text-muted-foreground">{t("personal.indexSubtitle")}</p>
       </header>
+      <PersonalTaxSummary year={year} />
       <PersonalTaxSection year={year} />
     </div>
   )

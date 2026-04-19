@@ -16,6 +16,7 @@ import {
   TrendingDown,
   RotateCw,
   Info,
+  Wrench,
 } from "lucide-react"
 import { formatCurrency } from "@/lib/utils"
 
@@ -81,6 +82,15 @@ export function CryptoPage() {
       utils.crypto.listDisposals.invalidate()
       utils.crypto.holdings.invalidate()
       utils.crypto.suggestGatewayLinks.invalidate()
+    },
+  })
+
+  const backfill = trpc.crypto.backfillMetadata.useMutation({
+    onSuccess: () => {
+      utils.crypto.summary.invalidate()
+      utils.crypto.listDisposals.invalidate()
+      utils.crypto.holdings.invalidate()
+      utils.crypto.availableYears.invalidate()
     },
   })
 
@@ -341,7 +351,14 @@ export function CryptoPage() {
           </Link>
         </span>
         <div className="ml-auto flex items-center gap-2">
-          {replayFifo.data ? (
+          {backfill.data ? (
+            <span className="tabular-nums">
+              {t("backfillResult", {
+                updated: backfill.data.transactionsUpdated,
+                skipped: backfill.data.transactionsSkipped,
+              })}
+            </span>
+          ) : replayFifo.data ? (
             <span className="tabular-nums">
               {t("replayResult", {
                 lots: replayFifo.data.lotsCreated,
@@ -349,6 +366,21 @@ export function CryptoPage() {
               })}
             </span>
           ) : null}
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => backfill.mutate({})}
+            disabled={backfill.isPending}
+            className="h-7 text-[11px]"
+            title={t("backfillMetadataHint")}
+          >
+            {backfill.isPending ? (
+              <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+            ) : (
+              <Wrench className="h-3.5 w-3.5 mr-1.5" />
+            )}
+            {t("backfillMetadata")}
+          </Button>
           <Button
             size="sm"
             variant="ghost"

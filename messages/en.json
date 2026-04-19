@@ -988,6 +988,117 @@
         "descriptionLabel": "Note",
         "descriptionPlaceholder": "e.g. Plan de pensiones BBVA",
         "save": "Save"
+      },
+      "incomeSource": {
+        "inactive": "Inactive",
+        "yearNoDataHint": "No linked transactions in this year.",
+        "detail": {
+          "monthlyOverview": "Monthly coverage · {year}",
+          "monthLegendColor": "Each month has its own colour \u2014 matching the stripe on its linked transactions. Orange dot = a deposit that month is missing its document.",
+          "monthEmpty": "No deposits",
+          "monthTooltip": "{withDoc}/{deposits} with {doc} · {gross} gross",
+          "month": {
+            "jan": "Jan", "feb": "Feb", "mar": "Mar", "apr": "Apr",
+            "may": "May", "jun": "Jun", "jul": "Jul", "aug": "Aug",
+            "sep": "Sep", "oct": "Oct", "nov": "Nov", "dec": "Dec"
+          },
+          "linkedTransactions": "Linked transactions ({count})",
+          "noLinkedYet": "No transactions linked for this year yet.",
+          "colDate": "Date",
+          "colDescription": "Description",
+          "colGross": "Gross",
+          "colNet": "Net",
+          "colRetention": {
+            "salary": "IRPF",
+            "dividend": "Retention",
+            "interest": "Retention"
+          },
+          "colDoc": {
+            "salary": "Payslip",
+            "rental": "Document",
+            "dividend": "Statement",
+            "interest": "Statement",
+            "other": "Document"
+          },
+          "docLabel": {
+            "salary": "payslip",
+            "rental": "document",
+            "dividend": "statement",
+            "interest": "statement",
+            "other": "document"
+          },
+          "viewDoc": "View",
+          "unlink": "Unlink",
+          "suggestedLinksTitle": "Suggested links ({count})",
+          "linkAction": "Link",
+          "matchReason": {
+            "merchant": "Merchant match",
+            "description": "Description match"
+          },
+          "chipMissingNif": "NIF not set",
+          "chipMonthsMissingDoc": "{count} month(s) without {doc}",
+          "chipDepositsMissingDoc": "{count} deposit(s) without {doc}",
+          "chipNoIrpf": "No IRPF extracted \u2014 add a payslip",
+          "chipComplete": "Complete"
+        }
+      },
+      "dividend": {
+        "title": "Dividend income",
+        "description": "Shares, ETFs, distributions",
+        "pageSubtitle": "Track payers that pay you dividends and their withholding.",
+        "empty": "No dividend payers yet.",
+        "emptyHint": "Add the first payer that distributes dividends to you.",
+        "summary": "{count} payer(s) \u00b7 {amount} gross YTD",
+        "addSource": "Add payer",
+        "ytdSummary": "{gross} gross \u00b7 {withheld} retained",
+        "noDataYet": "No distributions yet.",
+        "confirmDeleteTitle": "Delete payer?",
+        "confirmDeleteBody": "Remove {name}? Linked distributions will lose their payer tag.",
+        "delete": "Delete",
+        "addDialogTitle": "Add dividend payer",
+        "addDialogSubtitle": "Any issuer that pays you dividends (company, broker, ETF).",
+        "sourceName": "Payer name",
+        "sourceTaxId": "Payer NIF / CIF (optional)",
+        "save": "Save"
+      },
+      "interest": {
+        "title": "Interest income",
+        "description": "Bank accounts, deposits, bonds",
+        "pageSubtitle": "Track accounts and counterparties that pay you interest.",
+        "empty": "No interest payers yet.",
+        "emptyHint": "Add the first bank or counterparty that pays you interest.",
+        "summary": "{count} payer(s) \u00b7 {amount} gross YTD",
+        "addSource": "Add payer",
+        "ytdSummary": "{gross} gross \u00b7 {withheld} retained",
+        "noDataYet": "No interest payments yet.",
+        "confirmDeleteTitle": "Delete payer?",
+        "confirmDeleteBody": "Remove {name}? Linked interest payments will lose their payer tag.",
+        "delete": "Delete",
+        "addDialogTitle": "Add interest payer",
+        "addDialogSubtitle": "Typically a bank or broker that pays you interest.",
+        "sourceName": "Payer name",
+        "sourceTaxId": "Payer NIF / CIF (optional)",
+        "save": "Save"
+      },
+      "summary": {
+        "title": "Modelo 100 estimate \u00b7 {year}",
+        "estimateOnly": "Estimate",
+        "disclaimer": "Approximate. Uses average state + autonomous-community rates; real filing may differ.",
+        "estimatedToPay": "Estimated to pay",
+        "estimatedRefund": "Estimated refund",
+        "estimatedZero": "No balance owed",
+        "cuotaMinusWithheld": "{cuota} due \u2212 {withheld} withheld",
+        "generalBase": "General base",
+        "generalBaseSub": "Tax on this base: {cuota}",
+        "savingsBase": "Savings base",
+        "savingsBaseSub": "Tax on this base: {cuota}",
+        "totalCuota": "Total liability",
+        "afterCredits": "After {credits} in credits",
+        "noCredits": "No credits applied",
+        "totalWithheld": "Already withheld",
+        "totalWithheldSub": "Salary + investment retention",
+        "breakdownTitle": "Breakdown",
+        "noIncomeYet": "Link some personal income to see your estimated Modelo 100 liability."
       }
     }
   },
@@ -1573,6 +1684,7 @@
     "committed": {
       "personalTaxable": "Personal — taxable",
       "personalIgnored": "Personal — ignored",
+      "viewInPersonal": "View in Personal",
       "noBusinessActivityHint": "No business activity in this session — crypto disposals are taxed on Modelo 100 savings base (ganancia patrimonial), staking rewards as rendimientos capital mobiliario. See rollups below.",
       "taxRollups": {
         "title": "Tax-meaningful rollups",
@@ -1672,6 +1784,9 @@
     "openLotsLabel": "{count} open lots",
     "replayFifo": "Replay FIFO",
     "replayResult": "Lots: {lots}, disposals matched: {disposals}",
+    "backfillMetadata": "Rebuild metadata",
+    "backfillMetadataHint": "Re-reads the original upload files and reconstructs missing crypto metadata (asset, quantity, price) from the CSV/XLSX columns, then replays FIFO.",
+    "backfillResult": "Updated: {updated}, skipped: {skipped}",
     "matchedLotsHeading": "Matched FIFO lots",
     "matchedLotsEmpty": "No lots matched yet — run Replay FIFO on /crypto if this looks wrong.",
     "yearNoDataHint": "No crypto transactions in this year yet.",

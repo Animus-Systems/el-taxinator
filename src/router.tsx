@@ -33,6 +33,8 @@ import { CryptoPage } from "./routes/_app/crypto"
 import { PersonalIndexPage } from "./routes/_app/personal/index"
 import { EmploymentPage } from "./routes/_app/personal/employment"
 import { RentalPage } from "./routes/_app/personal/rental"
+import { DividendsPage } from "./routes/_app/personal/dividends"
+import { InterestPage } from "./routes/_app/personal/interest"
 import { DeductionsPage } from "./routes/_app/personal/deductions"
 
 // Pages — settings layout
@@ -257,6 +259,18 @@ const personalRentalRoute = createRoute({
   component: RentalPage,
 })
 
+const personalDividendsRoute = createRoute({
+  getParentRoute: () => appLayoutRoute,
+  path: "/personal/dividends",
+  component: DividendsPage,
+})
+
+const personalInterestRoute = createRoute({
+  getParentRoute: () => appLayoutRoute,
+  path: "/personal/interest",
+  component: InterestPage,
+})
+
 const personalDeductionsRoute = createRoute({
   getParentRoute: () => appLayoutRoute,
   path: "/personal/deductions",
@@ -431,6 +445,8 @@ const appChildren = appLayoutRoute.addChildren([
   personalIndexRoute,
   personalEmploymentRoute,
   personalRentalRoute,
+  personalDividendsRoute,
+  personalInterestRoute,
   personalDeductionsRoute,
   settingsChildren,
 ])

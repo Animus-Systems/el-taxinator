@@ -11,7 +11,7 @@ import type {
 import type { ContextFileText } from "@/lib/context-file-text"
 import type { TransactionCandidate } from "./import-csv"
 
-export const WIZARD_PROMPT_VERSION = "2026-04-17.9"
+export const WIZARD_PROMPT_VERSION = "2026-04-19.1"
 
 const MAX_FOCUSED_CANDIDATES = 150
 
@@ -656,7 +656,7 @@ FX gain/loss computation is pending — for now, just classify the rows correctl
 ## Output rules
 Produce a single JSON object with these top-level fields:
 - assistantMessage (string, REQUIRED): your natural-language reply to the user. Keep it concise and human — the structured fields carry the machine-readable details.
-- candidateUpdates (array, default []): one entry per row you are confidently changing. Always include rowIndex and reasoning. Set status, categoryCode, projectCode, type as needed. Set confidence numbers between 0 and 1. For crypto rows (category=crypto_*) set extra.crypto = { asset, quantity (decimal string), pricePerUnit (EUR cents, integer), costBasisPerUnit (EUR cents, integer or null if unknown) }. Omit the extra field entirely when not a crypto row.
+- candidateUpdates (array, default []): one entry per row you are confidently changing. Always include rowIndex and reasoning. Set status, categoryCode, projectCode, type as needed. Set confidence numbers between 0 and 1. For crypto rows (category=crypto_*), ALWAYS set extra.crypto with at minimum { asset, quantity (decimal string) } — those two are mandatory. Add pricePerUnit (EUR cents, integer) and costBasisPerUnit (EUR cents, integer) when known; use null for unknown. NEVER omit extra.crypto for a crypto_* row just because some fields are missing — partial metadata is better than none, the FIFO ledger fills the gaps downstream. If the row already carries an extra.crypto (populated by the CSV mapping), keep it and only fill in fields that are still null. Omit the extra field entirely when not a crypto row.
 - bulkActions (array, default []): when many rows share a pattern the user just clarified, propose ONE bulkAction (preferred over many candidateUpdates). Set offerAsRule=true if it would make sense to persist as a rule. To create an income_source (employer, landlord, broker, etc.) AND link every matching row to it in a single user click, include \`apply.createIncomeSource = { kind, name, taxId? }\` — see the "Personal streams" section for when to use it.
 - clarifyingQuestions (array, max 3): only when you genuinely need more information.
 - taxTips (array, default []): per-row or session-wide tips that help the user save tax legally. Each tip REQUIRES rowIndex (number or null for session-wide), title, body, legalBasis (non-empty). Use actionable="save_as_fact" when the tip is durable context the user should remember; "propose_recategorization" when you want the user to change a category; "advisory" otherwise.

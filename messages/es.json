@@ -988,6 +988,117 @@
         "descriptionLabel": "Nota",
         "descriptionPlaceholder": "p.ej. Plan de pensiones BBVA",
         "save": "Guardar"
+      },
+      "incomeSource": {
+        "inactive": "Inactivo",
+        "yearNoDataHint": "No hay transacciones enlazadas en este año.",
+        "detail": {
+          "monthlyOverview": "Cobertura mensual · {year}",
+          "monthLegendColor": "Cada mes tiene su color \u2014 coincide con la franja de sus transacciones enlazadas. Punto naranja = un ingreso de ese mes sin documento.",
+          "monthEmpty": "Sin ingresos",
+          "monthTooltip": "{withDoc}/{deposits} con {doc} · {gross} bruto",
+          "month": {
+            "jan": "Ene", "feb": "Feb", "mar": "Mar", "apr": "Abr",
+            "may": "May", "jun": "Jun", "jul": "Jul", "aug": "Ago",
+            "sep": "Sep", "oct": "Oct", "nov": "Nov", "dec": "Dic"
+          },
+          "linkedTransactions": "Transacciones enlazadas ({count})",
+          "noLinkedYet": "Aún no hay transacciones enlazadas para este año.",
+          "colDate": "Fecha",
+          "colDescription": "Descripción",
+          "colGross": "Bruto",
+          "colNet": "Neto",
+          "colRetention": {
+            "salary": "IRPF",
+            "dividend": "Retención",
+            "interest": "Retención"
+          },
+          "colDoc": {
+            "salary": "Nómina",
+            "rental": "Documento",
+            "dividend": "Justificante",
+            "interest": "Justificante",
+            "other": "Documento"
+          },
+          "docLabel": {
+            "salary": "nómina",
+            "rental": "documento",
+            "dividend": "justificante",
+            "interest": "justificante",
+            "other": "documento"
+          },
+          "viewDoc": "Ver",
+          "unlink": "Desvincular",
+          "suggestedLinksTitle": "Enlaces sugeridos ({count})",
+          "linkAction": "Enlazar",
+          "matchReason": {
+            "merchant": "Coincide el comercio",
+            "description": "Coincide la descripción"
+          },
+          "chipMissingNif": "Falta NIF",
+          "chipMonthsMissingDoc": "{count} mes(es) sin {doc}",
+          "chipDepositsMissingDoc": "{count} ingreso(s) sin {doc}",
+          "chipNoIrpf": "Sin IRPF extraído \u2014 sube una nómina",
+          "chipComplete": "Completo"
+        }
+      },
+      "dividend": {
+        "title": "Rendimientos de capital mobiliario \u2014 dividendos",
+        "description": "Acciones, ETFs, distribuciones",
+        "pageSubtitle": "Registra pagadores de dividendos y sus retenciones.",
+        "empty": "Todavía no hay pagadores.",
+        "emptyHint": "Añade el primer pagador que te distribuye dividendos.",
+        "summary": "{count} pagador(es) \u00b7 {amount} bruto YTD",
+        "addSource": "Añadir pagador",
+        "ytdSummary": "{gross} bruto \u00b7 {withheld} retenido",
+        "noDataYet": "Todavía no hay distribuciones.",
+        "confirmDeleteTitle": "¿Eliminar pagador?",
+        "confirmDeleteBody": "¿Eliminar {name}? Las distribuciones enlazadas perderán la etiqueta del pagador.",
+        "delete": "Eliminar",
+        "addDialogTitle": "Añadir pagador de dividendos",
+        "addDialogSubtitle": "Cualquier emisor que te pague dividendos (empresa, bróker, ETF).",
+        "sourceName": "Nombre del pagador",
+        "sourceTaxId": "NIF / CIF del pagador (opcional)",
+        "save": "Guardar"
+      },
+      "interest": {
+        "title": "Rendimientos de capital mobiliario \u2014 intereses",
+        "description": "Cuentas bancarias, depósitos, bonos",
+        "pageSubtitle": "Registra cuentas y contrapartes que te pagan intereses.",
+        "empty": "Todavía no hay pagadores.",
+        "emptyHint": "Añade el primer banco o contraparte que te paga intereses.",
+        "summary": "{count} pagador(es) \u00b7 {amount} bruto YTD",
+        "addSource": "Añadir pagador",
+        "ytdSummary": "{gross} bruto \u00b7 {withheld} retenido",
+        "noDataYet": "Todavía no hay pagos de intereses.",
+        "confirmDeleteTitle": "¿Eliminar pagador?",
+        "confirmDeleteBody": "¿Eliminar {name}? Los pagos de intereses enlazados perderán la etiqueta.",
+        "delete": "Eliminar",
+        "addDialogTitle": "Añadir pagador de intereses",
+        "addDialogSubtitle": "Normalmente un banco o bróker que te paga intereses.",
+        "sourceName": "Nombre del pagador",
+        "sourceTaxId": "NIF / CIF del pagador (opcional)",
+        "save": "Guardar"
+      },
+      "summary": {
+        "title": "Estimación Modelo 100 \u00b7 {year}",
+        "estimateOnly": "Estimación",
+        "disclaimer": "Aproximado. Usa tipos medios estatal + autonómico; la declaración real puede diferir.",
+        "estimatedToPay": "A pagar (estimado)",
+        "estimatedRefund": "A devolver (estimado)",
+        "estimatedZero": "Sin resultado",
+        "cuotaMinusWithheld": "{cuota} cuota \u2212 {withheld} retenido",
+        "generalBase": "Base general",
+        "generalBaseSub": "Cuota sobre esta base: {cuota}",
+        "savingsBase": "Base del ahorro",
+        "savingsBaseSub": "Cuota sobre esta base: {cuota}",
+        "totalCuota": "Cuota total",
+        "afterCredits": "Tras {credits} en deducciones",
+        "noCredits": "Sin deducciones aplicadas",
+        "totalWithheld": "Ya retenido",
+        "totalWithheldSub": "Nómina + retención inversora",
+        "breakdownTitle": "Desglose",
+        "noIncomeYet": "Enlaza algún ingreso personal para ver tu cuota estimada del Modelo 100."
       }
     }
   },
@@ -1573,6 +1684,7 @@
     "committed": {
       "personalTaxable": "Personal — imponible",
       "personalIgnored": "Personal — ignorado",
+      "viewInPersonal": "Ver en Personal",
       "noBusinessActivityHint": "No hay actividad de negocio en esta sesión — las ventas de cripto tributan en la base del ahorro del Modelo 100 (ganancia patrimonial) y las recompensas de staking como rendimientos del capital mobiliario. Ver totales abajo.",
       "taxRollups": {
         "title": "Totales relevantes para impuestos",
@@ -1672,6 +1784,9 @@
     "openLotsLabel": "{count} lotes abiertos",
     "replayFifo": "Recalcular FIFO",
     "replayResult": "Lotes: {lots}, disposiciones emparejadas: {disposals}",
+    "backfillMetadata": "Reconstruir metadatos",
+    "backfillMetadataHint": "Vuelve a leer los archivos originales y reconstruye los metadatos cripto faltantes (activo, cantidad, precio) desde las columnas del CSV/XLSX, luego recalcula FIFO.",
+    "backfillResult": "Actualizadas: {updated}, omitidas: {skipped}",
     "matchedLotsHeading": "Lotes FIFO emparejados",
     "matchedLotsEmpty": "Aún sin lotes emparejados — ejecuta Recalcular FIFO en /crypto si parece erróneo.",
     "yearNoDataHint": "Aún no hay transacciones cripto en este año.",
