@@ -1,26 +1,49 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { trpc } from "~/trpc"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { formatCurrency } from "@/lib/utils"
-import { Briefcase, Plus, Upload, Trash2 } from "lucide-react"
+import { Briefcase, ChevronDown, ChevronRight, Plus, Upload, Trash2 } from "lucide-react"
 import { useConfirm } from "@/components/ui/confirm-dialog"
 import { AddEmployerDialog } from "./add-employer-dialog"
 import { PayslipUploadDialog } from "./payslip-upload-dialog"
+import { EmployerDetailPanel } from "./employer-detail-panel"
 
 export function EmploymentPage() {
   const { t } = useTranslation("tax")
   const confirm = useConfirm()
   const utils = trpc.useUtils()
-  const year = new Date().getFullYear()
+  const [year, setYear] = useState<number>(new Date().getFullYear())
+  const [userPickedYear, setUserPickedYear] = useState(false)
+
+  const { data: availableYears = [] } = trpc.incomeSources.availableYears.useQuery({ kind: "salary" })
+
+  // One-shot auto-correct: if the user hasn't picked a year manually and the
+  // current default is empty, jump to the latest year that actually has
+  // salary-linked transactions. Rescues users whose salary rows were imported
+  // for a previous tax year.
+  useEffect(() => {
+    if (userPickedYear) return
+    if (availableYears.length === 0) return
+    if (availableYears.includes(year)) return
+    const latestWithData = availableYears[0]
+    if (typeof latestWithData === "number") setYear(latestWithData)
+  }, [availableYears, year, userPickedYear])
 
   const { data: employers = [], isLoading } = trpc.incomeSources.list.useQuery({ kind: "salary" })
   const { data: totals = [] } = trpc.incomeSources.totals.useQuery({ year })
 
+  const yearOptions = (() => {
+    const now = new Date().getFullYear()
+    const set = new Set<number>([now, now - 1, now - 2, now - 3, ...availableYears])
+    return [...set].sort((a, b) => b - a).slice(0, 6)
+  })()
+
   const [addOpen, setAddOpen] = useState(false)
   const [uploadOpen, setUploadOpen] = useState(false)
+  const [expandedId, setExpandedId] = useState<string | null>(null)
 
   const totalsById = new Map(totals.map((t) => [t.sourceId, t]))
 
@@ -53,7 +76,36 @@ export function EmploymentPage() {
             {t("personal.employment.pageSubtitle")}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="inline-flex items-center rounded-lg bg-muted/60 p-0.5 text-[11px] flex-shrink-0">
+            {yearOptions.map((y) => {
+              const hasData = availableYears.includes(y)
+              return (
+                <button
+                  key={y}
+                  type="button"
+                  onClick={() => {
+                    setUserPickedYear(true)
+                    setYear(y)
+                  }}
+                  title={hasData ? undefined : t("personal.employment.yearNoDataHint")}
+                  className={[
+                    "px-3 py-1 rounded-md transition-colors tabular-nums",
+                    y === year
+                      ? "bg-background shadow-sm text-foreground font-medium"
+                      : hasData
+                        ? "text-muted-foreground hover:text-foreground"
+                        : "text-muted-foreground/50 hover:text-muted-foreground",
+                  ].join(" ")}
+                >
+                  {y}
+                  {hasData && y !== year ? (
+                    <span className="ml-1 inline-block h-1.5 w-1.5 rounded-full bg-sky-500 align-middle" />
+                  ) : null}
+                </button>
+              )
+            })}
+          </div>
           <Button variant="outline" onClick={() => setAddOpen(true)}>
             <Plus className="mr-1.5 h-4 w-4" />
             {t("personal.employment.addEmployer")}
@@ -86,10 +138,28 @@ export function EmploymentPage() {
         <ul className="space-y-2">
           {employers.map((emp) => {
             const totals = totalsById.get(emp.id)
+            const isExpanded = expandedId === emp.id
             return (
               <li key={emp.id}>
-                <Card>
-                  <CardContent className="flex items-center gap-3 p-4">
+                <Card className="overflow-hidden">
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    aria-expanded={isExpanded}
+                    onClick={() => setExpandedId(isExpanded ? null : emp.id)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault()
+                        setExpandedId(isExpanded ? null : emp.id)
+                      }
+                    }}
+                    className="flex w-full cursor-pointer items-center gap-3 p-4 text-left hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    {isExpanded ? (
+                      <ChevronDown className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                    ) : (
+                      <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                    )}
                     <div className="flex h-10 w-10 items-center justify-center rounded-md bg-muted">
                       <Briefcase className="h-5 w-5" />
                     </div>
@@ -121,12 +191,16 @@ export function EmploymentPage() {
                       variant="ghost"
                       size="icon"
                       className="text-muted-foreground hover:text-destructive"
-                      onClick={() => handleDelete(emp.id, emp.name)}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        void handleDelete(emp.id, emp.name)
+                      }}
                       disabled={remove.isPending}
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
-                  </CardContent>
+                  </div>
+                  {isExpanded ? <EmployerDetailPanel sourceId={emp.id} year={year} /> : null}
                 </Card>
               </li>
             )

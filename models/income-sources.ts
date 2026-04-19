@@ -169,6 +169,204 @@ export async function getIncomeSourceTotals(
   }))
 }
 
+/**
+ * Distinct calendar years that have at least one transaction linked to an
+ * income_source, optionally filtered to a specific kind (e.g. salary). Used
+ * to populate the year picker on /personal/employment so rows imported for a
+ * past tax year aren't hidden behind an empty current-year default.
+ */
+export async function listIncomeSourceYears(
+  userId: string,
+  kind?: IncomeSourceKind,
+): Promise<number[]> {
+  const rows = kind
+    ? await queryMany<{ year: number }>(
+        sql`SELECT DISTINCT EXTRACT(YEAR FROM t.issued_at)::int AS year
+             FROM transactions t
+             JOIN income_sources s ON s.id = t.income_source_id AND s.user_id = t.user_id
+             WHERE t.user_id = ${userId}
+               AND s.kind = ${kind}
+               AND t.issued_at IS NOT NULL
+             ORDER BY year DESC`,
+      )
+    : await queryMany<{ year: number }>(
+        sql`SELECT DISTINCT EXTRACT(YEAR FROM issued_at)::int AS year
+             FROM transactions
+             WHERE user_id = ${userId}
+               AND income_source_id IS NOT NULL
+               AND issued_at IS NOT NULL
+             ORDER BY year DESC`,
+      )
+  return rows.map((r) => r.year)
+}
+
+export type IncomeSourceLinkedTxn = {
+  id: string
+  issuedAt: string
+  name: string | null
+  merchant: string | null
+  description: string | null
+  total: number
+  currencyCode: string
+  status: string | null
+  fileIds: string[]
+  grossCents: number | null
+  irpfWithheldCents: number | null
+  ssEmployeeCents: number | null
+  payslipPeriodStart: string | null
+  payslipPeriodEnd: string | null
+}
+
+/**
+ * All transactions linked to a given income source within a year, ordered by
+ * date descending. Pre-extracts payslip fields from `extra.payslip` so the UI
+ * doesn't have to dig through JSON.
+ */
+export async function listTransactionsBySource(
+  userId: string,
+  sourceId: string,
+  year: number,
+): Promise<IncomeSourceLinkedTxn[]> {
+  const pool = await getPool()
+  const start = new Date(Date.UTC(year, 0, 1))
+  const end = new Date(Date.UTC(year + 1, 0, 1))
+  const result = await pool.query(
+    `SELECT
+       id,
+       issued_at,
+       name,
+       merchant,
+       description,
+       total,
+       currency_code,
+       status,
+       COALESCE(files, '[]'::jsonb) AS files,
+       (extra->'payslip'->>'grossCents')::bigint AS gross_cents,
+       (extra->'payslip'->>'irpfWithheldCents')::bigint AS irpf_withheld_cents,
+       (extra->'payslip'->>'ssEmployeeCents')::bigint AS ss_employee_cents,
+       extra->'payslip'->>'periodStart' AS period_start,
+       extra->'payslip'->>'periodEnd' AS period_end
+     FROM transactions
+     WHERE user_id = $1
+       AND income_source_id = $2
+       AND issued_at >= $3 AND issued_at < $4
+     ORDER BY issued_at DESC`,
+    [userId, sourceId, start, end],
+  )
+  return result.rows.map((row) => {
+    const rawFiles = row["files"]
+    const fileIds = Array.isArray(rawFiles)
+      ? rawFiles.filter((f: unknown): f is string => typeof f === "string")
+      : []
+    const issuedAt = row["issued_at"]
+    return {
+      id: String(row["id"]),
+      issuedAt: issuedAt instanceof Date ? issuedAt.toISOString() : String(issuedAt),
+      name: row["name"] ?? null,
+      merchant: row["merchant"] ?? null,
+      description: row["description"] ?? null,
+      total: Number(row["total"] ?? 0),
+      currencyCode: String(row["currency_code"] ?? "EUR"),
+      status: row["status"] ?? null,
+      fileIds,
+      grossCents: row["gross_cents"] != null ? Number(row["gross_cents"]) : null,
+      irpfWithheldCents:
+        row["irpf_withheld_cents"] != null ? Number(row["irpf_withheld_cents"]) : null,
+      ssEmployeeCents:
+        row["ss_employee_cents"] != null ? Number(row["ss_employee_cents"]) : null,
+      payslipPeriodStart: row["period_start"] ?? null,
+      payslipPeriodEnd: row["period_end"] ?? null,
+    }
+  })
+}
+
+export type UnlinkedDeposit = {
+  id: string
+  issuedAt: string
+  merchant: string | null
+  description: string | null
+  total: number
+  currencyCode: string
+  status: string | null
+  matchReason: "merchant" | "description"
+}
+
+/**
+ * Suggest deposits that likely belong to the given income source but aren't
+ * linked yet. Matches by merchant ILIKE or description ILIKE against the
+ * source name (case-insensitive, trimmed). Scoped by year and skips rows
+ * already linked to any source.
+ */
+export async function listUnlinkedDepositsForSource(
+  userId: string,
+  source: { id: string; name: string },
+  year: number,
+): Promise<UnlinkedDeposit[]> {
+  const pool = await getPool()
+  const start = new Date(Date.UTC(year, 0, 1))
+  const end = new Date(Date.UTC(year + 1, 0, 1))
+  const needle = `%${source.name.trim()}%`
+  const result = await pool.query(
+    `SELECT
+       id,
+       issued_at,
+       merchant,
+       description,
+       total,
+       currency_code,
+       status,
+       CASE
+         WHEN merchant IS NOT NULL AND merchant ILIKE $4 THEN 'merchant'
+         ELSE 'description'
+       END AS match_reason
+     FROM transactions
+     WHERE user_id = $1
+       AND income_source_id IS NULL
+       AND type = 'income'
+       AND issued_at >= $2 AND issued_at < $3
+       AND (
+         (merchant IS NOT NULL AND merchant ILIKE $4)
+         OR (description IS NOT NULL AND description ILIKE $4)
+         OR (name IS NOT NULL AND name ILIKE $4)
+       )
+     ORDER BY issued_at DESC
+     LIMIT 50`,
+    [userId, start, end, needle],
+  )
+  return result.rows.map((row) => {
+    const issuedAt = row["issued_at"]
+    return {
+      id: String(row["id"]),
+      issuedAt: issuedAt instanceof Date ? issuedAt.toISOString() : String(issuedAt),
+      merchant: row["merchant"] ?? null,
+      description: row["description"] ?? null,
+      total: Number(row["total"] ?? 0),
+      currencyCode: String(row["currency_code"] ?? "EUR"),
+      status: row["status"] ?? null,
+      matchReason: row["match_reason"] === "merchant" ? "merchant" : "description",
+    }
+  })
+}
+
+/**
+ * Attach or detach an income_source from an existing committed transaction.
+ * Returns true when the row was updated (i.e. belonged to the user).
+ */
+export async function setTransactionIncomeSource(
+  userId: string,
+  transactionId: string,
+  sourceId: string | null,
+): Promise<boolean> {
+  const pool = await getPool()
+  const res = await pool.query(
+    `UPDATE transactions
+        SET income_source_id = $1, updated_at = now()
+      WHERE id = $2 AND user_id = $3`,
+    [sourceId, transactionId, userId],
+  )
+  return (res.rowCount ?? 0) > 0
+}
+
 export async function sumPersonalIncome(
   userId: string,
   year: number,

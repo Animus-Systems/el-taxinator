@@ -32,6 +32,7 @@ import {
   hasAnyBusinessFacts,
 } from "@/models/business-facts"
 import { getFilesByIds } from "@/models/files"
+import { upsertIncomeSource } from "@/models/income-sources"
 import {
   processWizardTurn,
   runOnboardingTurn,
@@ -326,11 +327,31 @@ export const wizardRouter = router({
 
   applyBulkAction: authedProcedure
     .input(z.object({ sessionId: z.string(), action: bulkActionSchema }))
-    .output(z.object({ updated: z.number(), candidates: z.array(z.unknown()) }))
+    .output(
+      z.object({
+        updated: z.number(),
+        candidates: z.array(z.unknown()),
+        createdIncomeSourceId: z.string().nullable(),
+      }),
+    )
     .mutation(async ({ ctx, input }) => {
       const session = await getImportSessionById(input.sessionId, ctx.user.id)
       if (!session) throw new TRPCError({ code: "NOT_FOUND", message: "session not found" })
       const candidates = Array.isArray(session.data) ? (session.data as TransactionCandidate[]) : []
+
+      // Upsert the income source first (if requested) so we can stamp its id onto
+      // every matched candidate in the same loop.
+      let incomeSourceId: string | null = null
+      const srcPayload = input.action.apply.createIncomeSource
+      if (srcPayload) {
+        const source = await upsertIncomeSource(ctx.user.id, {
+          kind: srcPayload.kind,
+          name: srcPayload.name,
+          ...(srcPayload.taxId ? { taxId: srcPayload.taxId } : {}),
+        })
+        incomeSourceId = source.id
+      }
+
       let updated = 0
       const targets = input.action.affectedRowIndexes
       const targetSet = targets.length > 0 ? new Set(targets) : null
@@ -345,10 +366,11 @@ export const wizardRouter = router({
         if (input.action.apply.projectCode !== undefined && input.action.apply.projectCode !== null) c.projectCode = input.action.apply.projectCode
         if (input.action.apply.type !== undefined && input.action.apply.type !== null) c.type = input.action.apply.type
         if (input.action.apply.status !== undefined && input.action.apply.status !== null) c.status = input.action.apply.status as TransactionReviewStatusValue
+        if (incomeSourceId) c.incomeSourceId = incomeSourceId
         updated += 1
       }
       await updateImportSession(input.sessionId, ctx.user.id, { data: candidates })
-      return { updated, candidates: candidates as unknown as unknown[] }
+      return { updated, candidates: candidates as unknown as unknown[], createdIncomeSourceId: incomeSourceId }
     }),
 
   listBusinessFacts: authedProcedure

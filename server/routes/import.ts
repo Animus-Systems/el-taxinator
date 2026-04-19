@@ -730,6 +730,10 @@ export async function importRoutes(app: FastifyInstance) {
             transferId: c.transferId ?? null,
             transferDirection: c.transferDirection ?? null,
             counterAccountId: c.counterAccountId ?? null,
+            // Set by `wizard.applyBulkAction` when the action upserts an income
+            // source (e.g. the AI proposes an Employment source for recurring
+            // salary deposits). Stays null for every other candidate.
+            incomeSourceId: c.incomeSourceId ?? null,
             // Carry the wizard's extra payload (crypto meta, etc.) through to
             // transactions.extra so /crypto-page queries can find it.
             ...(extraPayload ? { extra: extraPayload } : {}),

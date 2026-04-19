@@ -5,7 +5,8 @@ import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Loader2, Send, RotateCw, AlertTriangle, Sparkles } from "lucide-react"
+import { Loader2, Send, RotateCw, AlertTriangle, Sparkles, Briefcase } from "lucide-react"
+import { toast } from "sonner"
 import type { BulkAction, WizardMessage } from "@/lib/db-types"
 
 type Props = {
@@ -65,8 +66,12 @@ export function WizardChat({ sessionId, messages, pendingTurnAt, externalTurnPen
   })
 
   const applyBulk = trpc.wizard.applyBulkAction.useMutation({
-    onSuccess: () => {
+    onSuccess: (result) => {
       utils.wizard.get.invalidate({ sessionId })
+      if (result.createdIncomeSourceId) {
+        utils.incomeSources.list.invalidate()
+        toast.success(t("bulkActionIncomeSourceCreated", { count: result.updated }))
+      }
     },
   })
 
@@ -337,21 +342,35 @@ function MessageBubble({
 
         {message.bulkActions && message.bulkActions.length > 0 ? (
           <div className="mt-2 flex flex-col gap-1.5">
-            {message.bulkActions.map((action, i) => (
-              <Button
-                key={i}
-                size="sm"
-                variant="outline"
-                className="h-auto min-h-7 py-1.5 justify-start items-start text-left text-xs gap-1.5 whitespace-normal w-full"
-                onClick={() => onApplyBulkAction(action)}
-              >
-                <Sparkles className="h-3 w-3 flex-shrink-0 mt-0.5" />
-                <span className="flex-1 min-w-0 break-words">{action.description}</span>
-                <Badge variant="secondary" className="ml-auto flex-shrink-0">
-                  {action.affectedRowIndexes?.length ?? 0}
-                </Badge>
-              </Button>
-            ))}
+            {message.bulkActions.map((action, i) => {
+              const src = action.apply?.createIncomeSource
+              const Icon = src ? Briefcase : Sparkles
+              return (
+                <Button
+                  key={i}
+                  size="sm"
+                  variant="outline"
+                  className="h-auto min-h-7 py-1.5 justify-start items-start text-left text-xs gap-1.5 whitespace-normal w-full"
+                  onClick={() => onApplyBulkAction(action)}
+                >
+                  <Icon className="h-3 w-3 flex-shrink-0 mt-0.5" />
+                  <span className="flex-1 min-w-0 break-words">
+                    {action.description}
+                    {src ? (
+                      <span className="block text-[10px] font-normal text-muted-foreground mt-0.5">
+                        {t("bulkActionCreateIncomeSourceHint", {
+                          kind: t(`incomeSourceKind.${src.kind}`),
+                          name: src.name,
+                        })}
+                      </span>
+                    ) : null}
+                  </span>
+                  <Badge variant="secondary" className="ml-auto flex-shrink-0">
+                    {action.affectedRowIndexes?.length ?? 0}
+                  </Badge>
+                </Button>
+              )
+            })}
           </div>
         ) : null}
 

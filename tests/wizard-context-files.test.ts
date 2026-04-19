@@ -12,6 +12,7 @@ vi.mock("@/models/categories", () => ({ getCategories: vi.fn(async () => []) }))
 vi.mock("@/models/projects", () => ({ getProjects: vi.fn(async () => []) }))
 vi.mock("@/models/accounts", () => ({ getActiveAccounts: vi.fn(async () => []) }))
 vi.mock("@/models/rules", () => ({ getActiveRules: vi.fn(async () => []) }))
+vi.mock("@/models/income-sources", () => ({ listIncomeSources: vi.fn(async () => []) }))
 vi.mock("@/models/knowledge-packs", () => ({ listPacks: vi.fn(async () => []) }))
 vi.mock("@/models/business-facts", () => ({
   listBusinessFacts: vi.fn(async () => []),

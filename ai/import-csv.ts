@@ -87,6 +87,10 @@ export type TransactionCandidate = {
   // user picks which of their existing accounts is the counter-party. Flows
   // straight through to `transactions.counter_account_id` at commit time.
   counterAccountId?: string | null
+  // Populated by `wizard.applyBulkAction` when the action carries a
+  // `createIncomeSource` payload — the server upserts the income source and
+  // stamps its id here so the row links to the source on commit.
+  incomeSourceId?: string | null
 }
 
 export type SuggestedCategory = {

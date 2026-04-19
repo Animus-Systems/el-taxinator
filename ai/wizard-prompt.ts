@@ -31,6 +31,14 @@ export type WizardPromptInput = {
   userMessage: string
   defaultAccountId: string | null
   contextFiles?: ContextFileText[]
+  incomeSources?: WizardIncomeSourceRef[]
+}
+
+export type WizardIncomeSourceRef = {
+  id: string
+  kind: "salary" | "rental" | "dividend" | "interest" | "other"
+  name: string
+  taxId: string | null
 }
 
 const REPLY_SCHEMA = {
@@ -101,6 +109,15 @@ const REPLY_SCHEMA = {
               projectCode: { type: ["string", "null"] },
               type: { type: ["string", "null"], enum: ["expense", "income", "transfer", "conversion", null] },
               status: { type: ["string", "null"] },
+              createIncomeSource: {
+                type: "object",
+                properties: {
+                  kind: { type: "string", enum: ["salary", "rental", "dividend", "interest", "other"] },
+                  name: { type: "string" },
+                  taxId: { type: ["string", "null"] },
+                },
+                required: ["kind", "name"],
+              },
             },
           },
           affectedRowIndexes: { type: "array", items: { type: "number" } },
@@ -279,6 +296,18 @@ function formatAccounts(accounts: BankAccount[], defaultAccountId: string | null
       const currency = a.currencyCode ? ` [ccy: ${a.currencyCode}]` : ""
       const def = defaultAccountId && a.id === defaultAccountId ? " (session default)" : ""
       return `- id="${a.id}" name="${a.name}"${bank}${currency} type=${a.accountType}${def}`
+    })
+    .join("\n")
+}
+
+function formatIncomeSources(sources: WizardIncomeSourceRef[] | undefined): string {
+  if (!sources || sources.length === 0) {
+    return "(no income sources on file — feel free to propose one via bulkAction.apply.createIncomeSource when you spot a recurring personal-income series)"
+  }
+  return sources
+    .map((s) => {
+      const tax = s.taxId ? ` taxId="${s.taxId}"` : ""
+      return `- id="${s.id}" kind=${s.kind} name="${s.name}"${tax}`
     })
     .join("\n")
 }
@@ -506,6 +535,10 @@ ${formatCategories(input.categories)}
 ## Available projects
 ${formatProjects(input.projects)}
 
+## Existing income sources
+${formatIncomeSources(input.incomeSources)}
+Prefer an existing source over a new one: if a recurring personal-income series matches one of the rows above by name (case-insensitive, normalized), DO NOT include \`createIncomeSource\` in the bulkAction — the upsert keys on (kind, name), so resubmitting the same name is a no-op but still noisy. Just emit the bulkAction without it and the user will associate rows manually, OR omit the bulkAction entirely if the status/type updates are already captured in candidateUpdates.
+
 ## Available bank accounts
 ${formatAccounts(input.accounts, input.defaultAccountId)}
 When you know which account a transaction belongs to (matched bank, card mentioned in description, or user told you), set accountId on the candidateUpdate using one of the ids above. If the session has a default account the user can leave it as-is.
@@ -567,8 +600,18 @@ A transaction looks broker-related when any of these are true:
 Rules mirror crypto but use the "stock_" prefix: stock_purchase, stock_disposal, stock_dividend. extra.crypto is reused as the payload (asset=ticker, quantity, pricePerUnit, costBasisPerUnit) — asset_class on the ledger row distinguishes them at query time. Stock gains roll into the same ganancias patrimoniales bucket of Modelo 100 as crypto; dividends go to rendimientos del capital mobiliario (savings bracket). Set status="personal_taxable" on stock_disposal and stock_dividend rows (autónomo/individual) or "business_non_deductible" (SL).
 
 ## Personal streams (individual filer or autónomo's personal side)
-Salary deposits from an employer (nómina): don't assign a crypto/stock category — instead set status="personal_income" and link an income_source via the /personal/employment page. The wizard only categorizes and flags these for the user to attach.
-Rental income: same pattern; link to an income_source of kind=rental.
+Salary deposits from an employer (nómina) and recurring rental/interest/dividend receipts need an income_source attached so Modelo 100 picks them up correctly.
+
+When you spot a recurring personal-income pattern (same employer on multiple dates, same rental property, same dividend-paying broker), prefer ONE bulkAction over many candidateUpdates:
+- \`match\` — the field + pattern that identifies every row in the series (usually \`field: "description"\`, \`type: "contains"\`, \`value: "<Employer name>"\`).
+- \`apply.status\` — set to \`"personal_taxable"\`.
+- \`apply.type\` — set to \`"income"\`.
+- \`apply.createIncomeSource\` — \`{ kind: "salary" | "rental" | "dividend" | "interest" | "other", name: "<Employer / payer name>", taxId?: "<NIF if you know it>" }\`. When the user clicks the action the server upserts the income_source by (kind, normalized name) — no duplicates if it already exists — and stamps its id on every matched row.
+- \`affectedRowIndexes\` — list every matching rowIndex explicitly.
+
+Use \`kind: "salary"\` for employer payroll, \`"rental"\` for tenant rent, \`"dividend"\` for broker dividend distributions, \`"interest"\` for bank/bond interest.
+
+Do NOT include \`createIncomeSource\` in a bulkAction whose primary purpose is re-categorizing business expenses — only use it when the series is personal income belonging to one source.
 
 ## Own-account transfers (IMPORTANT — transfers are first-class)
 
@@ -614,7 +657,7 @@ FX gain/loss computation is pending — for now, just classify the rows correctl
 Produce a single JSON object with these top-level fields:
 - assistantMessage (string, REQUIRED): your natural-language reply to the user. Keep it concise and human — the structured fields carry the machine-readable details.
 - candidateUpdates (array, default []): one entry per row you are confidently changing. Always include rowIndex and reasoning. Set status, categoryCode, projectCode, type as needed. Set confidence numbers between 0 and 1. For crypto rows (category=crypto_*) set extra.crypto = { asset, quantity (decimal string), pricePerUnit (EUR cents, integer), costBasisPerUnit (EUR cents, integer or null if unknown) }. Omit the extra field entirely when not a crypto row.
-- bulkActions (array, default []): when many rows share a pattern the user just clarified, propose ONE bulkAction (preferred over many candidateUpdates). Set offerAsRule=true if it would make sense to persist as a rule.
+- bulkActions (array, default []): when many rows share a pattern the user just clarified, propose ONE bulkAction (preferred over many candidateUpdates). Set offerAsRule=true if it would make sense to persist as a rule. To create an income_source (employer, landlord, broker, etc.) AND link every matching row to it in a single user click, include \`apply.createIncomeSource = { kind, name, taxId? }\` — see the "Personal streams" section for when to use it.
 - clarifyingQuestions (array, max 3): only when you genuinely need more information.
 - taxTips (array, default []): per-row or session-wide tips that help the user save tax legally. Each tip REQUIRES rowIndex (number or null for session-wide), title, body, legalBasis (non-empty). Use actionable="save_as_fact" when the tip is durable context the user should remember; "propose_recategorization" when you want the user to change a category; "advisory" otherwise.
 - businessFactsToSave (array, default []): durable facts the user just told you about the business. Use stable keys like "profession", "vat_regime", "mixed_use_account:<account_name>", "client:<name>". Each value has at minimum {text}.

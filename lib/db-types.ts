@@ -270,6 +270,13 @@ export const candidateUpdateSchema = z.object({
 })
 export type CandidateUpdate = z.infer<typeof candidateUpdateSchema>
 
+export const bulkActionCreateIncomeSourceSchema = z.object({
+  kind: z.enum(["salary", "rental", "dividend", "interest", "other"]),
+  name: z.string().min(1).max(200),
+  taxId: z.string().max(64).nullable().optional(),
+})
+export type BulkActionCreateIncomeSource = z.infer<typeof bulkActionCreateIncomeSourceSchema>
+
 export const bulkActionSchema = z.object({
   description: z.string(),
   match: z.object({
@@ -282,6 +289,10 @@ export const bulkActionSchema = z.object({
     projectCode: z.string().nullable().optional(),
     type: z.enum(["expense", "income", "transfer", "conversion"]).nullable().optional(),
     status: transactionReviewStatusSchema.nullable().optional(),
+    // When set, applyBulkAction upserts an income_source row by (kind, normalized name)
+    // and stamps its id onto every matched candidate. The AI uses this to propose
+    // "create employment source X and link these deposits" as one clickable action.
+    createIncomeSource: bulkActionCreateIncomeSourceSchema.optional(),
   }),
   affectedRowIndexes: z.array(z.number()).default([]),
   offerAsRule: z.boolean().default(false),

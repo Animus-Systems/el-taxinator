@@ -15,6 +15,7 @@ import { getCategories } from "@/models/categories"
 import { getProjects } from "@/models/projects"
 import { getActiveAccounts } from "@/models/accounts"
 import { getActiveRules } from "@/models/rules"
+import { listIncomeSources } from "@/models/income-sources"
 import { listPacks as listKnowledgePacks } from "@/models/knowledge-packs"
 import { getSettings, getLLMSettings } from "@/models/settings"
 import { listBusinessFacts, hasAnyBusinessFacts, upsertBusinessFact } from "@/models/business-facts"
@@ -62,7 +63,7 @@ export async function processWizardTurn(input: ProcessTurnInput): Promise<Proces
   const session = await getImportSessionById(input.sessionId, input.userId)
   if (!session) throw new Error("Wizard session not found")
 
-  const [user, settings, businessFacts, categories, projects, accounts, rules, knowledgePacks] =
+  const [user, settings, businessFacts, categories, projects, accounts, rules, knowledgePacks, incomeSources] =
     await Promise.all([
       getUserById(input.userId),
       getSettings(input.userId),
@@ -72,6 +73,7 @@ export async function processWizardTurn(input: ProcessTurnInput): Promise<Proces
       getActiveAccounts(input.userId),
       getActiveRules(input.userId),
       listKnowledgePacks(input.userId),
+      listIncomeSources(input.userId),
     ])
 
   if (!user) throw new Error("Wizard turn: user not found")
@@ -96,6 +98,12 @@ export async function processWizardTurn(input: ProcessTurnInput): Promise<Proces
     userMessage: input.userMessage,
     defaultAccountId: session.accountId ?? null,
     contextFiles,
+    incomeSources: incomeSources.map((s) => ({
+      id: s.id,
+      kind: s.kind,
+      name: s.name,
+      taxId: s.taxId,
+    })),
   })
 
   const llmSettings = getLLMSettings(settings)
