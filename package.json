@@ -5,7 +5,7 @@
   "type": "module",
   "packageManager": "yarn@1.22.22",
   "engines": {
-    "node": ">=20.19.0"
+    "node": ">=22.0.0"
   },
   "scripts": {
     "dev": "concurrently -n server,client -c blue,green \"yarn dev:server\" \"yarn dev:client\"",
