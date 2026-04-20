@@ -81,13 +81,14 @@ export async function queryInvoiceRevenue(pool: Awaited<ReturnType<typeof getPoo
 }
 
 /** Total deductible expenses in a date range. Excludes rows marked
- * `personal_ignored` or `personal_taxable` — personal activity (own-account
- * transfers, mistaken deposits, crypto disposals, staking rewards, …) must
- * never leak into business expense totals regardless of `type`. Personal
- * taxable rows surface on Modelo 100 via the FIFO ledger / category queries.
- * Also defensively excludes `type IN ('transfer', 'conversion')` (first-class
- * non-business movements); the outer `type = 'expense'` filter already rules
- * them out, but the redundant clause keeps the intent explicit and future-proof. */
+ * `personal_ignored`, `personal_taxable`, or `internal` — personal activity
+ * (own-account transfers, mistaken deposits, crypto disposals, staking
+ * rewards, FX conversions) must never leak into business expense totals
+ * regardless of `type`. Personal taxable rows surface on Modelo 100 via the
+ * FIFO ledger / category queries. Also defensively excludes
+ * `type IN ('transfer', 'conversion')` (first-class non-business movements);
+ * the outer `type = 'expense'` filter already rules them out, but the
+ * redundant clause keeps the intent explicit and future-proof. */
 export async function queryExpenses(pool: Awaited<ReturnType<typeof getPool>>, userId: string, start: Date, end: Date, requireConverted = false) {
   const result = await pool.query(
     `SELECT
@@ -96,7 +97,7 @@ export async function queryExpenses(pool: Awaited<ReturnType<typeof getPool>>, u
      FROM transactions
      WHERE user_id = $1
        AND type = 'expense'
-       AND (status IS NULL OR status NOT IN ('personal_ignored', 'personal_taxable'))
+       AND (status IS NULL OR status NOT IN ('personal_ignored', 'personal_taxable', 'internal'))
        AND (type IS NULL OR type NOT IN ('transfer', 'conversion'))
        AND issued_at >= $2
        AND issued_at <= $3
@@ -160,7 +161,7 @@ export const calcModelo420 = cache(
     const period = getTaxPeriod(year, quarter)
 
     // Aggregate IGIC bands from invoice items (unique to 420 — can't share with simple revenue query)
-    const [igicResult, expenses] = await Promise.all([
+    const [igicResult, expenses, purchasesVat, allocatedRow] = await Promise.all([
       pool.query(
         `SELECT
            SUM(CASE WHEN ii.vat_rate = 0 OR ii.vat_rate IS NULL THEN ii.quantity * ii.unit_price ELSE 0 END)::float AS base_zero,
@@ -183,6 +184,35 @@ export const calcModelo420 = cache(
         [userId, period.start, period.end],
       ),
       queryExpenses(pool, userId, period.start, period.end, true),
+      // Input VAT from recorded supplier purchases in this period.
+      // A purchase with itemised VAT is authoritative for its amount; for
+      // expense transactions that are NOT covered by a purchase allocation
+      // the rate-based estimate below still applies to whatever's left.
+      pool.query(
+        `SELECT
+           COALESCE(SUM(pi.quantity * pi.unit_price), 0)::float AS base,
+           COALESCE(SUM(pi.quantity * pi.unit_price * (pi.vat_rate / 100.0)), 0)::float AS cuota
+         FROM purchases p
+         JOIN purchase_items pi ON pi.purchase_id = p.id
+         WHERE p.user_id = $1
+           AND p.status != 'cancelled'
+           AND p.issue_date >= $2
+           AND p.issue_date <= $3`,
+        [userId, period.start, period.end],
+      ),
+      // How much of the period's expense transactions is already covered by
+      // a purchase_payments allocation — those cents must be excluded from
+      // the rate-based estimate to avoid double-counting.
+      pool.query(
+        `SELECT COALESCE(SUM(pp.amount_cents), 0)::float AS allocated
+         FROM purchase_payments pp
+         JOIN transactions t ON t.id = pp.transaction_id
+         WHERE pp.user_id = $1
+           AND t.type = 'expense'
+           AND t.issued_at >= $2
+           AND t.issued_at <= $3`,
+        [userId, period.start, period.end],
+      ),
     ])
 
     const r = igicResult.rows[0]
@@ -203,9 +233,19 @@ export const calcModelo420 = cache(
 
     const { totalExpenses, expenseCount } = expenses
 
-    // Estimate deductible IGIC: assume expenses are IGIC-inclusive at general rate (7%)
-    const baseDeducible = Math.round(totalExpenses / (1 + IGIC_GENERAL_RATE / 100))
-    const cuotaDeducible = totalExpenses - baseDeducible
+    // Itemised VAT from supplier purchases — authoritative for amounts covered.
+    const purchasesBase = num(purchasesVat.rows[0]?.["base"])
+    const purchasesCuota = num(purchasesVat.rows[0]?.["cuota"])
+    const allocatedToPurchases = num(allocatedRow.rows[0]?.["allocated"])
+
+    // Rate-based estimate applies only to the residual expense total not
+    // covered by a recorded purchase allocation.
+    const residualExpenses = Math.max(0, totalExpenses - allocatedToPurchases)
+    const residualBase = Math.round(residualExpenses / (1 + IGIC_GENERAL_RATE / 100))
+    const residualCuota = residualExpenses - residualBase
+
+    const baseDeducible = Math.round(purchasesBase) + residualBase
+    const cuotaDeducible = Math.round(purchasesCuota) + residualCuota
 
     const resultado = totalIgicDevengado - cuotaDeducible
 

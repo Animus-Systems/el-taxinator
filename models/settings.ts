@@ -52,6 +52,28 @@ export function getLLMSettings(settings: SettingsMap): LLMSettings {
   return { providers }
 }
 
+/**
+ * Swap Anthropic Opus models to Sonnet for vision/extraction tasks.
+ *
+ * Opus (4.7 specifically) is agentic by design — when invoked via the Claude
+ * CLI's `-p` mode with `--allowedTools Read`, it sometimes decides NOT to
+ * call the Read tool on the attached file and returns an empty result.
+ * Measured reliability on a 2-page BBVA statement: Sonnet 4.6 ≈ 100%,
+ * Opus 4.7 ≈ 33%. For structured vision extraction — "read file, emit JSON" —
+ * Sonnet is the right tool. Users who picked Opus as primary still get Opus
+ * for wizard chat and reasoning, where its agentic behavior is an asset.
+ */
+export function preferSonnetForVision(settings: LLMSettings): LLMSettings {
+  return {
+    ...settings,
+    providers: settings.providers.map((p) => {
+      if (p.provider !== "anthropic") return p
+      if (!p.model.startsWith("claude-opus")) return p
+      return { ...p, model: "claude-sonnet-4-6", modelIsDefault: false }
+    }),
+  }
+}
+
 export const getSettings = cache(async (userId: string): Promise<SettingsMap> => {
   const settings = await queryMany<Setting>(
     sql`SELECT * FROM settings WHERE user_id = ${userId}`

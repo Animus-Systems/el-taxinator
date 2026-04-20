@@ -3,15 +3,17 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import type { Contact } from "@/lib/db-types"
+import type { ContactRole } from "@/models/contacts"
 import { useTranslations } from "next-intl"
 
 type Props = {
   contact?: Contact
+  defaultRole?: ContactRole
   onSubmit: (formData: FormData) => void
   isPending: boolean
 }
 
-export function ContactForm({ contact, onSubmit, isPending }: Props) {
+export function ContactForm({ contact, defaultRole, onSubmit, isPending }: Props) {
   const t = useTranslations("contacts")
   return (
     <form action={onSubmit} className="space-y-4">
@@ -32,7 +34,7 @@ export function ContactForm({ contact, onSubmit, isPending }: Props) {
           <select
             id="role"
             name="role"
-            defaultValue={contact?.role ?? "client"}
+            defaultValue={contact?.role ?? defaultRole ?? "client"}
             className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
           >
             <option value="client">{t("roleClient")}</option>

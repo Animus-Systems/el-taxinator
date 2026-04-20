@@ -43,6 +43,7 @@ type StatusKey =
   | "business_non_deductible"
   | "personal_taxable"
   | "personal_ignored"
+  | "internal"
 type FilterKey = "all" | StatusKey
 
 const STATUS_DOT: Record<string, string> = {
@@ -50,6 +51,7 @@ const STATUS_DOT: Record<string, string> = {
   business_non_deductible: "bg-amber-500",
   personal_taxable: "bg-amber-500/70",
   personal_ignored: "bg-muted-foreground/30",
+  internal: "bg-sky-500",
   needs_review: "bg-rose-500",
 }
 
@@ -58,6 +60,7 @@ const STATUS_LABEL: Record<string, string> = {
   business_non_deductible: "Non-deductible",
   personal_taxable: "Personal (taxable)",
   personal_ignored: "Personal (ignored)",
+  internal: "Internal",
   needs_review: "Needs review",
 }
 
@@ -68,6 +71,7 @@ const FILTER_ORDER: FilterKey[] = [
   "business_non_deductible",
   "personal_taxable",
   "personal_ignored",
+  "internal",
 ]
 
 const FILTER_LABEL: Record<FilterKey, string> = {
@@ -77,15 +81,17 @@ const FILTER_LABEL: Record<FilterKey, string> = {
   business_non_deductible: "Non-deductible",
   personal_taxable: "Personal (taxable)",
   personal_ignored: "Personal (ignored)",
+  internal: "Internal",
 }
 
-// Sort priority: needs_review at top, everything else preserves original order.
+// Sort priority: needs_review at top, internal at bottom (least interesting).
 const SORT_PRIORITY: Record<string, number> = {
   needs_review: 0,
   business_non_deductible: 1,
   business: 2,
   personal_taxable: 3,
   personal_ignored: 4,
+  internal: 5,
 }
 
 type AccountInfo = { name: string; bankName: string | null }

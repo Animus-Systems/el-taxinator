@@ -613,6 +613,13 @@ export function ReviewTable({
             <p className="text-xs text-muted-foreground">{formatStatusTotals(summary.totals.personal_ignored)}</p>
           </CardContent>
         </Card>
+        <Card>
+          <CardContent className="p-3">
+            <p className="text-xs text-muted-foreground">Internal</p>
+            <p className="text-lg font-semibold">{summary.counts.internal}</p>
+            <p className="text-xs text-muted-foreground">{formatStatusTotals(summary.totals.internal)}</p>
+          </CardContent>
+        </Card>
       </div>
 
       {importErrors.length > 0 && (
@@ -800,6 +807,7 @@ export function ReviewTable({
                         </SelectItem>
                         <SelectItem value="personal_taxable">Personal (taxable)</SelectItem>
                         <SelectItem value="personal_ignored">Personal (ignored)</SelectItem>
+                        <SelectItem value="internal">Internal</SelectItem>
                       </SelectContent>
                     </Select>
                     {row.suggestedStatus && row.status === "needs_review" && (

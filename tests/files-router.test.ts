@@ -18,16 +18,26 @@ import { getFiles } from "@/models/files"
 import { hasAnyProviderConfigured } from "@/lib/llm-providers"
 
 describe("hasAnyProviderConfigured", () => {
-  it("returns false for an empty settings map", () => {
-    expect(hasAnyProviderConfigured({})).toBe(false)
+  it("returns true for an empty settings map (default fallback includes subscription CLIs)", () => {
+    expect(hasAnyProviderConfigured({})).toBe(true)
   })
 
-  it("returns false when every api-key entry is blank", () => {
+  it("returns true when every api-key entry is blank (subscription CLIs still in default fallback)", () => {
     expect(
       hasAnyProviderConfigured({
         anthropic_api_key: "",
         openai_api_key: "   ",
         custom_api_key: "",
+      }),
+    ).toBe(true)
+  })
+
+  it("returns false when the user narrowed the fallback to non-subscription providers with no keys", () => {
+    expect(
+      hasAnyProviderConfigured({
+        llm_providers: "openai,google",
+        llm_primary_provider: "openai",
+        llm_backup_provider: "google",
       }),
     ).toBe(false)
   })
@@ -51,15 +61,6 @@ describe("hasAnyProviderConfigured", () => {
 
   it("returns true when only a subscription backup is set", () => {
     expect(hasAnyProviderConfigured({ llm_backup_provider: "codex" })).toBe(true)
-  })
-
-  it("returns false when a non-subscription provider is selected primary but has no api key", () => {
-    expect(
-      hasAnyProviderConfigured({
-        llm_primary_provider: "openai",
-        llm_backup_provider: "google",
-      }),
-    ).toBe(false)
   })
 
   it("returns true when only OpenRouter is configured", () => {

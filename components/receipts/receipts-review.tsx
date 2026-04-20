@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react"
 import { useTranslations } from "next-intl"
+import { toast } from "sonner"
 import { trpc } from "~/trpc"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -12,7 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Loader2, Sparkles } from "lucide-react"
+import { Check, Loader2, ShoppingBag, Sparkles } from "lucide-react"
 import { formatCurrency } from "@/lib/utils"
 import type { ExtractedReceipt } from "@/ai/extract-receipt"
 
@@ -102,6 +103,20 @@ export function ReceiptsReview({ receipts, onComplete, onCancel }: Props) {
     onSuccess: (counts) => onComplete(counts),
   })
 
+  const [convertedToPurchase, setConvertedToPurchase] = useState<Set<string>>(new Set())
+
+  const createPurchaseFromReceipt = trpc.purchases.createFromReceipt.useMutation({
+    onSuccess: (_purchase, vars) => {
+      setConvertedToPurchase((prev) => {
+        const next = new Set(prev)
+        next.add(vars.fileId)
+        return next
+      })
+      toast.success(t("receipts.purchaseDraftCreated"))
+    },
+    onError: (err) => toast.error(err.message),
+  })
+
   const updateRow = (fileId: string, patch: Partial<RowState>) =>
     setRows((prev) => {
       const cur = prev[fileId]
@@ -124,6 +139,7 @@ export function ReceiptsReview({ receipts, onComplete, onCancel }: Props) {
     > = []
 
     for (const r of receipts) {
+      if (convertedToPurchase.has(r.fileId)) continue
       const state = rows[r.fileId]
       if (!state) continue
       if (state.decision.action === "attach") {
@@ -259,6 +275,12 @@ export function ReceiptsReview({ receipts, onComplete, onCancel }: Props) {
                     </p>
                   )}
 
+                  {convertedToPurchase.has(receipt.fileId) ? (
+                    <div className="flex items-center gap-2 rounded-md bg-emerald-500/10 px-3 py-2 text-sm text-emerald-700 dark:text-emerald-400">
+                      <Check className="h-4 w-4" />
+                      {t("receipts.purchaseDraftCreated")}
+                    </div>
+                  ) : (
                   <div className="flex flex-wrap items-center gap-2">
                     <Select
                       value={
@@ -311,7 +333,22 @@ export function ReceiptsReview({ receipts, onComplete, onCancel }: Props) {
                         {formatCurrency(matchedTx.totalCents, matchedTx.currencyCode ?? "EUR")}
                       </span>
                     )}
+
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={createPurchaseFromReceipt.isPending}
+                      onClick={() =>
+                        createPurchaseFromReceipt.mutate({ fileId: receipt.fileId })
+                      }
+                      title={t("receipts.createPurchaseDraft")}
+                    >
+                      <ShoppingBag className="h-4 w-4" />
+                      <span className="hidden md:inline">{t("receipts.createPurchaseDraft")}</span>
+                    </Button>
                   </div>
+                  )}
                 </CardContent>
               </Card>
             </li>

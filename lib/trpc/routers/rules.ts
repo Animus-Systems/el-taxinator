@@ -23,7 +23,13 @@ const ruleInputSchema = z.object({
   projectCode: z.string().max(64).nullish(),
   type: z.enum(["expense", "income"]).nullish(),
   status: z
-    .enum(["business", "business_non_deductible", "personal_taxable", "personal_ignored"])
+    .enum([
+      "business",
+      "business_non_deductible",
+      "personal_taxable",
+      "personal_ignored",
+      "internal",
+    ])
     .nullish(),
   note: z.string().max(512).nullish(),
   priority: z.coerce.number().int().min(0).max(1000).default(0),

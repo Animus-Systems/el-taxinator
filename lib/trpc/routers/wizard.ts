@@ -453,7 +453,7 @@ export const wizardRouter = router({
         return {
           ...c,
           type: "transfer",
-          status: "personal_ignored",
+          status: "internal",
           extra: nextExtra,
           transferId: sharedTransferId,
           transferDirection: deriveDirection(c.type),

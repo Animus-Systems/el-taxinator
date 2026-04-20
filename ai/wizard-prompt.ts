@@ -69,6 +69,7 @@ const REPLY_SCHEMA = {
               "business_non_deductible",
               "personal_taxable",
               "personal_ignored",
+              "internal",
               null,
             ],
           },
@@ -619,7 +620,7 @@ Movements between the user's own accounts are a distinct transaction TYPE, not p
 
 Always classify own-account rows as:
 - type: "transfer"
-- status: "personal_ignored"
+- status: "internal"  (these are mechanical book moves, not personal spending — applies equally to autónomo and SL)
 
 Telltales:
 - "Transferencia saliente/entrante" naming the user themselves as counterparty.
@@ -642,14 +643,14 @@ TRUST the user when they say "mistake" or "between my accounts" — apply type="
 
 Rows that move money between currencies inside a single account — e.g. Revolut's "Exchanged to EUR", "Exchanged to PLN", "Currency conversion", or similar — are NOT business income/expense. They're an in-account FX operation. Model them as:
 - type: "conversion"
-- status: "personal_ignored"
+- status: "internal"  (same reasoning as transfers — mechanical book moves, not personal)
 
 Telltales:
 - Description contains "Exchanged to <CURRENCY>", "Converted to <CURRENCY>", "FX <PAIR>", "Currency conversion".
 - The counterparty field is blank or the same bank as the source account (e.g. "Revolut" on a Revolut statement).
 - Two rows on the same date, same account, opposite sign, different currencies.
 
-When you see two candidate rows that look like legs of one conversion (same account, same date, opposite sign, different currencies), emit one entry in proposedTransferLinks naming both rowIndex values — the same machinery that handles transfers also handles conversions once both legs are marked type="conversion". If only one leg is visible (the other side is off-statement or excluded), mark the single row type="conversion" + status="personal_ignored" and leave it orphan.
+When you see two candidate rows that look like legs of one conversion (same account, same date, opposite sign, different currencies), emit one entry in proposedTransferLinks naming both rowIndex values — the same machinery that handles transfers also handles conversions once both legs are marked type="conversion". If only one leg is visible (the other side is off-statement or excluded), mark the single row type="conversion" + status="internal" and leave it orphan.
 
 FX gain/loss computation is pending — for now, just classify the rows correctly. Do NOT try to compute realized_fx_gain_cents yourself.
 

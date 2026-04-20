@@ -10,6 +10,7 @@ import {
   deleteInvoice,
   convertQuoteToInvoice,
   setInvoicePdfFileId,
+  findDuplicateInvoice,
 } from "@/models/invoices"
 import { getFileById } from "@/models/files"
 import type { InvoiceData } from "@/models/invoices"
@@ -96,6 +97,17 @@ export const invoicesRouter = router({
     .input(invoiceInputSchema)
     .output(invoiceWithRelationsSchema)
     .mutation(async ({ ctx, input }) => {
+      const dup = await findDuplicateInvoice(
+        ctx.user.id,
+        input.contactId ?? null,
+        input.number,
+      )
+      if (dup) {
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: `An invoice with number "${input.number}" already exists for this client.`,
+        })
+      }
       return createInvoice(ctx.user.id, input as InvoiceData)
     }),
 
@@ -129,6 +141,13 @@ export const invoicesRouter = router({
     .input(z.object({ quoteId: z.string(), invoiceNumber: z.string() }))
     .output(invoiceWithRelationsSchema)
     .mutation(async ({ ctx, input }) => {
+      const dup = await findDuplicateInvoice(ctx.user.id, null, input.invoiceNumber)
+      if (dup) {
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: `An invoice with number "${input.invoiceNumber}" already exists.`,
+        })
+      }
       return convertQuoteToInvoice(input.quoteId, ctx.user.id, input.invoiceNumber)
     }),
 

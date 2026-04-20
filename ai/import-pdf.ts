@@ -1,5 +1,5 @@
 import { requestLLM } from "./providers/llmProvider"
-import { getLLMSettings, getSettings } from "@/models/settings"
+import { getLLMSettings, getSettings, preferSonnetForVision } from "@/models/settings"
 import { getCategories } from "@/models/categories"
 import { getProjects } from "@/models/projects"
 import type { TransactionCandidate } from "./import-csv"
@@ -13,7 +13,7 @@ export async function detectPDFType(
   userId: string,
 ): Promise<"bank_statement" | "receipt"> {
   const settings = await getSettings(userId)
-  const llmSettings = getLLMSettings(settings)
+  const llmSettings = preferSonnetForVision(getLLMSettings(settings))
 
   const prompt = `Look at this PDF. Is it a bank statement (contains a TABLE of multiple transactions with dates, descriptions, and amounts) or a single receipt/invoice?
 
@@ -39,7 +39,7 @@ export async function extractPDFTransactions(
   defaultCurrency: string,
 ): Promise<{ bank: string; bankConfidence: number; candidates: TransactionCandidate[] }> {
   const settings = await getSettings(userId)
-  const llmSettings = getLLMSettings(settings)
+  const llmSettings = preferSonnetForVision(getLLMSettings(settings))
   const categories = await getCategories(userId)
   const projects = await getProjects(userId)
 
@@ -55,7 +55,7 @@ export async function extractPDFTransactions(
 - type: "expense" or "income"
 - suggested categoryCode from the list below (or null)
 - suggested projectCode from the list below (or null)
-- suggested status: "business", "business_non_deductible", "personal_taxable", "personal_ignored", or null if unsure. Use "personal_taxable" for crypto disposals / staking rewards / airdrops / stock dividends (personal but Modelo-100 taxable); use "personal_ignored" for own-account transfers, bank-side counter-legs of crypto disposals, mistaken deposits.
+- suggested status: "business", "business_non_deductible", "personal_taxable", "personal_ignored", "internal", or null if unsure. Use "personal_taxable" for crypto disposals / staking rewards / airdrops / stock dividends (personal but Modelo-100 taxable); use "personal_ignored" for bank-side counter-legs of crypto disposals and mistaken deposits; use "internal" for own-account transfers and in-account FX conversions (mechanical book moves, not personal).
 
 Also identify the bank name from the document header/branding and the statement-level default currency.
 
@@ -109,6 +109,7 @@ Return ONLY valid JSON:
                 "business_non_deductible",
                 "personal_taxable",
                 "personal_ignored",
+                "internal",
                 null,
               ],
             },
@@ -121,11 +122,46 @@ Return ONLY valid JSON:
     required: ["bank", "transactions"],
   }
 
-  const response = await requestLLM(llmSettings, { prompt, schema, attachments })
-  if (response.error) throw new Error(response.error)
+  // Walk the configured provider chain on 0-row results. A valid JSON envelope
+  // with an empty transactions array is a soft failure: either the model
+  // skipped reading the file (observed with Claude Opus in CLI -p mode, where
+  // it's more agentic) or the vision pass genuinely found no rows. We can't
+  // tell the two apart from a single response, so we treat 0 rows as a reason
+  // to try the next provider in the fallback list. The built-in requestLLM
+  // fallback only fires on hard errors; this loop covers soft failures too.
+  let output: Record<string, unknown> = {}
+  let transactions: Array<Record<string, unknown>> = []
+  let bankName = ""
+  let bankConfidence = 0
 
-  const output = response.output as Record<string, unknown>
-  const transactions = output["transactions"] as Array<Record<string, unknown>>
+  const providerChain = llmSettings.providers
+  const attemptsBudget = Math.max(2, providerChain.length)
+  for (let attempt = 0; attempt < attemptsBudget; attempt++) {
+    const attemptSettings: typeof llmSettings =
+      attempt < providerChain.length
+        ? { ...llmSettings, providers: providerChain.slice(attempt) }
+        : llmSettings // budget overrun → retry on the primary
+    const response = await requestLLM(attemptSettings, { prompt, schema, attachments })
+    if (response.error) throw new Error(response.error)
+    output = response.output as Record<string, unknown>
+    transactions = (output["transactions"] as Array<Record<string, unknown>> | undefined) ?? []
+    bankName = typeof output["bank"] === "string" ? (output["bank"] as string) : ""
+    bankConfidence =
+      typeof output["bankConfidence"] === "number" ? (output["bankConfidence"] as number) : 0
+
+    if (transactions.length > 0) {
+      if (attempt > 0) {
+        console.info(
+          `[extractPDFTransactions] recovered on attempt ${attempt + 1}: ${transactions.length} row(s), bank="${bankName}" conf=${bankConfidence}`,
+        )
+      }
+      break
+    }
+    console.warn(
+      `[extractPDFTransactions] attempt ${attempt + 1}/${attemptsBudget} returned 0 rows (bank="${bankName}" conf=${bankConfidence}) — trying next provider`,
+    )
+  }
+
   const currency = (output["currency"] as string) || defaultCurrency
 
   const candidates: TransactionCandidate[] = transactions.map((t, idx) => {
@@ -151,12 +187,14 @@ Return ONLY valid JSON:
       t["status"] === "business" ||
       t["status"] === "business_non_deductible" ||
       t["status"] === "personal_taxable" ||
-      t["status"] === "personal_ignored"
+      t["status"] === "personal_ignored" ||
+      t["status"] === "internal"
         ? (t["status"] as
             | "business"
             | "business_non_deductible"
             | "personal_taxable"
-            | "personal_ignored")
+            | "personal_ignored"
+            | "internal")
         : null,
     confidence: {
       category: (t["confidence"] as number) || 0.5,
@@ -169,8 +207,8 @@ Return ONLY valid JSON:
   })
 
   return {
-    bank: (output["bank"] as string) || "Unknown",
-    bankConfidence: (output["bankConfidence"] as number) || 0.5,
+    bank: bankName || "Unknown",
+    bankConfidence: bankConfidence || 0.5,
     candidates,
   }
 }

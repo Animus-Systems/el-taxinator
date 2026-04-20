@@ -269,6 +269,26 @@ async function fetchClientInTx(
 // Invoices
 // ---------------------------------------------------------------------------
 
+/**
+ * Check whether another invoice already exists with the same (user, number).
+ * Invoice numbers are meant to be globally unique per issuer (Spanish
+ * accounting convention), so we check across the user's entire invoice set —
+ * not per-contact.
+ */
+export async function findDuplicateInvoice(
+  userId: string,
+  _contactId: string | null,
+  number: string,
+): Promise<{ id: string } | null> {
+  const trimmed = number.trim()
+  if (!trimmed) return null
+  return queryOne<{ id: string }>(sql`
+    SELECT id FROM invoices
+    WHERE user_id = ${userId}
+      AND LOWER(number) = LOWER(${trimmed})
+    LIMIT 1`)
+}
+
 export async function getInvoices(
   userId: string,
   filters?: InvoiceListFilters,

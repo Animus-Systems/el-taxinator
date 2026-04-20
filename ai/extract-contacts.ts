@@ -1,5 +1,5 @@
 import { requestLLM } from "./providers/llmProvider"
-import { getLLMSettings, getSettings } from "@/models/settings"
+import { getLLMSettings, getSettings, preferSonnetForVision } from "@/models/settings"
 import { isXlsxFileName, isXlsxMimeType, xlsxBufferToCsv } from "@/lib/xlsx-to-csv"
 import type { AnalyzeAttachment } from "./attachments"
 
@@ -101,7 +101,7 @@ export async function extractContactsFromFile(
   file: { filename: string; mimetype: string; buffer: Buffer },
 ): Promise<ExtractedContact[]> {
   const settings = await getSettings(userId)
-  const llmSettings = getLLMSettings(settings)
+  const llmSettings = preferSonnetForVision(getLLMSettings(settings))
 
   let prompt = PROMPT
   let attachments: AnalyzeAttachment[] = []

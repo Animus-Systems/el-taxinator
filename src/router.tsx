@@ -16,6 +16,8 @@ import { ReportsPage } from "./routes/_app/reports"
 import { InvoicesPage } from "./routes/_app/invoices"
 import { NewInvoicePage } from "./routes/_app/invoices-new"
 import { InvoiceDetailPage } from "./routes/_app/invoice-detail"
+import { PurchasesPage } from "./routes/_app/purchases"
+import { PurchaseDetailPage } from "./routes/_app/purchase-detail"
 import { ReconcilePage } from "./routes/_app/reconcile"
 import { ContactsPage } from "./routes/_app/contacts"
 import { ProductsPage } from "./routes/_app/products"
@@ -155,6 +157,18 @@ const invoiceDetailRoute = createRoute({
   getParentRoute: () => appLayoutRoute,
   path: "/invoices/$invoiceId",
   component: InvoiceDetailPage,
+})
+
+const purchasesRoute = createRoute({
+  getParentRoute: () => appLayoutRoute,
+  path: "/purchases",
+  component: PurchasesPage,
+})
+
+const purchaseDetailRoute = createRoute({
+  getParentRoute: () => appLayoutRoute,
+  path: "/purchases/$purchaseId",
+  component: PurchaseDetailPage,
 })
 
 const reconcileRoute = createRoute({
@@ -428,6 +442,8 @@ const appChildren = appLayoutRoute.addChildren([
   invoicesRoute,
   invoicesNewRoute,
   invoiceDetailRoute,
+  purchasesRoute,
+  purchaseDetailRoute,
   reconcileRoute,
   contactsRoute,
   productsRoute,

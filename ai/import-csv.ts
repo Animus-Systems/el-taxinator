@@ -589,7 +589,7 @@ For each transaction, return:
 - categoryCode: the best matching category code, or null if unsure
 - projectCode: the best matching project code, or null if unsure
 - type: "expense" or "income"
-- status: "business", "business_non_deductible", "personal_taxable", "personal_ignored", or null if unsure. "personal_taxable" = crypto disposals/staking/airdrops/dividends (personal, Modelo 100 taxable). "personal_ignored" = own-account transfers, bank-side disposal legs, mistaken deposits.
+- status: "business", "business_non_deductible", "personal_taxable", "personal_ignored", "internal", or null if unsure. "personal_taxable" = crypto disposals/staking/airdrops/dividends (personal, Modelo 100 taxable). "personal_ignored" = bank-side disposal legs, mistaken deposits. "internal" = own-account transfers and in-account FX conversions (mechanical book moves, not personal).
 - confidence: 0 to 1, how confident you are in the categorization${feedbackContext}`
 
     const schema = {
@@ -615,6 +615,7 @@ For each transaction, return:
                   "business_non_deductible",
                   "personal_taxable",
                   "personal_ignored",
+                  "internal",
                   null,
                 ],
               },
@@ -689,7 +690,8 @@ For each transaction, return:
           result.status === "business" ||
           result.status === "business_non_deductible" ||
           result.status === "personal_taxable" ||
-          result.status === "personal_ignored"
+          result.status === "personal_ignored" ||
+          result.status === "internal"
             ? result.status
             : null
 

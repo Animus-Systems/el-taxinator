@@ -299,6 +299,56 @@ CREATE INDEX invoice_payments_user_idx ON invoice_payments (user_id);
 CREATE INDEX invoice_payments_invoice_idx ON invoice_payments (invoice_id);
 CREATE INDEX invoice_payments_transaction_idx ON invoice_payments (transaction_id);
 
+-- ─── Purchases (supplier invoices, libro de facturas recibidas) ─────────────
+
+CREATE TABLE purchases (
+    id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
+    user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    contact_id uuid REFERENCES contacts(id) ON DELETE SET NULL,
+    pdf_file_id uuid REFERENCES files(id) ON DELETE SET NULL,
+    supplier_invoice_number text NOT NULL,
+    status text DEFAULT 'received' NOT NULL,
+    issue_date timestamp(3) NOT NULL,
+    due_date timestamp(3),
+    paid_at timestamp(3),
+    currency_code text NOT NULL DEFAULT 'EUR',
+    irpf_rate double precision DEFAULT 0.0 NOT NULL,
+    notes text,
+    created_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+CREATE INDEX purchases_user_id_idx ON purchases (user_id);
+CREATE INDEX purchases_contact_id_idx ON purchases (contact_id) WHERE contact_id IS NOT NULL;
+CREATE INDEX purchases_user_status_idx ON purchases (user_id, status);
+CREATE INDEX purchases_user_issue_date_idx ON purchases (user_id, issue_date);
+
+CREATE TABLE purchase_items (
+    id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
+    purchase_id uuid NOT NULL REFERENCES purchases(id) ON DELETE CASCADE,
+    product_id uuid REFERENCES products(id) ON DELETE SET NULL,
+    description text NOT NULL,
+    quantity double precision DEFAULT 1 NOT NULL,
+    unit_price integer NOT NULL,
+    vat_rate double precision DEFAULT 0 NOT NULL,
+    "position" integer DEFAULT 0 NOT NULL
+);
+CREATE INDEX purchase_items_purchase_id_idx ON purchase_items (purchase_id);
+
+CREATE TABLE purchase_payments (
+    id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
+    user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    purchase_id uuid NOT NULL REFERENCES purchases(id) ON DELETE CASCADE,
+    transaction_id uuid NOT NULL REFERENCES transactions(id) ON DELETE CASCADE,
+    amount_cents bigint NOT NULL,
+    note text,
+    source text DEFAULT 'manual' NOT NULL,
+    created_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    UNIQUE (purchase_id, transaction_id)
+);
+CREATE INDEX purchase_payments_user_idx ON purchase_payments (user_id);
+CREATE INDEX purchase_payments_purchase_idx ON purchase_payments (purchase_id);
+CREATE INDEX purchase_payments_transaction_idx ON purchase_payments (transaction_id);
+
 -- ─── Receipt vendor aliases (AI learns vendor→merchant pairings) ────────────
 
 CREATE TABLE receipt_vendor_aliases (

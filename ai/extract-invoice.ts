@@ -1,5 +1,5 @@
 import { requestLLM } from "./providers/llmProvider"
-import { getLLMSettings, getSettings } from "@/models/settings"
+import { getLLMSettings, getSettings, preferSonnetForVision } from "@/models/settings"
 import type { AnalyzeAttachment } from "./attachments"
 
 /**
@@ -28,7 +28,7 @@ export async function extractInvoiceFromPDF(
   userId: string,
 ): Promise<ExtractedInvoice> {
   const settings = await getSettings(userId)
-  const llmSettings = getLLMSettings(settings)
+  const llmSettings = preferSonnetForVision(getLLMSettings(settings))
 
   const prompt = `Look at this invoice (factura / receipt) and extract the fields below.
 

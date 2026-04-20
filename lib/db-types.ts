@@ -235,6 +235,7 @@ export const transactionReviewStatusSchema = z.enum([
   "business_non_deductible",
   "personal_taxable",
   "personal_ignored",
+  "internal",
 ])
 export type TransactionReviewStatusValue = z.infer<typeof transactionReviewStatusSchema>
 
@@ -834,6 +835,45 @@ export const invoicePaymentSchema = z.object({
   createdAt: z.date(),
 })
 
+export const purchaseSchema = z.object({
+  id: z.string(),
+  userId: z.string(),
+  contactId: z.string().nullable(),
+  pdfFileId: z.string().nullable(),
+  supplierInvoiceNumber: z.string(),
+  status: z.string(),
+  issueDate: z.date(),
+  dueDate: z.date().nullable(),
+  paidAt: z.date().nullable(),
+  currencyCode: z.string(),
+  irpfRate: z.number(),
+  notes: z.string().nullable(),
+  createdAt: z.date(),
+  updatedAt: z.date(),
+})
+
+export const purchaseItemSchema = z.object({
+  id: z.string(),
+  purchaseId: z.string(),
+  productId: z.string().nullable(),
+  description: z.string(),
+  quantity: z.number(),
+  unitPrice: z.number(),
+  vatRate: z.number(),
+  position: z.number(),
+})
+
+export const purchasePaymentSchema = z.object({
+  id: z.string(),
+  userId: z.string(),
+  purchaseId: z.string(),
+  transactionId: z.string(),
+  amountCents: z.number(),
+  note: z.string().nullable(),
+  source: z.string(),
+  createdAt: z.date(),
+})
+
 export const taxFilingSchema = z.object({
   id: z.string().uuid(),
   userId: z.string().uuid(),
@@ -909,6 +949,9 @@ export type QuoteItem = z.infer<typeof quoteItemSchema>
 export type Invoice = z.infer<typeof invoiceSchema>
 export type InvoiceItem = z.infer<typeof invoiceItemSchema>
 export type InvoicePayment = z.infer<typeof invoicePaymentSchema>
+export type Purchase = z.infer<typeof purchaseSchema>
+export type PurchaseItem = z.infer<typeof purchaseItemSchema>
+export type PurchasePayment = z.infer<typeof purchasePaymentSchema>
 export type AccountantInvite = z.infer<typeof accountantInviteSchema>
 export type AccountantAccessLog = z.infer<typeof accountantAccessLogSchema>
 export type AccountantComment = z.infer<typeof accountantCommentSchema>

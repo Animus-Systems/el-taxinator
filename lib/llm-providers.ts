@@ -195,18 +195,31 @@ export const PROVIDERS: ProviderConfig[] = [
  *
  * A provider counts as "configured" when:
  *   - its API key is set in settings, OR
- *   - it's a subscription provider (Claude CLI, codex CLI) and the user has
- *     picked it as `llm_primary_provider` or `llm_backup_provider` — those
- *     auth via a locally-installed CLI, not via an API key.
+ *   - it's a subscription provider (Claude CLI, codex CLI) that appears in the
+ *     user's effective provider order — explicit primary/backup, the saved
+ *     `llm_providers` list, or the default fallback when nothing is saved.
+ *     Subscription providers auth via a locally-installed CLI, not an API key.
+ *
+ * Mirrors the fallback logic in `getLLMSettings` so the chat gate matches
+ * what dispatch would actually attempt.
  */
 export function hasAnyProviderConfigured(settings: Record<string, string>): boolean {
   const primary = settings["llm_primary_provider"]?.trim() ?? ""
   const backup = settings["llm_backup_provider"]?.trim() ?? ""
+  const fallbackRaw =
+    settings["llm_providers"]?.trim() || PROVIDERS.map((p) => p.key).join(",")
+  const fallbackKeys = new Set(
+    fallbackRaw
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean),
+  )
   return PROVIDERS.some((provider) => {
     const apiKey = settings[provider.apiKeyName]
     if (typeof apiKey === "string" && apiKey.trim().length > 0) return true
-    if (provider.isSubscription && (provider.key === primary || provider.key === backup)) {
-      return true
+    if (provider.isSubscription) {
+      if (provider.key === primary || provider.key === backup) return true
+      if (fallbackKeys.has(provider.key)) return true
     }
     return false
   })

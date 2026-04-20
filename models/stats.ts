@@ -85,12 +85,13 @@ export type DashboardAnalytics = {
 /** Convenience wrapper: builds WHERE for stats queries (no table alias, no search).
  *
  * Always excludes two categories of rows:
- * - `status IN ('personal_ignored', 'personal_taxable')` — personal rows that
- *   are not business activity. `personal_ignored` covers own-account transfers,
- *   mistaken deposits, conversion legs. `personal_taxable` covers crypto
+ * - `status IN ('personal_ignored', 'personal_taxable', 'internal')` — rows
+ *   that are not business activity. `personal_ignored` covers mistaken
+ *   deposits and personal spending. `personal_taxable` covers crypto
  *   disposals, staking rewards, airdrops, stock dividends — they ARE taxable
  *   on Modelo 100 but surface via the FIFO ledger + category queries, not via
- *   the business income/expense aggregates.
+ *   the business income/expense aggregates. `internal` covers own-account
+ *   transfers and in-account FX conversions — mechanical book moves.
  * - `type IN ('transfer', 'conversion')` — first-class non-business movement
  *   rows (cross-account transfers and in-account currency conversions). They
  *   are explicitly non-business and must never appear in any aggregate.
@@ -100,7 +101,7 @@ function buildStatsWhere(
   filters: TransactionFilters = {},
   extraConditions?: string[],
 ): { clause: string; values: unknown[] } {
-  const excludePersonal = "(status IS NULL OR status NOT IN ('personal_ignored', 'personal_taxable'))"
+  const excludePersonal = "(status IS NULL OR status NOT IN ('personal_ignored', 'personal_taxable', 'internal'))"
   const excludeNonBusinessTypes = "(type IS NULL OR type NOT IN ('transfer', 'conversion'))"
   const defaults = [excludePersonal, excludeNonBusinessTypes]
   const merged = extraConditions ? [...defaults, ...extraConditions] : defaults
@@ -311,7 +312,7 @@ export const getDashboardAnalytics = cache(
     const { clause, values, nextIdx } = buildTransactionWhere(userId, filters, {
       alias: "t",
       extraConditions: [
-        "(t.status IS NULL OR t.status NOT IN ('personal_ignored', 'personal_taxable'))",
+        "(t.status IS NULL OR t.status NOT IN ('personal_ignored', 'personal_taxable', 'internal'))",
         "(t.type IS NULL OR t.type NOT IN ('transfer', 'conversion'))",
       ],
     })

@@ -96,6 +96,7 @@ type Labels = {
   statusNonDeductible: string
   statusPersonalTaxable: string
   statusPersonal: string
+  statusInternal: string
   statusNeedsReview: string
   countColumn: string
   amountColumn: string
@@ -132,6 +133,7 @@ const defaultLabels: Labels = {
   statusNonDeductible: "Business — non-deductible",
   statusPersonalTaxable: "Personal (taxable)",
   statusPersonal: "Personal (ignored)",
+  statusInternal: "Internal (transfer / FX)",
   statusNeedsReview: "Needs review",
   countColumn: "Count",
   amountColumn: "Amount",
@@ -301,6 +303,7 @@ export function WizardSessionReportPDF({ report, labels: userLabels }: Props) {
           {renderStatusRow(L.statusNonDeductible, report.totals.byStatus["business_non_deductible"], ccy)}
           {renderStatusRow(L.statusPersonalTaxable, report.totals.byStatus["personal_taxable"], ccy)}
           {renderStatusRow(L.statusPersonal, report.totals.byStatus["personal_ignored"], ccy)}
+          {renderStatusRow(L.statusInternal, report.totals.byStatus["internal"], ccy)}
           {renderStatusRow(L.statusNeedsReview, report.totals.byStatus["needs_review"], ccy)}
         </View>
 

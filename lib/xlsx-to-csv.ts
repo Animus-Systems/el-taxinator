@@ -13,10 +13,18 @@ import * as XLSX from "xlsx"
 // Common header keywords that appear on the column-label row of bank / crypto
 // statements. Used to skip preamble rows (address blocks, account metadata,
 // balance summaries) that some exports put above the transaction table.
+// Covers English and Spanish — Spanish bank exports (BBVA, Santander,
+// CaixaBank, …) put account metadata above the data table.
 const HEADER_KEYWORDS = [
+  // English
   "date", "time", "amount", "type", "currency", "description", "name",
   "merchant", "account", "reference", "note", "fee", "gross", "net",
   "code", "total", "credit", "debit", "payee", "balance", "transaction",
+  // Spanish
+  "fecha", "contable", "valor", "concepto", "beneficiario", "ordenante",
+  "observaciones", "importe", "saldo", "divisa", "moneda", "oficina",
+  "remesa", "referencia", "comisión", "comision", "operación", "operacion",
+  "detalle", "débito", "debito", "crédito", "credito", "cuenta",
 ]
 
 /**

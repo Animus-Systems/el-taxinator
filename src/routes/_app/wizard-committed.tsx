@@ -51,7 +51,8 @@ export function WizardCommittedPage() {
             {report.totals.byStatus["business"]?.count ?? 0} deductible ·{" "}
             {report.totals.byStatus["business_non_deductible"]?.count ?? 0} non-deductible ·{" "}
             {report.totals.byStatus["personal_taxable"]?.count ?? 0} personal taxable ·{" "}
-            {report.totals.byStatus["personal_ignored"]?.count ?? 0} personal ignored
+            {report.totals.byStatus["personal_ignored"]?.count ?? 0} personal ignored ·{" "}
+            {report.totals.byStatus["internal"]?.count ?? 0} internal
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -205,6 +206,11 @@ export function WizardCommittedPage() {
               <StatusRow
                 label={t("committed.personalIgnored")}
                 value={report.totals.byStatus["personal_ignored"]}
+                ccy={ccy}
+              />
+              <StatusRow
+                label={t("committed.internal")}
+                value={report.totals.byStatus["internal"]}
                 ccy={ccy}
               />
               <StatusRow

@@ -27,6 +27,7 @@ import {
   PanelLeft,
   Package,
   Receipt,
+  ShoppingBag,
   ScrollText,
   Settings,
   UserRound,
@@ -147,6 +148,7 @@ export function AppSidebar({
                   badge={untrackedCryptoCount}
                 />
                 <NavItem href="/invoices" icon={Receipt} label={t("invoices")} />
+                <NavItem href="/purchases" icon={ShoppingBag} label={t("purchases")} />
                 <NavItem href="/quotes" icon={ScrollText} label={t("quotes")} />
                 <NavItem href="/contacts" icon={Users} label={t("contacts")} />
                 <NavItem href="/products" icon={Package} label={t("products")} />

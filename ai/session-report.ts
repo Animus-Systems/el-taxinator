@@ -61,6 +61,7 @@ export type SessionReport = {
     nonDeductibleTotal: number       // cents — sum of `business_non_deductible`
     personalTaxableTotal: number     // cents — sum of `personal_taxable`
     personalTotal: number            // cents — sum of `personal_ignored`
+    internalTotal: number            // cents — sum of `internal` (transfers + FX conversions)
     grandTotal: number               // cents — sum of all selected rows
     currencyCode: string | null      // best-effort: dominant currency on the session
   }
@@ -143,6 +144,7 @@ export function computeTotals(
     business_non_deductible: { count: 0, amount: 0 },
     personal_taxable: { count: 0, amount: 0 },
     personal_ignored: { count: 0, amount: 0 },
+    internal: { count: 0, amount: 0 },
     needs_review: { count: 0, amount: 0 },
   }
   const byCategoryMap = new Map<string, CategoryTotal>()
@@ -152,6 +154,7 @@ export function computeTotals(
   let nonDeductibleTotal = 0
   let personalTaxableTotal = 0
   let personalTotal = 0
+  let internalTotal = 0
   let grandTotal = 0
 
   const taxRollups: TaxRollups = {
@@ -193,6 +196,7 @@ export function computeTotals(
     else if (status === "business_non_deductible") nonDeductibleTotal += total
     else if (status === "personal_taxable") personalTaxableTotal += total
     else if (status === "personal_ignored") personalTotal += total
+    else if (status === "internal") internalTotal += total
 
     if (c.categoryCode) {
       const meta = categoryLookup.get(c.categoryCode)
@@ -248,6 +252,7 @@ export function computeTotals(
       nonDeductibleTotal,
       personalTaxableTotal,
       personalTotal,
+      internalTotal,
       grandTotal,
       currencyCode,
     },
