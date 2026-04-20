@@ -13,9 +13,14 @@ import { toast } from "sonner"
 import { LineItem, LineItemsEditor } from "./line-items-editor"
 import { ContactPicker } from "@/components/contacts/contact-picker"
 
+type InvoiceKind = "invoice" | "simplified"
+
 type Props = {
   clients: Client[]
   products: Product[]
+  /** Which numbering series this row belongs to. Affects default number
+   * prefix ('F' vs 'R') and the `kind` sent to the backend. */
+  kind?: InvoiceKind
   /** When provided the form skips `router.push` and hands the new invoice id
    * to the caller — lets a dialog close itself and navigate deliberately. */
   onCreated?: (invoiceId: string) => void
@@ -23,12 +28,13 @@ type Props = {
   onCancel?: () => void
 }
 
-function generateInvoiceNumber() {
+function generateInvoiceNumber(kind: InvoiceKind) {
   const now = new Date()
-  return `F-${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}-001`
+  const prefix = kind === "simplified" ? "R" : "F"
+  return `${prefix}-${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}-001`
 }
 
-export function InvoiceForm({ clients, products, onCreated, onCancel }: Props) {
+export function InvoiceForm({ clients, products, kind = "invoice", onCreated, onCancel }: Props) {
   const router = useRouter()
   const t = useTranslations("invoices")
   const tSettings = useTranslations("settings")
@@ -60,10 +66,15 @@ export function InvoiceForm({ clients, products, onCreated, onCancel }: Props) {
 
   return (
     <form ref={formRef} onSubmit={handleSubmit} className="space-y-6">
+      <input type="hidden" name="kind" value={kind} />
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-1">
-          <Label htmlFor="number">{t("invoiceNumber")}</Label>
-          <Input id="number" name="number" defaultValue={generateInvoiceNumber()} required />
+          <Label htmlFor="number">
+            {kind === "simplified"
+              ? t("simplifiedInvoiceNumber", { defaultValue: "Simplified invoice number" })
+              : t("invoiceNumber")}
+          </Label>
+          <Input id="number" name="number" defaultValue={generateInvoiceNumber(kind)} required />
         </div>
         <div className="space-y-1">
           <Label>{t("client")}</Label>

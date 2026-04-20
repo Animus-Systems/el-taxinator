@@ -8,8 +8,10 @@ import {
   updateTransactionFiles,
   deleteTransaction,
   bulkDeleteTransactions,
+  bulkUpdateTransactionType,
   getTransactionDateRange,
 } from "@/models/transactions"
+import { classifyTransaction } from "@/lib/classify-transaction"
 import type { TransactionData, TransactionFilters } from "@/models/transactions"
 import { attachFileToTransaction, getFileById } from "@/models/files"
 import { linkTransferPair, unlinkTransfer } from "@/models/transfers"
@@ -160,6 +162,97 @@ export const transactionsRouter = router({
     .mutation(async ({ ctx, input }) => {
       const entityId = await getActiveEntityId()
       return bulkDeleteTransactions(input.ids, ctx.user.id, entityId)
+    }),
+
+  /** Scan the user's transactions with a deterministic heuristic classifier
+   *  and return the rows whose description/merchant/amount suggests a
+   *  different type than what's currently stored. Used by the Reclassify
+   *  dialog to help catch long-tail misclassifications without AI calls. */
+  reclassifySuggestions: authedProcedure
+    .input(z.object({}).optional())
+    .output(
+      z.array(
+        z.object({
+          id: z.string(),
+          name: z.string().nullable(),
+          merchant: z.string().nullable(),
+          description: z.string().nullable(),
+          issuedAt: z.date().nullable(),
+          total: z.number().nullable(),
+          currencyCode: z.string().nullable(),
+          currentType: z.string().nullable(),
+          suggestedType: z.enum([
+            "income",
+            "expense",
+            "refund",
+            "transfer",
+            "exchange",
+            "other",
+          ]),
+          reason: z.string(),
+        }),
+      ),
+    )
+    .query(async ({ ctx }) => {
+      const result = await getTransactions(ctx.user.id, {})
+      const proposals: Array<{
+        id: string
+        name: string | null
+        merchant: string | null
+        description: string | null
+        issuedAt: Date | null
+        total: number | null
+        currencyCode: string | null
+        currentType: string | null
+        suggestedType: "income" | "expense" | "refund" | "transfer" | "exchange" | "other"
+        reason: string
+      }> = []
+      for (const tx of result.transactions) {
+        const hit = classifyTransaction({
+          name: tx.name,
+          merchant: tx.merchant,
+          description: tx.description,
+          total: tx.total,
+          type: tx.type,
+        })
+        if (!hit) continue
+        if (hit.suggested === tx.type) continue
+        proposals.push({
+          id: tx.id,
+          name: tx.name,
+          merchant: tx.merchant,
+          description: tx.description,
+          issuedAt: tx.issuedAt,
+          total: tx.total,
+          currencyCode: tx.currencyCode,
+          currentType: tx.type,
+          suggestedType: hit.suggested,
+          reason: hit.reason,
+        })
+      }
+      return proposals
+    }),
+
+  /** Set `type` on a list of transactions in one round trip. Used by the
+   *  inline type editor and the Reclassify bulk-apply. */
+  bulkSetType: authedProcedure
+    .meta({ openapi: { method: "POST", path: "/api/v1/transactions/bulk-set-type" } })
+    .input(
+      z.object({
+        ids: z.array(z.string()).min(1).max(1000),
+        type: z.enum([
+          "income",
+          "expense",
+          "refund",
+          "transfer",
+          "exchange",
+          "other",
+        ]),
+      }),
+    )
+    .output(z.object({ updated: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      return bulkUpdateTransactionType(ctx.user.id, input.ids, input.type)
     }),
 
   /**

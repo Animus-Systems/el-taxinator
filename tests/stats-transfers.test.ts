@@ -10,15 +10,15 @@ vi.mock("@/lib/pg", () => ({
 
 import { getDashboardStats } from "@/models/stats"
 
-describe("stats exclude type='transfer' and type='conversion' rows", () => {
-  it("adds type NOT IN ('transfer', 'conversion') to buildStatsWhere", async () => {
+describe("stats exclude type='transfer' and type='exchange' rows", () => {
+  it("adds type NOT IN ('transfer', 'exchange') to buildStatsWhere", async () => {
     mocks.query.mockResolvedValue({ rows: [] })
     await getDashboardStats("user-1", {})
     // Multiple queries may be issued — scan all of them for the exclusion.
     const allSql = mocks.query.mock.calls
       .map((call) => String(call[0] ?? ""))
       .join("\n")
-    expect(allSql).toMatch(/type\s+NOT\s+IN\s*\(\s*'transfer',\s*'conversion'\s*\)/i)
+    expect(allSql).toMatch(/type\s+NOT\s+IN\s*\(\s*'transfer',\s*'exchange'\s*\)/i)
     expect(allSql).toMatch(/personal_ignored/i) // still excludes personal
   })
 })

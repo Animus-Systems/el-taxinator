@@ -90,8 +90,9 @@ export function TransactionSearchAndFilters({
             <SelectItem value="-">{t("filters.allTypes")}</SelectItem>
             <SelectItem value="income">{t("types.income")}</SelectItem>
             <SelectItem value="expense">{t("types.expense")}</SelectItem>
+            <SelectItem value="refund">{t("types.refund")}</SelectItem>
             <SelectItem value="transfer">{t("types.transfer")}</SelectItem>
-            <SelectItem value="conversion">{t("types.conversion")}</SelectItem>
+            <SelectItem value="exchange">{t("types.exchange")}</SelectItem>
             <SelectItem value="other">{t("types.other")}</SelectItem>
           </SelectContent>
         </Select>

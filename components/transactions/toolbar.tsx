@@ -3,8 +3,9 @@ import { useState } from "react"
 import { useTranslations } from "next-intl"
 import { useNavigate } from "@tanstack/react-router"
 import { Button } from "@/components/ui/button"
-import { Download, Sparkles } from "lucide-react"
+import { Download, Link2, Sparkles, Tags } from "lucide-react"
 import { ExportTransactionsDialog } from "@/components/export/transactions"
+import { ReclassifyDialog } from "@/components/transactions/reclassify-dialog"
 import type { BankAccount, Category, Field, Project } from "@/lib/db-types"
 
 type Props = {
@@ -22,7 +23,7 @@ type Props = {
 export function TransactionsToolbar({ accounts: _accounts, categories, projects, fields, total }: Props) {
   const t = useTranslations("transactions")
   const navigate = useNavigate()
-  const [activeDialog, setActiveDialog] = useState<"export" | null>(null)
+  const [activeDialog, setActiveDialog] = useState<"export" | "reclassify" | null>(null)
 
   const close = () => setActiveDialog(null)
 
@@ -31,6 +32,12 @@ export function TransactionsToolbar({ accounts: _accounts, categories, projects,
       <div className="flex gap-2">
         <Button variant="outline" onClick={() => navigate({ to: "/wizard/new" as string })}>
           <Sparkles /> <span className="hidden md:block">{t("aiImport")}</span>
+        </Button>
+        <Button variant="outline" onClick={() => navigate({ to: "/reconcile" as string })}>
+          <Link2 /> <span className="hidden md:block">{t("reconcile", { defaultValue: "Reconcile" })}</span>
+        </Button>
+        <Button variant="outline" onClick={() => setActiveDialog("reclassify")}>
+          <Tags /> <span className="hidden md:block">{t("reclassifyTrigger", { defaultValue: "Reclassify" })}</span>
         </Button>
         <Button variant="outline" onClick={() => setActiveDialog("export")}>
           <Download /> <span className="hidden md:block">{t("export")}</span>
@@ -46,6 +53,12 @@ export function TransactionsToolbar({ accounts: _accounts, categories, projects,
           onClose={close}
         />
       )}
+      <ReclassifyDialog
+        open={activeDialog === "reclassify"}
+        onOpenChange={(next) => {
+          if (!next) close()
+        }}
+      />
     </>
   )
 }

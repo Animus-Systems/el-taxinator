@@ -9,6 +9,7 @@ import {
   updateInvoiceStatus,
   updateInvoiceContact,
   updateInvoiceCurrency,
+  updateInvoiceTotalCents,
   deleteInvoice,
   convertQuoteToInvoice,
   setInvoicePdfFileId,
@@ -50,6 +51,7 @@ const invoiceInputSchema = z.object({
   quoteId: z.string().nullish(),
   pdfFileId: z.string().nullish(),
   number: z.string(),
+  kind: z.enum(["invoice", "simplified"]).optional(),
   status: z.string().optional(),
   issueDate: z.union([z.date(), z.string().transform((v) => new Date(v))]),
   dueDate: z.union([z.date(), z.string().transform((v) => new Date(v))]).nullish(),
@@ -146,6 +148,21 @@ export const invoicesRouter = router({
     .output(invoiceSchema.nullable())
     .mutation(async ({ ctx, input }) => {
       return updateInvoiceCurrency(input.id, ctx.user.id, input.currencyCode)
+    }),
+
+  /** Overwrite the printed-total override. `null` clears the override so the
+   *  display falls back to line-item reconstruction. */
+  setTotal: authedProcedure
+    .meta({ openapi: { method: "PATCH", path: "/api/v1/invoices/{id}/total" } })
+    .input(
+      z.object({
+        id: z.string(),
+        totalCents: z.number().int().positive().nullable(),
+      }),
+    )
+    .output(invoiceSchema.nullable())
+    .mutation(async ({ ctx, input }) => {
+      return updateInvoiceTotalCents(input.id, ctx.user.id, input.totalCents)
     }),
 
   delete: authedProcedure

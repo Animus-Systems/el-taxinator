@@ -8,13 +8,10 @@ import {
   listPaymentsForInvoice,
   listPaymentsForTransaction,
   getAllocatedByInvoice,
-  getAllocatedByTransaction,
   getInvoicePaymentById,
 } from "@/models/invoice-payments"
-import { getInvoiceById, updateInvoiceStatus, getInvoices } from "@/models/invoices"
-import { getTransactions } from "@/models/transactions"
+import { getInvoiceById, updateInvoiceStatus } from "@/models/invoices"
 import { calcInvoiceTotals } from "@/lib/invoice-calculations"
-import { matchInvoicesToTransactions } from "@/ai/match-invoices"
 
 const paymentInputSchema = z.object({
   invoiceId: z.string(),
@@ -24,41 +21,6 @@ const paymentInputSchema = z.object({
   source: z.enum(["manual", "ai"]).optional(),
 })
 
-const reconcileRowInvoiceSchema = z.object({
-  id: z.string(),
-  number: z.string(),
-  clientName: z.string().nullable(),
-  issueDate: z.date(),
-  totalCents: z.number(),
-  allocatedCents: z.number(),
-  status: z.string(),
-  notes: z.string().nullable(),
-})
-
-const reconcileRowTransactionSchema = z.object({
-  id: z.string(),
-  name: z.string().nullable(),
-  merchant: z.string().nullable(),
-  issuedAt: z.date().nullable(),
-  totalCents: z.number(),
-  type: z.string().nullable(),
-  currencyCode: z.string().nullable(),
-  allocatedCents: z.number(),
-})
-
-const reconcileOutputSchema = z.object({
-  invoices: z.array(reconcileRowInvoiceSchema),
-  transactions: z.array(reconcileRowTransactionSchema),
-})
-
-const suggestedMatchSchema = z.object({
-  invoiceId: z.string(),
-  transactionId: z.string(),
-  amountCents: z.number(),
-  confidence: z.number(),
-  reasoning: z.string(),
-})
-
 /**
  * After a payment is created or deleted, re-evaluate whether the invoice
  * is now "fully paid" and flip its status accordingly.
@@ -66,7 +28,7 @@ const suggestedMatchSchema = z.object({
  * Flip forward only: if allocations sum to >= total, mark paid.
  * Don't un-flip on delete — the user may have set paid manually.
  */
-async function maybeAutoFlipPaid(invoiceId: string, userId: string): Promise<void> {
+export async function maybeAutoFlipPaid(invoiceId: string, userId: string): Promise<void> {
   const invoice = await getInvoiceById(invoiceId, userId)
   if (!invoice) return
   if (invoice.status === "paid" || invoice.status === "cancelled") return
@@ -125,105 +87,5 @@ export const invoicePaymentsRouter = router({
       }
       await deleteInvoicePayment(input.id, ctx.user.id)
       return { ok: true }
-    }),
-
-  /**
-   * Snapshot of everything the /reconcile page and the AI matcher need:
-   * invoices with their computed totals and allocations, and transactions
-   * with their allocations. Filters out fully-paid / fully-allocated rows.
-   */
-  reconcileData: authedProcedure
-    .input(z.object({}).optional())
-    .output(reconcileOutputSchema)
-    .query(async ({ ctx }) => {
-      const [allInvoices, txResult, allocByInvoice, allocByTx] = await Promise.all([
-        getInvoices(ctx.user.id),
-        getTransactions(ctx.user.id, {}),
-        getAllocatedByInvoice(ctx.user.id),
-        getAllocatedByTransaction(ctx.user.id),
-      ])
-
-      const invoices = allInvoices
-        .filter((inv) => inv.status !== "cancelled")
-        .map((inv) => {
-          const { total } = calcInvoiceTotals(inv.items, inv.totalCents)
-          const allocated = allocByInvoice.get(inv.id) ?? 0
-          return {
-            id: inv.id,
-            number: inv.number,
-            clientName: inv.client?.name ?? null,
-            issueDate: inv.issueDate,
-            totalCents: Math.round(total),
-            allocatedCents: allocated,
-            status: inv.status,
-            notes: inv.notes,
-          }
-        })
-        .filter((inv) => inv.allocatedCents < inv.totalCents)
-
-      const transactions = txResult.transactions
-        .map((tx) => {
-          const allocated = allocByTx.get(tx.id) ?? 0
-          const absTotal = Math.abs(tx.total ?? 0)
-          return {
-            id: tx.id,
-            name: tx.name,
-            merchant: tx.merchant,
-            issuedAt: tx.issuedAt,
-            totalCents: absTotal,
-            type: tx.type,
-            currencyCode: tx.currencyCode,
-            allocatedCents: allocated,
-          }
-        })
-        .filter((tx) => tx.allocatedCents < tx.totalCents)
-
-      return { invoices, transactions }
-    }),
-
-  aiMatch: authedProcedure
-    .input(z.object({}).optional())
-    .output(z.array(suggestedMatchSchema))
-    .mutation(async ({ ctx }) => {
-      const [allInvoices, txResult, allocByInvoice, allocByTx] = await Promise.all([
-        getInvoices(ctx.user.id),
-        getTransactions(ctx.user.id, {}),
-        getAllocatedByInvoice(ctx.user.id),
-        getAllocatedByTransaction(ctx.user.id),
-      ])
-
-      const invoices = allInvoices
-        .filter((inv) => inv.status !== "cancelled")
-        .map((inv) => {
-          const { total } = calcInvoiceTotals(inv.items, inv.totalCents)
-          return {
-            id: inv.id,
-            number: inv.number,
-            clientName: inv.client?.name ?? null,
-            issueDate: inv.issueDate.toISOString().slice(0, 10),
-            totalCents: Math.round(total),
-            allocatedCents: allocByInvoice.get(inv.id) ?? 0,
-            notes: inv.notes,
-          }
-        })
-        .filter((inv) => inv.allocatedCents < inv.totalCents)
-
-      const transactions = txResult.transactions
-        .map((tx) => ({
-          id: tx.id,
-          name: tx.name,
-          merchant: tx.merchant,
-          issuedAt: tx.issuedAt ? tx.issuedAt.toISOString().slice(0, 10) : null,
-          totalCents: Math.abs(tx.total ?? 0),
-          type: tx.type,
-          currencyCode: tx.currencyCode,
-          allocatedCents: allocByTx.get(tx.id) ?? 0,
-        }))
-        .filter((tx) => tx.allocatedCents < tx.totalCents)
-
-      if (invoices.length === 0 || transactions.length === 0) return []
-
-      const suggestions = await matchInvoicesToTransactions(invoices, transactions, ctx.user.id)
-      return suggestions
     }),
 })

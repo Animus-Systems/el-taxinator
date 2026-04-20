@@ -7,6 +7,7 @@ import {
   createPurchase,
   updatePurchase,
   updatePurchaseStatus,
+  updatePurchaseTotalCents,
   deletePurchase,
   setPurchasePdfFileId,
   findDuplicatePurchase,
@@ -81,6 +82,7 @@ const purchaseInputSchema = z.object({
   issueDate: z.union([z.date(), z.string().transform((v) => new Date(v))]),
   dueDate: z.union([z.date(), z.string().transform((v) => new Date(v))]).nullish(),
   currencyCode: z.string().optional(),
+  totalCents: z.number().int().nullish(),
   irpfRate: z.number().min(0).max(100).optional(),
   notes: z.string().nullish(),
   items: z.array(purchaseItemInputSchema).min(1),
@@ -164,6 +166,20 @@ export const purchasesRouter = router({
       return updatePurchaseStatus(input.id, ctx.user.id, input.status, paidAt ?? null)
     }),
 
+  /** Overwrite the printed-total override. `null` clears. */
+  setTotal: authedProcedure
+    .meta({ openapi: { method: "PATCH", path: "/api/v1/purchases/{id}/total" } })
+    .input(
+      z.object({
+        id: z.string(),
+        totalCents: z.number().int().positive().nullable(),
+      }),
+    )
+    .output(purchaseSchema.nullable())
+    .mutation(async ({ ctx, input }) => {
+      return updatePurchaseTotalCents(input.id, ctx.user.id, input.totalCents)
+    }),
+
   delete: authedProcedure
     .meta({ openapi: { method: "DELETE", path: "/api/v1/purchases/{id}" } })
     .input(z.object({ id: z.string() }))
@@ -243,6 +259,10 @@ export const purchasesRouter = router({
         status: "draft",
         issueDate,
         currencyCode: extracted.currency ?? "EUR",
+        // The receipt extraction gives us the printed total directly; store
+        // it authoritatively so later read-back doesn't drift by a cent or
+        // two from VAT reconstruction.
+        totalCents: totalCents > 0 ? totalCents : null,
         irpfRate: 0,
         notes: null,
         items: [
@@ -316,6 +336,10 @@ export const purchasesRouter = router({
                 .union([z.date(), z.string().transform((v) => (v ? new Date(v) : null))])
                 .nullish(),
               currencyCode: z.string().optional(),
+              /** Printed grand total (incl. VAT) in minor units — when set,
+               *  overrides the sum-from-items reconstruction so imports don't
+               *  drift from €36.97 → €37.01 due to VAT integer-cent math. */
+              totalCents: z.number().int().nullish(),
               status: z
                 .enum(["draft", "received", "overdue", "paid", "cancelled", "refunded"])
                 .optional(),
@@ -412,6 +436,7 @@ export const purchasesRouter = router({
           issueDate: p.issueDate,
           dueDate: p.dueDate ?? null,
           currencyCode: p.currencyCode ?? "EUR",
+          totalCents: p.totalCents ?? null,
           irpfRate: p.irpfRate ?? 0,
           notes: p.notes ?? null,
           items: p.items.map((it, idx) => ({

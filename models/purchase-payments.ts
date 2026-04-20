@@ -77,3 +77,25 @@ export async function getPurchasePaymentById(
     sql`SELECT * FROM purchase_payments WHERE id = ${id} AND user_id = ${userId}`,
   )
 }
+
+export async function updatePurchasePaymentAmount(
+  id: string,
+  userId: string,
+  amountCents: number,
+): Promise<PurchasePayment | null> {
+  return queryOne<PurchasePayment>(
+    sql`UPDATE purchase_payments
+        SET amount_cents = ${amountCents}
+        WHERE id = ${id} AND user_id = ${userId}
+        RETURNING *`,
+  )
+}
+
+export async function listAllPurchasePayments(userId: string): Promise<PurchasePayment[]> {
+  return queryMany<PurchasePayment>(
+    sql`SELECT * FROM purchase_payments
+        WHERE user_id = ${userId}
+        ORDER BY created_at DESC
+        LIMIT 1000`,
+  )
+}

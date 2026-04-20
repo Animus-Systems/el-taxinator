@@ -10,7 +10,15 @@ import { getVisibleTransactionFields } from "@/lib/transaction-list-fields"
 import { cn, formatCurrency } from "@/lib/utils"
 import type { BankAccount, Category, Field, Project, Transaction } from "@/lib/db-types"
 import { formatDate } from "date-fns"
-import { AlertTriangle, ArrowDownIcon, ArrowLeftRight, ArrowUpIcon, File, Paperclip, Repeat, Sparkles, TrendingDown, TrendingUp, Zap } from "lucide-react"
+import { AlertTriangle, ArrowDownIcon, ArrowLeftRight, ArrowUpIcon, File, HelpCircle, Paperclip, Repeat, RotateCcw, Sparkles, TrendingDown, TrendingUp, Zap } from "lucide-react"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { trpc } from "~/trpc"
+import { toast } from "sonner"
 import { AttachReceiptDialog } from "@/components/transactions/attach-receipt-dialog"
 import { EditTransactionDialog } from "@/components/transactions/edit-dialog"
 import { useTranslations } from "next-intl"
@@ -53,10 +61,40 @@ function totalColorClass(transaction: Transaction): string {
     if (transaction.counterAccountId !== null) return "text-sky-600/60"
     return "text-amber-600"
   }
-  if (transaction.type === "conversion") return "text-purple-600"
+  if (transaction.type === "exchange") return "text-purple-600"
   if (transaction.type === "income") return "text-green-500"
   if (transaction.type === "expense") return "text-red-500"
+  if (transaction.type === "refund") return "text-amber-600"
   return "text-black"
+}
+
+/** Direction sign shown in front of the total amount.
+ *   "+" — money coming into the account (income, incoming transfer, supplier
+ *         refund, …). Signed historical totals also count.
+ *   "−" — money leaving the account (expense, outgoing transfer, client
+ *         refund). Uses a real minus sign, not a hyphen, for typographic
+ *         consistency with Intl.NumberFormat.
+ *   ""  — neutral or unknown direction (exchange without a direction hint,
+ *         `other`, zero-value rows).
+ *
+ *  Preference order: explicit sign on `total` > `transfer_direction` > type. */
+export function totalSignPrefix(transaction: Transaction): "+" | "−" | "" {
+  const value = transaction.total ?? 0
+  if (value < 0) return "−"
+  if (value > 0) {
+    // The stored value is positive — derive the sign from the type and,
+    // where applicable, the transfer direction. Exchange legs and `other`
+    // rows have no intrinsic direction so we leave them neutral.
+    if (transaction.type === "income") return "+"
+    if (transaction.type === "expense") return "−"
+    if (transaction.type === "refund") return "+"
+    if (transaction.type === "transfer") {
+      if (transaction.transferDirection === "outgoing") return "−"
+      if (transaction.transferDirection === "incoming") return "+"
+      return ""
+    }
+  }
+  return ""
 }
 
 function FilesCell({ transaction }: { transaction: Transaction }) {
@@ -105,21 +143,18 @@ function FilesCell({ transaction }: { transaction: Transaction }) {
   )
 }
 
-function TypeCell({ transaction }: { transaction: Transaction }) {
-  const t = useTranslations("transactions.types")
-  const tTransfers = useTranslations("transactions.transfers")
-
+/** Pure-presentation icon used by both the inline cell and the dropdown menu
+ *  items — keeps the icon/colour mapping in one place. */
+function TypeIcon({
+  transaction,
+  label,
+}: {
+  transaction: Transaction
+  label: string
+}) {
   if (transaction.type === "transfer") {
     const isPaired = transaction.transferId !== null
     const awaitingMatch = !isPaired && transaction.counterAccountId !== null
-    const direction = transaction.transferDirection
-    const label = isPaired
-      ? direction
-        ? tTransfers(`pairedBadge.${direction}`)
-        : tTransfers("pairedBadgeGeneric")
-      : awaitingMatch
-        ? tTransfers("awaitingMatchBadge")
-        : tTransfers("unmatchedBadge")
     const colorClass = isPaired
       ? "text-sky-600"
       : awaitingMatch
@@ -136,9 +171,7 @@ function TypeCell({ transaction }: { transaction: Transaction }) {
       </span>
     )
   }
-
-  if (transaction.type === "conversion") {
-    const label = tTransfers("conversionBadge")
+  if (transaction.type === "exchange") {
     return (
       <span
         title={label}
@@ -149,19 +182,110 @@ function TypeCell({ transaction }: { transaction: Transaction }) {
       </span>
     )
   }
+  if (transaction.type === "refund") {
+    return (
+      <span title={label} aria-label={label} className="inline-flex text-amber-600">
+        <RotateCcw className="h-4 w-4" />
+      </span>
+    )
+  }
+  if (transaction.type === "income") {
+    return (
+      <span title={label} aria-label={label} className="inline-flex text-green-500">
+        <TrendingUp className="h-4 w-4" />
+      </span>
+    )
+  }
+  if (transaction.type === "expense") {
+    return (
+      <span title={label} aria-label={label} className="inline-flex text-red-500">
+        <TrendingDown className="h-4 w-4" />
+      </span>
+    )
+  }
+  if (transaction.type === "other") {
+    return (
+      <span title={label} aria-label={label} className="inline-flex text-muted-foreground">
+        <HelpCircle className="h-4 w-4" />
+      </span>
+    )
+  }
+  return (
+    <span title={label} aria-label={label} className="inline-flex text-muted-foreground">
+      <HelpCircle className="h-4 w-4" />
+    </span>
+  )
+}
 
-  const type: "income" | "expense" | "other" =
-    transaction.type === "income" || transaction.type === "expense" ? transaction.type : "other"
-  const label = t(type)
+const TYPE_OPTIONS = [
+  { key: "income", Icon: TrendingUp, color: "text-green-500" },
+  { key: "expense", Icon: TrendingDown, color: "text-red-500" },
+  { key: "refund", Icon: RotateCcw, color: "text-amber-600" },
+  { key: "transfer", Icon: ArrowLeftRight, color: "text-sky-600" },
+  { key: "exchange", Icon: Repeat, color: "text-purple-600" },
+  { key: "other", Icon: HelpCircle, color: "text-muted-foreground" },
+] as const
 
-  const Icon = type === "income" ? TrendingUp : type === "expense" ? TrendingDown : ArrowLeftRight
-  const color =
-    type === "income" ? "text-green-500" : type === "expense" ? "text-red-500" : "text-muted-foreground"
+function TypeCell({ transaction }: { transaction: Transaction }) {
+  const t = useTranslations("transactions.types")
+  const tTransfers = useTranslations("transactions.transfers")
+  const utils = trpc.useUtils()
+
+  const setType = trpc.transactions.bulkSetType.useMutation({
+    onSuccess: () => {
+      utils.transactions.list.invalidate()
+      utils.transactions.getById.invalidate({ id: transaction.id })
+    },
+    onError: (err) => toast.error(err.message),
+  })
+
+  // Pick the tooltip label. Transfers keep their rich "paired / awaiting /
+  // unmatched" wording; everything else just uses the type name.
+  let triggerLabel: string
+  if (transaction.type === "transfer") {
+    const isPaired = transaction.transferId !== null
+    const awaitingMatch = !isPaired && transaction.counterAccountId !== null
+    const direction = transaction.transferDirection
+    triggerLabel = isPaired
+      ? direction
+        ? tTransfers(`pairedBadge.${direction}`)
+        : tTransfers("pairedBadgeGeneric")
+      : awaitingMatch
+        ? tTransfers("awaitingMatchBadge")
+        : tTransfers("unmatchedBadge")
+  } else if (transaction.type === "exchange") {
+    triggerLabel = tTransfers("conversionBadge")
+  } else if (transaction.type) {
+    triggerLabel = t(transaction.type, { defaultValue: transaction.type })
+  } else {
+    triggerLabel = t("other")
+  }
 
   return (
-    <span title={label} aria-label={label} className="inline-flex">
-      <Icon className={cn("h-4 w-4", color)} />
-    </span>
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        className="rounded p-0.5 hover:bg-muted/50"
+        aria-label={triggerLabel}
+      >
+        <TypeIcon transaction={transaction} label={triggerLabel} />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="center" className="w-40">
+        {TYPE_OPTIONS.map(({ key, Icon, color }) => {
+          const isCurrent = transaction.type === key
+          return (
+            <DropdownMenuItem
+              key={key}
+              disabled={setType.isPending || isCurrent}
+              onClick={() => setType.mutate({ ids: [transaction.id], type: key })}
+              className={cn("gap-2", isCurrent && "bg-muted")}
+            >
+              <Icon className={cn("h-4 w-4", color)} />
+              <span>{t(key, { defaultValue: key })}</span>
+            </DropdownMenuItem>
+          )
+        })}
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }
 
@@ -278,15 +402,24 @@ export const standardFieldRenderers: Record<string, FieldRenderer> = {
           )}
         >
           <span>
-            {transaction.total && transaction.currencyCode
-              ? formatCurrency(transaction.total, transaction.currencyCode)
-              : transaction.total}
+            {transaction.total && transaction.currencyCode ? (
+              <>
+                {totalSignPrefix(transaction)}
+                {formatCurrency(Math.abs(transaction.total), transaction.currencyCode)}
+              </>
+            ) : (
+              transaction.total
+            )}
           </span>
           {transaction.convertedTotal &&
             transaction.convertedCurrencyCode &&
             transaction.convertedCurrencyCode !== transaction.currencyCode && (
               <span className="text-sm -mt-1">
-                ({formatCurrency(transaction.convertedTotal, transaction.convertedCurrencyCode)})
+                ({totalSignPrefix(transaction)}
+                {formatCurrency(
+                  Math.abs(transaction.convertedTotal),
+                  transaction.convertedCurrencyCode,
+                )})
               </span>
             )}
         </div>
@@ -333,9 +466,17 @@ export const standardFieldRenderers: Record<string, FieldRenderer> = {
           "flex flex-col justify-end text-right text-lg"
         )}
       >
-        {transaction.convertedTotal && transaction.convertedCurrencyCode
-          ? formatCurrency(transaction.convertedTotal, transaction.convertedCurrencyCode)
-          : transaction.convertedTotal}
+        {transaction.convertedTotal && transaction.convertedCurrencyCode ? (
+          <>
+            {totalSignPrefix(transaction)}
+            {formatCurrency(
+              Math.abs(transaction.convertedTotal),
+              transaction.convertedCurrencyCode,
+            )}
+          </>
+        ) : (
+          transaction.convertedTotal
+        )}
       </div>
     ),
   },

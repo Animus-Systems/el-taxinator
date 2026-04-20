@@ -47,6 +47,11 @@ export function PurchaseForm({
   const [status, setStatus] = useState("received")
   const [irpfRate, setIrpfRate] = useState("0")
   const [currencyCode, setCurrencyCode] = useState("EUR")
+  // Optional printed-total override. When blank, we let the server compute
+  // the total from line items. When the user fills this in — or a future AI
+  // import populates it — it wins over the items so display matches the
+  // exact printed amount on the supplier invoice.
+  const [printedTotal, setPrintedTotal] = useState<string>("")
   const [notes, setNotes] = useState("")
   const [items, setItems] = useState<LineItem[]>([])
   const [pdfFileId, setPdfFileId] = useState<string | null>(null)
@@ -101,6 +106,11 @@ export function PurchaseForm({
       toast.error(t("itemsRequired"))
       return
     }
+    const printedTotalEuros = Number.parseFloat(printedTotal)
+    const totalCents =
+      Number.isFinite(printedTotalEuros) && printedTotalEuros > 0
+        ? Math.round(printedTotalEuros * 100)
+        : null
     createPurchase.mutate({
       supplierInvoiceNumber: supplierInvoiceNumber.trim(),
       contactId: contactId || null,
@@ -109,6 +119,7 @@ export function PurchaseForm({
       dueDate: dueDate ? new Date(dueDate) : null,
       status,
       currencyCode,
+      totalCents,
       irpfRate: Number(irpfRate) || 0,
       notes: notes || null,
       items: items
@@ -215,6 +226,28 @@ export function PurchaseForm({
               ))}
             </SelectContent>
           </Select>
+        </div>
+        <div className="space-y-1">
+          <Label htmlFor="printedTotal">
+            {t("printedTotal", { defaultValue: "Printed total (incl. VAT)" })}
+          </Label>
+          <Input
+            id="printedTotal"
+            type="number"
+            step="0.01"
+            min="0"
+            value={printedTotal}
+            onChange={(e) => setPrintedTotal(e.target.value)}
+            placeholder={t("printedTotalPlaceholder", {
+              defaultValue: "Leave blank to compute from items",
+            })}
+          />
+          <p className="text-xs text-muted-foreground">
+            {t("printedTotalHint", {
+              defaultValue:
+                "Optional — copy the exact total from the supplier invoice. Avoids a few-cent drift from VAT rounding.",
+            })}
+          </p>
         </div>
       </div>
 

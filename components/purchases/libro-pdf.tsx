@@ -81,7 +81,7 @@ function LibroPDF({
   let totalIrpf = 0
   let totalGrand = 0
   for (const p of purchases) {
-    const { subtotal, vatTotal, total } = calcInvoiceTotals(p.items)
+    const { subtotal, vatTotal, total } = calcInvoiceTotals(p.items, p.totalCents)
     const irpf = subtotal * (p.irpfRate / 100)
     totalBase += subtotal
     totalVat += vatTotal
@@ -115,7 +115,7 @@ function LibroPDF({
         </View>
 
         {purchases.map((p) => {
-          const { subtotal, vatTotal, total } = calcInvoiceTotals(p.items)
+          const { subtotal, vatTotal, total } = calcInvoiceTotals(p.items, p.totalCents)
           const irpf = subtotal * (p.irpfRate / 100)
           return (
             <View key={p.id} style={styles.row} wrap={false}>

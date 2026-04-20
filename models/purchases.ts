@@ -36,6 +36,9 @@ export type PurchaseData = {
   issueDate: Date
   dueDate?: Date | null
   currencyCode?: string
+  /** Authoritative printed grand total in minor units. When set, overrides
+   *  the sum-from-items reconstruction at display time (mirrors invoices). */
+  totalCents?: number | null
   irpfRate?: number
   notes?: string | null
   items: PurchaseItemData[]
@@ -253,6 +256,23 @@ export async function updatePurchase(id: string, userId: string, data: PurchaseD
     ]
     return result
   })
+}
+
+/** Mirror of `updateInvoiceTotalCents`. Overwrites the printed-total override
+ *  on a purchase row; null clears and falls back to line-item reconstruction. */
+export async function updatePurchaseTotalCents(
+  id: string,
+  userId: string,
+  totalCents: number | null,
+): Promise<Purchase | null> {
+  return queryOne<Purchase>(
+    buildUpdate(
+      "purchases",
+      { totalCents },
+      "id = $1 AND user_id = $2",
+      [id, userId],
+    ),
+  )
 }
 
 export async function updatePurchaseStatus(

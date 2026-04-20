@@ -27,13 +27,16 @@ import { calcInvoiceTotals } from "@/lib/invoice-calculations"
 import { formatCurrency } from "@/lib/utils"
 import {
   ArrowLeft,
+  Check,
   Download,
   Eye,
   Link2,
   Loader2,
   Paperclip,
+  Pencil,
   Trash2,
   Upload,
+  X,
 } from "lucide-react"
 import {
   Tooltip,
@@ -103,6 +106,17 @@ export function PurchaseDetail({ purchase }: { purchase: PurchaseWithRelations }
     onError: (err) => toast.error(err.message || t("attach.uploadFailed")),
   })
 
+  const setTotal = trpc.purchases.setTotal.useMutation({
+    onSuccess: () => {
+      utils.purchases.getById.invalidate({ id: purchase.id })
+      utils.purchases.list.invalidate()
+      utils.reconcile.data.invalidate()
+      utils.reconcile.links.invalidate()
+      toast.success(t("totalUpdated", { defaultValue: "Printed total updated." }))
+    },
+    onError: (err) => toast.error(err.message),
+  })
+
   const detachPdf = trpc.purchases.detachPdf.useMutation({
     onSuccess: () => {
       utils.purchases.getById.invalidate({ id: purchase.id })
@@ -140,8 +154,14 @@ export function PurchaseDetail({ purchase }: { purchase: PurchaseWithRelations }
   const [paidAtDraft, setPaidAtDraft] = useState<string>(
     purchase.paidAt ? format(purchase.paidAt, "yyyy-MM-dd") : "",
   )
+  const [editingTotal, setEditingTotal] = useState(false)
+  const [printedTotalDraft, setPrintedTotalDraft] = useState<string>(
+    purchase.totalCents !== null && purchase.totalCents !== undefined
+      ? (purchase.totalCents / 100).toFixed(2)
+      : "",
+  )
 
-  const { subtotal, vatTotal, total } = calcInvoiceTotals(purchase.items)
+  const { subtotal, vatTotal, total } = calcInvoiceTotals(purchase.items, purchase.totalCents)
   const irpfAmount = subtotal * (purchase.irpfRate / 100)
   const grandTotal = total - irpfAmount
   const allocated = payments.reduce((sum, p) => sum + p.amountCents, 0)
@@ -394,6 +414,94 @@ export function PurchaseDetail({ purchase }: { purchase: PurchaseWithRelations }
             <div className="flex justify-between border-t pt-2 font-semibold">
               <span>{t("total")}</span>
               <span>{formatCurrency(grandTotal, purchase.currencyCode)}</span>
+            </div>
+            <div className="flex items-center justify-between gap-2 border-t pt-2">
+              <span className="text-xs text-muted-foreground">
+                {t("printedTotal", { defaultValue: "Printed total (incl. VAT)" })}
+              </span>
+              {editingTotal ? (
+                <div className="flex items-center gap-1">
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={printedTotalDraft}
+                    onChange={(e) => setPrintedTotalDraft(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault()
+                        const raw = printedTotalDraft.trim()
+                        if (raw === "") {
+                          setTotal.mutate({ id: purchase.id, totalCents: null })
+                          setEditingTotal(false)
+                          return
+                        }
+                        const euros = Number.parseFloat(raw)
+                        if (!Number.isFinite(euros) || euros <= 0) return
+                        setTotal.mutate({
+                          id: purchase.id,
+                          totalCents: Math.round(euros * 100),
+                        })
+                        setEditingTotal(false)
+                      }
+                      if (e.key === "Escape") setEditingTotal(false)
+                    }}
+                    className="h-8 w-28"
+                    placeholder={t("printedTotalPlaceholder", {
+                      defaultValue: "Blank = from items",
+                    })}
+                    autoFocus
+                  />
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="ghost"
+                    className="h-8 w-8"
+                    onClick={() => {
+                      const raw = printedTotalDraft.trim()
+                      if (raw === "") {
+                        setTotal.mutate({ id: purchase.id, totalCents: null })
+                      } else {
+                        const euros = Number.parseFloat(raw)
+                        if (!Number.isFinite(euros) || euros <= 0) return
+                        setTotal.mutate({
+                          id: purchase.id,
+                          totalCents: Math.round(euros * 100),
+                        })
+                      }
+                      setEditingTotal(false)
+                    }}
+                    aria-label={t("save", { defaultValue: "Save" })}
+                  >
+                    <Check className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="ghost"
+                    className="h-8 w-8"
+                    onClick={() => setEditingTotal(false)}
+                    aria-label={t("cancel", { defaultValue: "Cancel" })}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setEditingTotal(true)}
+                  className="inline-flex items-center gap-1 text-xs hover:text-foreground"
+                >
+                  <span>
+                    {purchase.totalCents !== null && purchase.totalCents !== undefined
+                      ? formatCurrency(purchase.totalCents, purchase.currencyCode)
+                      : t("printedTotalUnset", {
+                          defaultValue: "— (computed from items)",
+                        })}
+                  </span>
+                  <Pencil className="h-3 w-3 opacity-60" aria-hidden />
+                </button>
+              )}
             </div>
           </div>
         </div>

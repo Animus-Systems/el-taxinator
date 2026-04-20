@@ -11,7 +11,7 @@ function isNonBusinessStatus(status: string | null | undefined): boolean {
 export function calcTotalPerCurrency(transactions: Transaction[]): Record<string, number> {
   return transactions.reduce(
     (acc, transaction) => {
-      if (transaction.type === "transfer" || transaction.type === "conversion") return acc
+      if (transaction.type === "transfer" || transaction.type === "exchange") return acc
       if (isNonBusinessStatus(transaction.status)) return acc
       if (transaction.convertedCurrencyCode) {
         acc[transaction.convertedCurrencyCode.toUpperCase()] =
@@ -29,7 +29,7 @@ export function calcTotalPerCurrency(transactions: Transaction[]): Record<string
 export function calcNetTotalPerCurrency(transactions: Transaction[]): Record<string, number> {
   return transactions.reduce(
     (acc, transaction) => {
-      if (transaction.type === "transfer" || transaction.type === "conversion") return acc
+      if (transaction.type === "transfer" || transaction.type === "exchange") return acc
       if (isNonBusinessStatus(transaction.status)) return acc
       let amount = 0
       let currency: string | undefined

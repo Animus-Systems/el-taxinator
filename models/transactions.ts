@@ -514,6 +514,28 @@ export const deleteTransaction = async (
   return undefined
 }
 
+/**
+ * Set `type` on many transactions in one round trip. Used by the reclassify
+ * review tool — the caller provides the ids it wants to update, we scope
+ * by user_id and fire a single UPDATE.
+ */
+export async function bulkUpdateTransactionType(
+  userId: string,
+  ids: string[],
+  type: string,
+): Promise<{ updated: number }> {
+  if (ids.length === 0) return { updated: 0 }
+  const pool = await getPool()
+  const result = await pool.query(
+    `UPDATE transactions
+       SET type = $1, updated_at = now()
+     WHERE user_id = $2
+       AND id = ANY($3::uuid[])`,
+    [type, userId, ids],
+  )
+  return { updated: result.rowCount ?? 0 }
+}
+
 export const bulkDeleteTransactions = async (ids: string[], userId: string, entityId: string) => {
   const pool = await getPool()
   if (ids.length === 0) return { count: 0 }

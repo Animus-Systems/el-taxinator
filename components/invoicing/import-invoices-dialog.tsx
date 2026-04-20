@@ -290,6 +290,10 @@ export function ImportInvoicesDialog({ open, onOpenChange }: Props) {
       const fd = new FormData()
       fd.append("fileId", it.fileId)
       fd.append("number", it.number.trim())
+      // Infer series from the number prefix: R* → factura simplificada,
+      // anything else → factura ordinaria. Spain requires separate
+      // correlative numbering for each series (RD 1619/2012).
+      fd.append("kind", /^R/i.test(it.number.trim()) ? "simplified" : "invoice")
       fd.append("status", it.invoiceStatus)
       fd.append("issueDate", it.issueDate)
       if (it.dueDate) fd.append("dueDate", it.dueDate)

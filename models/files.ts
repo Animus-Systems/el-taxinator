@@ -355,6 +355,74 @@ export async function attachFileToTransaction(
   return (result.rowCount ?? 0) > 0
 }
 
+/**
+ * Delete every file that is currently "orphan" (reviewed, no links anywhere).
+ * Runs the same LATERAL-join orphan detection as getFiles so the criterion
+ * matches the UI filter exactly. Returns the number of files removed.
+ *
+ * Caps at 5000 rows per call as a sanity guard — if a user somehow has more
+ * orphans than that, they can click again; better than accidentally taking
+ * 30s of disk unlinks in one transaction.
+ */
+export const deleteAllOrphanFiles = async (
+  userId: string,
+  entityId: string,
+): Promise<{ deleted: number }> => {
+  const pool = await getPool()
+  const result = await pool.query(
+    `SELECT f.*
+     FROM files f
+     LEFT JOIN LATERAL (
+       SELECT 1 FROM transactions t
+       WHERE t.user_id = f.user_id AND t.files ? f.id::text LIMIT 1
+     ) lt ON TRUE
+     LEFT JOIN LATERAL (
+       SELECT 1 FROM invoices i
+       WHERE i.user_id = f.user_id AND i.pdf_file_id = f.id LIMIT 1
+     ) li ON TRUE
+     LEFT JOIN LATERAL (
+       SELECT 1 FROM import_sessions s
+       WHERE s.user_id = f.user_id AND s.file_id = f.id LIMIT 1
+     ) lis_src ON TRUE
+     LEFT JOIN LATERAL (
+       SELECT 1 FROM import_sessions s
+       WHERE s.user_id = f.user_id AND s.context_file_ids ? f.id::text LIMIT 1
+     ) lis_ctx ON TRUE
+     LEFT JOIN LATERAL (
+       SELECT 1 FROM personal_deductions pd
+       WHERE pd.user_id = f.user_id AND pd.file_id = f.id LIMIT 1
+     ) lpd ON TRUE
+     WHERE f.user_id = $1
+       AND f.is_reviewed = true
+       AND lt IS NULL AND li IS NULL
+       AND lis_src IS NULL AND lis_ctx IS NULL
+       AND lpd IS NULL
+     LIMIT 5000`,
+    [userId],
+  )
+
+  if (result.rows.length === 0) return { deleted: 0 }
+
+  const files = result.rows.map((r) => mapRow<File>(r))
+  // Unlink on disk first, then the DB row. If disk unlink throws we still
+  // delete the DB row — the orphan bytes would just sit until next cleanup,
+  // and mirrors the single-file deleteFile() behavior above.
+  for (const file of files) {
+    try {
+      await unlink(fullPathForFile(entityId, file))
+    } catch (error) {
+      console.error("Error deleting orphan file on disk:", error)
+    }
+  }
+
+  const ids = files.map((f) => f.id)
+  await pool.query(
+    `DELETE FROM files WHERE user_id = $1 AND id = ANY($2::uuid[])`,
+    [userId, ids],
+  )
+  return { deleted: files.length }
+}
+
 export const deleteFile = async (id: string, userId: string, entityId: string) => {
   const pool = await getPool()
   const result = await pool.query(

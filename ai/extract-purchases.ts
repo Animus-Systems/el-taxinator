@@ -19,6 +19,11 @@ export type ExtractedPurchase = {
   status: "draft" | "received" | "overdue" | "paid" | "cancelled" | "refunded" | null
   irpfRate: number | null       // 0 | 7 | 15 | 19 | …
   notes: string | null
+  /** Printed grand total including VAT, in MAJOR units (e.g. 36.97 means
+   *  €36.97). Null when not visible. The router stores this as totalCents on
+   *  the purchase row so later reads don't drift from integer-cent VAT
+   *  reconstruction. */
+  totalAmount: number | null
   items: Array<{
     description: string
     quantity: number
@@ -50,6 +55,7 @@ const PURCHASE_SCHEMA = {
           },
           irpfRate: { type: ["number", "null"] },
           notes: { type: ["string", "null"] },
+          totalAmount: { type: ["number", "null"] },
           items: {
             type: "array",
             items: {
@@ -87,6 +93,7 @@ For each purchase extract:
 - status: "paid" only if explicitly stamped "PAGADA"/"PAID". "cancelled" if stamped annulled/rectified. Otherwise "received" — don't guess beyond what the document says.
 - irpfRate: retención IRPF percentage visible on the invoice (e.g. 7, 15). 0 when none is applied. Null only when you can't tell.
 - notes: short free text (payment terms, reference, project). Null when nothing to keep.
+- totalAmount: the printed grand total INCLUDING VAT in EUROS (e.g. 36.97 means €36.97). Read it verbatim from the invoice's "TOTAL" / "Total a pagar" line — do NOT compute it from the line items. Return null only if no grand total is printed on the document (never for a register row where the total column is visible). This is what we store as the authoritative amount, so don't reconstruct, don't round, don't re-apply VAT.
 - items: line items. Each has description (string), quantity (number, default 1), unitPrice (NUMBER IN EUROS — NOT cents), and vatRate (VAT/IGIC rate as a percentage number, e.g. 7 for 7% IGIC, 21 for 21% IVA; use 0 when exempt).
   - For a single receipt/ticket with only a total: emit ONE item with description = vendor + receipt purpose, quantity = 1, unitPrice = the base amount (pre-VAT, derive from total and VAT rate when both visible), vatRate = the VAT rate.
   - For a multi-line invoice: one item per printed line.
@@ -175,6 +182,10 @@ export async function extractPurchasesFromFile(
       .filter((it) => it.description.trim() !== "")
     if (!number || mappedItems.length === 0) continue
 
+    const totalAmount =
+      typeof r["totalAmount"] === "number" && Number.isFinite(r["totalAmount"])
+        ? (r["totalAmount"] as number)
+        : null
     out.push({
       supplierName: asString(r["supplierName"]),
       supplierTaxId: asString(r["supplierTaxId"]),
@@ -185,6 +196,7 @@ export async function extractPurchasesFromFile(
       status: asStatus(r["status"]),
       irpfRate: typeof r["irpfRate"] === "number" ? r["irpfRate"] : null,
       notes: asString(r["notes"]),
+      totalAmount,
       items: mappedItems,
       confidence: asBounded(r["confidence"]),
     })

@@ -4,6 +4,7 @@ import { invoicesRouter } from "./routers/invoices"
 import { invoicePaymentsRouter } from "./routers/invoice-payments"
 import { purchasesRouter } from "./routers/purchases"
 import { purchasePaymentsRouter } from "./routers/purchase-payments"
+import { reconcileRouter } from "./routers/reconcile"
 import { quotesRouter } from "./routers/quotes"
 import { contactsRouter } from "./routers/contacts"
 import { productsRouter } from "./routers/products"
@@ -38,6 +39,7 @@ export const appRouter = router({
   invoicePayments: invoicePaymentsRouter,
   purchases: purchasesRouter,
   purchasePayments: purchasePaymentsRouter,
+  reconcile: reconcileRouter,
   quotes: quotesRouter,
   contacts: contactsRouter,
   products: productsRouter,

@@ -6,7 +6,8 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { formatBytes } from "@/lib/utils"
-import { Download, FileText, Loader2, Trash2, Link2 } from "lucide-react"
+import { Download, FileText, Loader2, Trash, Trash2, Link2 } from "lucide-react"
+import { toast } from "sonner"
 import { useConfirm } from "@/components/ui/confirm-dialog"
 
 type StatusFilter = "all" | "unreviewed" | "linked" | "orphan"
@@ -56,6 +57,40 @@ export function FilesPage() {
       utils.files.listUnsorted.invalidate()
     },
   })
+
+  const deleteAllOrphans = trpc.files.deleteAllOrphans.useMutation({
+    onSuccess: ({ deleted }) => {
+      utils.files.list.invalidate()
+      utils.files.listUnsorted.invalidate()
+      toast.success(
+        t("deleteAllOrphansDone", {
+          count: deleted,
+          defaultValue: deleted === 1
+            ? "Deleted {count} orphan file."
+            : "Deleted {count} orphan files.",
+        }),
+      )
+    },
+    onError: (err) => toast.error(err.message),
+  })
+
+  async function onDeleteAllOrphans(): Promise<void> {
+    if (total === 0) return
+    const ok = await confirm({
+      title: t("deleteAllOrphansTitle", { defaultValue: "Delete all orphan files?" }),
+      description: t("deleteAllOrphansConfirm", {
+        count: total,
+        defaultValue:
+          total === 1
+            ? "This permanently removes 1 orphan file. This cannot be undone."
+            : "This permanently removes {count} orphan files. This cannot be undone.",
+      }),
+      confirmLabel: t("deleteAllOrphansButton", { defaultValue: "Delete all orphans" }),
+      variant: "destructive",
+    })
+    if (!ok) return
+    deleteAllOrphans.mutate({})
+  }
 
   const filterLabel = useMemo<Record<StatusFilter, string>>(
     () => ({
@@ -162,17 +197,38 @@ export function FilesPage() {
           ))}
         </div>
 
-        <form onSubmit={onSearchSubmit} className="flex gap-2 md:w-80">
-          <Input
-            type="search"
-            value={searchDraft}
-            onChange={(e) => setSearchDraft(e.target.value)}
-            placeholder={t("searchPlaceholder")}
-          />
-          <Button type="submit" variant="outline" size="sm">
-            {t("searchButton")}
-          </Button>
-        </form>
+        <div className="flex flex-wrap items-center gap-2 md:flex-nowrap">
+          {status === "orphan" && total > 0 && (
+            <Button
+              type="button"
+              variant="destructive"
+              size="sm"
+              onClick={onDeleteAllOrphans}
+              disabled={deleteAllOrphans.isPending}
+            >
+              {deleteAllOrphans.isPending ? (
+                <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+              ) : (
+                <Trash className="mr-1.5 h-4 w-4" />
+              )}
+              {t("deleteAllOrphansButton", {
+                count: total,
+                defaultValue: "Delete all orphans ({count})",
+              })}
+            </Button>
+          )}
+          <form onSubmit={onSearchSubmit} className="flex gap-2 md:w-80">
+            <Input
+              type="search"
+              value={searchDraft}
+              onChange={(e) => setSearchDraft(e.target.value)}
+              placeholder={t("searchPlaceholder")}
+            />
+            <Button type="submit" variant="outline" size="sm">
+              {t("searchButton")}
+            </Button>
+          </form>
+        </div>
       </div>
 
       {isLoading ? (

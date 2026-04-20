@@ -56,7 +56,7 @@ const REPLY_SCHEMA = {
           description: { type: ["string", "null"] },
           total: { type: ["number", "null"] },
           currencyCode: { type: ["string", "null"] },
-          type: { type: ["string", "null"], enum: ["expense", "income", "transfer", "conversion", null] },
+          type: { type: ["string", "null"], enum: ["expense", "income", "refund", "transfer", "exchange", "other", null] },
           categoryCode: { type: ["string", "null"] },
           projectCode: { type: ["string", "null"] },
           accountId: { type: ["string", "null"] },
@@ -108,7 +108,7 @@ const REPLY_SCHEMA = {
             properties: {
               categoryCode: { type: ["string", "null"] },
               projectCode: { type: ["string", "null"] },
-              type: { type: ["string", "null"], enum: ["expense", "income", "transfer", "conversion", null] },
+              type: { type: ["string", "null"], enum: ["expense", "income", "refund", "transfer", "exchange", "other", null] },
               status: { type: ["string", "null"] },
               createIncomeSource: {
                 type: "object",
@@ -639,10 +639,10 @@ Use the \`id=…\` field from the "Available bank accounts" list when referencin
 
 TRUST the user when they say "mistake" or "between my accounts" — apply type="transfer" even if the description looks like income.
 
-## Currency conversions within one account (IMPORTANT)
+## Currency exchanges within one account (IMPORTANT)
 
 Rows that move money between currencies inside a single account — e.g. Revolut's "Exchanged to EUR", "Exchanged to PLN", "Currency conversion", or similar — are NOT business income/expense. They're an in-account FX operation. Model them as:
-- type: "conversion"
+- type: "exchange"
 - status: "internal"  (same reasoning as transfers — mechanical book moves, not personal)
 
 Telltales:
@@ -650,7 +650,13 @@ Telltales:
 - The counterparty field is blank or the same bank as the source account (e.g. "Revolut" on a Revolut statement).
 - Two rows on the same date, same account, opposite sign, different currencies.
 
-When you see two candidate rows that look like legs of one conversion (same account, same date, opposite sign, different currencies), emit one entry in proposedTransferLinks naming both rowIndex values — the same machinery that handles transfers also handles conversions once both legs are marked type="conversion". If only one leg is visible (the other side is off-statement or excluded), mark the single row type="conversion" + status="internal" and leave it orphan.
+When you see two candidate rows that look like legs of one exchange (same account, same date, opposite sign, different currencies), emit one entry in proposedTransferLinks naming both rowIndex values — the same machinery that handles transfers also handles exchanges once both legs are marked type="exchange". If only one leg is visible (the other side is off-statement or excluded), mark the single row type="exchange" + status="internal" and leave it orphan.
+
+## Refunds (money returning from or to a counterparty)
+
+Use type="refund" when a transaction REVERSES an earlier sale or purchase. This is different from income/expense because refunds cancel out prior business activity rather than creating new revenue or costs. Telltales: description contains "refund", "devolución", "reembolso"; the counterparty is one the user has previously transacted with; the sign matches a reversal (money back IN for a product returned, money back OUT for a cancelled client order).
+
+Refund rows ARE business events — they flow through stats/tax as a reversal of income or expense. They're NOT excluded like transfer/exchange rows.
 
 FX gain/loss computation is pending — for now, just classify the rows correctly. Do NOT try to compute realized_fx_gain_cents yourself.
 

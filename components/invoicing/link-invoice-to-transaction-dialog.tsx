@@ -48,7 +48,7 @@ export function LinkInvoiceToTransactionDialog({
 }: Props) {
   const { t } = useTranslation("invoices")
 
-  const { data: reconcile, isLoading } = trpc.invoicePayments.reconcileData.useQuery(
+  const { data: reconcile, isLoading } = trpc.reconcile.data.useQuery(
     {},
     { enabled: open },
   )
@@ -66,6 +66,10 @@ export function LinkInvoiceToTransactionDialog({
   }, [open])
 
   const transactions: ReconcileTx[] = useMemo(() => {
+    // Linking an invoice is usually paired with an income transaction (client
+    // paid us). Expense transactions can also be valid — that's a refund
+    // (we paid the client back). Both are allowed; currency check happens
+    // on submit.
     return reconcile?.transactions ?? []
   }, [reconcile])
 

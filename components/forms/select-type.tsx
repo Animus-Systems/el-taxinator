@@ -15,10 +15,15 @@ export const FormSelectType = ({
   hideIfEmpty?: boolean
   isRequired?: boolean
 } & SelectProps) => {
+  // Mirrors transactionTypeSchema in lib/db-types.ts. Order is user-facing:
+  // income/expense first (the common cases), then refund (reversal),
+  // transfer/exchange (non-business movement), other (fallback).
   const items = [
-    { code: "expense", name: "Expense", badge: "↓" },
     { code: "income", name: "Income", badge: "↑" },
-    { code: "pending", name: "Pending", badge: "⏲︎" },
+    { code: "expense", name: "Expense", badge: "↓" },
+    { code: "refund", name: "Refund", badge: "↺" },
+    { code: "transfer", name: "Transfer", badge: "⇄" },
+    { code: "exchange", name: "Exchange", badge: "⇆" },
     { code: "other", name: "Other", badge: "?" },
   ]
 

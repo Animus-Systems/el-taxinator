@@ -56,12 +56,12 @@ const reconcileOutputSchema = z.object({
  * derive paid_at from the latest linked transaction's issued_at.
  * Flip forward only — don't un-flip on delete (user may have set paid manually).
  */
-async function maybeAutoFlipPaid(purchaseId: string, userId: string): Promise<void> {
+export async function maybeAutoFlipPaidPurchase(purchaseId: string, userId: string): Promise<void> {
   const purchase = await getPurchaseById(purchaseId, userId)
   if (!purchase) return
   if (purchase.status === "paid" || purchase.status === "cancelled") return
 
-  const { total } = calcInvoiceTotals(purchase.items)
+  const { total } = calcInvoiceTotals(purchase.items, purchase.totalCents)
   const allocationMap = await getAllocatedByPurchase(userId)
   const allocated = allocationMap.get(purchaseId) ?? 0
   if (allocated >= total && total > 0) {
@@ -115,7 +115,7 @@ export const purchasePaymentsRouter = router({
       if (purchase?.pdfFileId) {
         await attachFileToTransaction(ctx.user.id, input.transactionId, purchase.pdfFileId)
       }
-      await maybeAutoFlipPaid(input.purchaseId, ctx.user.id)
+      await maybeAutoFlipPaidPurchase(input.purchaseId, ctx.user.id)
       return payment
     }),
 
@@ -146,7 +146,7 @@ export const purchasePaymentsRouter = router({
       const purchases = allPurchases
         .filter((p) => p.status !== "cancelled")
         .map((p) => {
-          const { total } = calcInvoiceTotals(p.items)
+          const { total } = calcInvoiceTotals(p.items, p.totalCents)
           const allocated = allocByPurchase.get(p.id) ?? 0
           return {
             id: p.id,

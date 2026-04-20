@@ -10,7 +10,15 @@ import { InvoiceList } from "@/components/invoicing/invoice-list"
 import { ImportInvoicesDialog } from "@/components/invoicing/import-invoices-dialog"
 import { NewInvoiceDialog } from "@/components/invoicing/new-invoice-dialog"
 import { Button } from "@/components/ui/button"
-import { Plus, Sparkles } from "lucide-react"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { Plus, Sparkles, FileText, Receipt, ChevronDown } from "lucide-react"
 import { Link } from "@/lib/navigation"
 
 type InvoiceItem = ComponentProps<typeof InvoiceList>["invoices"][number]
@@ -29,7 +37,7 @@ function normalizeInvoice(inv: {
 export function InvoicesPage() {
   const { t } = useTranslation("invoices")
   const { t: tQuotes } = useTranslation("quotes")
-  const [newOpen, setNewOpen] = useState(false)
+  const [newKind, setNewKind] = useState<"invoice" | "simplified" | null>(null)
   const [importOpen, setImportOpen] = useState(false)
 
   const { data: invoices, isLoading } = trpc.invoices.list.useQuery({})
@@ -55,21 +63,56 @@ export function InvoicesPage() {
           <Button asChild variant="outline">
             <Link href="/quotes">{tQuotes("title")}</Link>
           </Button>
-          <Button asChild variant="outline">
-            <Link href="/reconcile">{t("reconcile.trigger")}</Link>
-          </Button>
           <Button variant="outline" onClick={() => setImportOpen(true)}>
             <Sparkles /> <span className="hidden md:block">{t("uploadExternal.trigger")}</span>
           </Button>
-          <Button onClick={() => setNewOpen(true)}>
-            <Plus /> <span className="hidden md:block">{t("newInvoice")}</span>
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button>
+                <Plus className="h-4 w-4" />
+                <span className="hidden md:block">{t("newShort", { defaultValue: "New" })}</span>
+                <ChevronDown className="h-4 w-4 opacity-70" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-64">
+              <DropdownMenuLabel className="pb-1 text-[11px] font-normal uppercase tracking-wide text-muted-foreground">
+                {t("newMenu.label", { defaultValue: "Create new" })}
+              </DropdownMenuLabel>
+              <DropdownMenuItem onClick={() => setNewKind("invoice")}>
+                <FileText className="mr-2 h-4 w-4" />
+                <div className="flex flex-col items-start">
+                  <span>{t("newMenu.invoice", { defaultValue: "Invoice (factura)" })}</span>
+                  <span className="text-[11px] text-muted-foreground">
+                    {t("newMenu.invoiceHint", { defaultValue: "Full B2B invoice — F-series" })}
+                  </span>
+                </div>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => setNewKind("simplified")}>
+                <Receipt className="mr-2 h-4 w-4" />
+                <div className="flex flex-col items-start">
+                  <span>{t("newMenu.simplified", { defaultValue: "Simplified invoice (ticket)" })}</span>
+                  <span className="text-[11px] text-muted-foreground">
+                    {t("newMenu.simplifiedHint", {
+                      defaultValue: "≤ €400, or ≤ €3k retail — R-series",
+                    })}
+                  </span>
+                </div>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </header>
       <main>
-        <InvoiceList invoices={invoiceList} onCreateNew={() => setNewOpen(true)} />
+        <InvoiceList invoices={invoiceList} onCreateNew={() => setNewKind("invoice")} />
       </main>
-      <NewInvoiceDialog open={newOpen} onOpenChange={setNewOpen} />
+      <NewInvoiceDialog
+        open={newKind !== null}
+        onOpenChange={(next) => {
+          if (!next) setNewKind(null)
+        }}
+        kind={newKind ?? "invoice"}
+      />
       <ImportInvoicesDialog open={importOpen} onOpenChange={setImportOpen} />
     </>
   )

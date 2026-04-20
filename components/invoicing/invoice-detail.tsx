@@ -9,7 +9,7 @@ import { calcInvoiceTotals } from "@/lib/invoice-calculations"
 import { formatCurrency } from "@/lib/utils"
 import type { InvoiceWithRelations } from "@/models/invoices"
 import { format } from "date-fns"
-import { ArrowLeft, Download, Eye, Link2, Paperclip, RefreshCw, Trash2, X } from "lucide-react"
+import { ArrowLeft, Check, Download, Eye, Link2, Paperclip, Pencil, RefreshCw, Trash2, X } from "lucide-react"
 import { Link, useRouter } from "@/lib/navigation"
 import { useEffect, useRef, useState, useTransition } from "react"
 import { useTranslations } from "next-intl"
@@ -57,6 +57,41 @@ export function InvoiceDetail({
       toast.error(err.message || t("failedToUpdate"))
     },
   })
+  const setTotal = trpc.invoices.setTotal.useMutation({
+    onSuccess: () => {
+      utils.invoices.getById.invalidate({ id: invoice.id })
+      utils.invoices.list.invalidate()
+      utils.reconcile.data.invalidate()
+      utils.reconcile.links.invalidate()
+      toast.success(t("totalUpdated", { defaultValue: "Printed total updated." }))
+    },
+    onError: (err) => toast.error(err.message || t("failedToUpdate")),
+  })
+  const [editingTotal, setEditingTotal] = useState(false)
+  const [printedTotalDraft, setPrintedTotalDraft] = useState<string>(
+    invoice.totalCents !== null && invoice.totalCents !== undefined
+      ? (invoice.totalCents / 100).toFixed(2)
+      : "",
+  )
+  useEffect(() => {
+    setPrintedTotalDraft(
+      invoice.totalCents !== null && invoice.totalCents !== undefined
+        ? (invoice.totalCents / 100).toFixed(2)
+        : "",
+    )
+  }, [invoice.totalCents])
+  function commitTotal(): void {
+    const raw = printedTotalDraft.trim()
+    if (raw === "") {
+      setTotal.mutate({ id: invoice.id, totalCents: null })
+      setEditingTotal(false)
+      return
+    }
+    const euros = Number.parseFloat(raw)
+    if (!Number.isFinite(euros) || euros <= 0) return
+    setTotal.mutate({ id: invoice.id, totalCents: Math.round(euros * 100) })
+    setEditingTotal(false)
+  }
   const [currencyDraft, setCurrencyDraft] = useState(invoiceCurrency)
   useEffect(() => {
     setCurrencyDraft(invoiceCurrency)
@@ -334,6 +369,71 @@ export function InvoiceDetail({
             <TableCell colSpan={4}>{t("totalToPay")}</TableCell>
             <TableCell className="text-right">
               {formatCurrency(total - (invoice.irpfRate > 0 ? Math.round(subtotal * invoice.irpfRate / 100) : 0), invoiceCurrency)}
+            </TableCell>
+          </TableRow>
+          <TableRow className="text-xs text-muted-foreground">
+            <TableCell colSpan={4}>
+              {t("printedTotal", { defaultValue: "Printed total (incl. VAT)" })}
+            </TableCell>
+            <TableCell className="text-right">
+              {editingTotal ? (
+                <div className="inline-flex items-center gap-1">
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={printedTotalDraft}
+                    onChange={(e) => setPrintedTotalDraft(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault()
+                        commitTotal()
+                      }
+                      if (e.key === "Escape") setEditingTotal(false)
+                    }}
+                    className="h-8 w-28"
+                    placeholder={t("printedTotalPlaceholder", {
+                      defaultValue: "Blank = from items",
+                    })}
+                    autoFocus
+                  />
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="ghost"
+                    className="h-8 w-8"
+                    onClick={commitTotal}
+                    aria-label={t("save", { defaultValue: "Save" })}
+                  >
+                    <Check className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="ghost"
+                    className="h-8 w-8"
+                    onClick={() => setEditingTotal(false)}
+                    aria-label={t("cancel", { defaultValue: "Cancel" })}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setEditingTotal(true)}
+                  className="inline-flex items-center gap-1 hover:text-foreground"
+                >
+                  <span>
+                    {invoice.totalCents !== null && invoice.totalCents !== undefined
+                      ? formatCurrency(invoice.totalCents, invoiceCurrency)
+                      : t("printedTotalUnset", {
+                          defaultValue: "— (computed from items)",
+                        })}
+                  </span>
+                  <Pencil className="h-3 w-3 opacity-60" aria-hidden />
+                </button>
+              )}
             </TableCell>
           </TableRow>
         </TableFooter>

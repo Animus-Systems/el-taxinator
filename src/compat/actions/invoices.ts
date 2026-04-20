@@ -6,10 +6,13 @@ import { formDataToObject, nullableStringValue, numberValue, parseJsonField, trp
 function invoicePayload(formData: FormData): Record<string, unknown> {
   const values = formDataToObject(formData)
   const rawCurrency = nullableStringValue(values["currencyCode"])
+  const rawKind = nullableStringValue(values["kind"])
+  const kind = rawKind === "simplified" ? "simplified" : rawKind === "invoice" ? "invoice" : undefined
   return {
     contactId: nullableStringValue(values["contactId"]),
     quoteId: nullableStringValue(values["quoteId"]),
     number: values["number"],
+    kind,
     status: nullableStringValue(values["status"]),
     issueDate: values["issueDate"],
     dueDate: nullableStringValue(values["dueDate"]),

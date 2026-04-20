@@ -6,6 +6,7 @@ import {
   getFileById,
   getFiles,
   deleteFile,
+  deleteAllOrphanFiles,
 } from "@/models/files"
 import { fileSchema } from "@/lib/db-types"
 import { getActiveEntityId } from "@/lib/entities"
@@ -78,5 +79,14 @@ export const filesRouter = router({
     .mutation(async ({ ctx, input }) => {
       const entityId = await getActiveEntityId()
       return deleteFile(input.id, ctx.user.id, entityId)
+    }),
+
+  deleteAllOrphans: authedProcedure
+    .meta({ openapi: { method: "POST", path: "/api/v1/files/orphans/delete-all" } })
+    .input(z.object({}).optional())
+    .output(z.object({ deleted: z.number().int() }))
+    .mutation(async ({ ctx }) => {
+      const entityId = await getActiveEntityId()
+      return deleteAllOrphanFiles(ctx.user.id, entityId)
     }),
 })

@@ -5,6 +5,7 @@ import {
   CryptoMetaSection,
   shouldShowCryptoMeta,
 } from "@/components/transactions/crypto-meta-section"
+import { TransactionAllocationsPanel } from "@/components/transactions/allocations-panel"
 
 export function TransactionDetailPage() {
   const { transactionId } = useParams({ strict: false }) as { transactionId: string }
@@ -48,6 +49,7 @@ export function TransactionDetailPage() {
         fields={fields ?? []}
         settings={settings ?? {}}
       />
+      <TransactionAllocationsPanel transactionId={transaction.id} />
     </div>
   )
 }

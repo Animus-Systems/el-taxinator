@@ -138,7 +138,19 @@ export const fileSchema = z.object({
   createdAt: z.date(),
 })
 
-export const transactionTypeSchema = z.enum(["income", "expense", "transfer", "conversion", "other"])
+/** Canonical transaction type taxonomy. `exchange` replaces the old
+ *  `conversion` label (migration v34 renamed existing rows). `refund` is a
+ *  first-class kind — unlike transfer/exchange, refunds ARE business events
+ *  (they reverse a sale or a purchase), so stats/tax continue to include
+ *  them; only transfer and exchange are excluded as non-business movement. */
+export const transactionTypeSchema = z.enum([
+  "income",
+  "expense",
+  "refund",
+  "transfer",
+  "exchange",
+  "other",
+])
 export type TransactionType = z.infer<typeof transactionTypeSchema>
 
 export const transferDirectionSchema = z.enum(["outgoing", "incoming"]).nullable()
@@ -259,7 +271,7 @@ export const candidateUpdateSchema = z.object({
   description: z.string().nullable().optional(),
   total: z.number().nullable().optional(),
   currencyCode: z.string().nullable().optional(),
-  type: z.enum(["expense", "income", "transfer", "conversion"]).nullable().optional(),
+  type: z.enum(["expense", "income", "refund", "transfer", "exchange", "other"]).nullable().optional(),
   categoryCode: z.string().nullable().optional(),
   projectCode: z.string().nullable().optional(),
   accountId: z.string().nullable().optional(),
@@ -288,7 +300,7 @@ export const bulkActionSchema = z.object({
   apply: z.object({
     categoryCode: z.string().nullable().optional(),
     projectCode: z.string().nullable().optional(),
-    type: z.enum(["expense", "income", "transfer", "conversion"]).nullable().optional(),
+    type: z.enum(["expense", "income", "refund", "transfer", "exchange", "other"]).nullable().optional(),
     status: transactionReviewStatusSchema.nullable().optional(),
     // When set, applyBulkAction upserts an income_source row by (kind, normalized name)
     // and stamps its id onto every matched candidate. The AI uses this to propose
@@ -796,6 +808,14 @@ export const quoteItemSchema = z.object({
   position: z.number(),
 })
 
+/** Spain distinguishes factura ordinaria (full B2B invoice, recipient deducts VAT)
+ *  from factura simplificada (aka "ticket", allowed ≤ €400 or ≤ €3k for retail/
+ *  restaurants/taxis). Separate correlative numbering series required by law
+ *  (RD 1619/2012). Treated the same for VAT aggregation — only the series and
+ *  some optional recipient fields differ. */
+export const invoiceKindSchema = z.enum(["invoice", "simplified"])
+export type InvoiceKind = z.infer<typeof invoiceKindSchema>
+
 export const invoiceSchema = z.object({
   id: z.string(),
   userId: z.string(),
@@ -803,6 +823,7 @@ export const invoiceSchema = z.object({
   quoteId: z.string().nullable(),
   pdfFileId: z.string().nullable(),
   number: z.string(),
+  kind: invoiceKindSchema.default("invoice"),
   status: z.string(),
   issueDate: z.date(),
   dueDate: z.date().nullable(),
@@ -853,6 +874,11 @@ export const purchaseSchema = z.object({
   dueDate: z.date().nullable(),
   paidAt: z.date().nullable(),
   currencyCode: z.string(),
+  /** Authoritative final amount (incl. VAT) as printed on the supplier
+   * invoice, in minor units of `currencyCode`. When null, display
+   * reconstructs from items × (1 + vatRate). When set, wins over
+   * line-item reconstruction — same semantics as invoices.totalCents. */
+  totalCents: z.number().int().nullable(),
   irpfRate: z.number(),
   notes: z.string().nullable(),
   createdAt: z.date(),

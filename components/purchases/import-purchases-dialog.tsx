@@ -38,6 +38,8 @@ type ExtractedPurchase = {
   status: "draft" | "received" | "overdue" | "paid" | "cancelled" | "refunded" | null
   irpfRate: number | null
   notes: string | null
+  /** Printed grand total (incl. VAT) in major units — overrides item math. */
+  totalAmount: number | null
   items: Array<{
     description: string
     quantity: number
@@ -54,6 +56,11 @@ type ReviewRow = ExtractedPurchase & {
 }
 
 function rowTotal(row: ExtractedPurchase): number {
+  // Prefer the printed total when the extractor captured one — that's the
+  // source of truth. Fall back to line-item reconstruction otherwise.
+  if (typeof row.totalAmount === "number" && Number.isFinite(row.totalAmount)) {
+    return row.totalAmount
+  }
   return row.items.reduce(
     (sum, it) => sum + it.quantity * it.unitPrice * (1 + it.vatRate / 100),
     0,
@@ -216,6 +223,12 @@ export function ImportPurchasesDialog({ open, onOpenChange }: Props) {
           issueDate: r.issueDate ? new Date(r.issueDate) : new Date(),
           dueDate: r.dueDate ? new Date(r.dueDate) : null,
           currencyCode: r.currencyCode ?? "EUR",
+          // Preserve the printed grand total so read-back doesn't drift
+          // from integer-cent VAT reconstruction (e.g. €36.97 at 7% IGIC).
+          totalCents:
+            typeof r.totalAmount === "number" && Number.isFinite(r.totalAmount)
+              ? Math.round(r.totalAmount * 100)
+              : null,
           ...(r.status ? { status: r.status } : {}),
           irpfRate: r.irpfRate ?? 0,
           notes: r.notes,

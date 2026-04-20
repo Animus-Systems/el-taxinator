@@ -24,6 +24,7 @@ import type { AnalyzeAttachment } from "@/ai/attachments"
 
 type Fields = {
   number?: string
+  kind?: string
   issueDate?: string
   dueDate?: string
   contactId?: string
@@ -182,10 +183,13 @@ export async function invoicesRoutes(app: FastifyInstance) {
         ? Math.round(totalMinorUnits / (1 + vatRate / 100))
         : totalMinorUnits
 
+      const kind = fields.kind === "simplified" ? "simplified" : "invoice"
+
       const invoice = await createInvoice(user.id, {
         contactId: fields.contactId ? fields.contactId : null,
         pdfFileId,
         number: fields.number,
+        kind,
         status: fields.status ?? "sent",
         issueDate,
         dueDate,

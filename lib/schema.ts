@@ -15,7 +15,7 @@ import path from "path"
 // 2. Add a migration entry here with the next version number
 // 3. The migration SQL should be idempotent (use IF NOT EXISTS, etc.)
 
-export const SCHEMA_VERSION = 31 // bump this when adding a migration
+export const SCHEMA_VERSION = 34 // bump this when adding a migration
 
 export const migrations: { version: number; description: string; sql: string }[] = [
   {
@@ -861,6 +861,62 @@ export const migrations: { version: number; description: string; sql: string }[]
           ALTER TABLE invoices ADD COLUMN total_cents integer NULL;
         END IF;
       END $$;
+    `,
+  },
+  {
+    version: 32,
+    description:
+      "Invoices: add `kind` column distinguishing factura ordinaria ('invoice') from factura simplificada ('simplified'). Spain requires separate correlative numbering series per kind (RD 1619/2012). Backfill: R-prefixed numbers → simplified, everything else → invoice.",
+    sql: `
+      DO $$
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'invoices') THEN
+          RETURN;
+        END IF;
+        IF NOT EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_name = 'invoices' AND column_name = 'kind'
+        ) THEN
+          ALTER TABLE invoices ADD COLUMN kind text NOT NULL DEFAULT 'invoice';
+          UPDATE invoices SET kind = 'simplified' WHERE number ~* '^R';
+        END IF;
+        IF NOT EXISTS (
+          SELECT 1 FROM information_schema.table_constraints
+          WHERE table_name = 'invoices' AND constraint_name = 'invoices_kind_check'
+        ) THEN
+          ALTER TABLE invoices
+            ADD CONSTRAINT invoices_kind_check
+            CHECK (kind IN ('invoice', 'simplified'));
+        END IF;
+        CREATE INDEX IF NOT EXISTS invoices_user_kind_idx ON invoices (user_id, kind);
+      END $$;
+    `,
+  },
+  {
+    version: 33,
+    description:
+      "Purchases: add total_cents column — authoritative final amount as printed on the supplier invoice, mirroring invoices.total_cents (v31). Lets imports preserve totals like €36.97 that can't be exactly represented as integer-cent pre-tax × (1 + vat_rate). When null, display reconstructs from items × (1 + vatRate). Existing rows keep the NULL default so current display math is unchanged.",
+    sql: `
+      DO $$
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'purchases') THEN
+          RETURN;
+        END IF;
+        IF NOT EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_name = 'purchases' AND column_name = 'total_cents'
+        ) THEN
+          ALTER TABLE purchases ADD COLUMN total_cents integer NULL;
+        END IF;
+      END $$;
+    `,
+  },
+  {
+    version: 34,
+    description:
+      "Rename transaction type 'conversion' → 'exchange' (matches FX-trading user-facing term). Also cleans up any lingering 'conversion' strings in wizard candidates; the taxonomy on display is now income, expense, refund, transfer, exchange, other.",
+    sql: `
+      UPDATE transactions SET type = 'exchange' WHERE type = 'conversion';
     `,
   },
 ]

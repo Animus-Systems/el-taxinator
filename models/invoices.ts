@@ -40,6 +40,9 @@ export type InvoiceData = {
   quoteId?: string | null
   pdfFileId?: string | null
   number: string
+  /** 'invoice' for factura ordinaria (default), 'simplified' for factura
+   * simplificada. Determines which numbering series this row belongs to. */
+  kind?: "invoice" | "simplified"
   status?: string
   issueDate: Date
   dueDate?: Date | null
@@ -392,6 +395,27 @@ export async function updateInvoiceContact(
  * doesn't touch line-item amounts — those stay as-is, now interpreted in the
  * new currency.
  */
+/**
+ * Overwrite the printed-total override (`total_cents`) on an invoice. Used to
+ * fix drift between the reconstructed-from-items total and the supplier's
+ * actual printed total. Pass null to clear the override and fall back to
+ * line-item reconstruction.
+ */
+export async function updateInvoiceTotalCents(
+  id: string,
+  userId: string,
+  totalCents: number | null,
+): Promise<Invoice | null> {
+  return queryOne<Invoice>(
+    buildUpdate(
+      "invoices",
+      { totalCents },
+      "id = $1 AND user_id = $2",
+      [id, userId],
+    ),
+  )
+}
+
 export async function updateInvoiceCurrency(
   id: string,
   userId: string,

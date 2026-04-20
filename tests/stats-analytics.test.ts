@@ -96,7 +96,7 @@ describe("getDashboardAnalytics", () => {
       expect(sql).toContain("personal_ignored")
       expect(sql).toContain("personal_taxable")
       expect(sql).toContain("'transfer'")
-      expect(sql).toContain("'conversion'")
+      expect(sql).toContain("'exchange'")
     }
   })
 })

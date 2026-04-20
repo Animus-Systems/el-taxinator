@@ -92,9 +92,13 @@ export type DashboardAnalytics = {
  *   on Modelo 100 but surface via the FIFO ledger + category queries, not via
  *   the business income/expense aggregates. `internal` covers own-account
  *   transfers and in-account FX conversions — mechanical book moves.
- * - `type IN ('transfer', 'conversion')` — first-class non-business movement
- *   rows (cross-account transfers and in-account currency conversions). They
- *   are explicitly non-business and must never appear in any aggregate.
+ * - `type IN ('transfer', 'exchange')` — first-class non-business movement
+ *   rows (cross-account transfers and in-account FX exchanges). They are
+ *   explicitly non-business and must never appear in any aggregate.
+ *
+ *   `refund` is NOT excluded: a refund reverses an earlier sale or purchase —
+ *   it's still a business event (negative revenue or negative expense)
+ *   depending on direction.
  */
 function buildStatsWhere(
   userId: string,
@@ -102,7 +106,7 @@ function buildStatsWhere(
   extraConditions?: string[],
 ): { clause: string; values: unknown[] } {
   const excludePersonal = "(status IS NULL OR status NOT IN ('personal_ignored', 'personal_taxable', 'internal'))"
-  const excludeNonBusinessTypes = "(type IS NULL OR type NOT IN ('transfer', 'conversion'))"
+  const excludeNonBusinessTypes = "(type IS NULL OR type NOT IN ('transfer', 'exchange'))"
   const defaults = [excludePersonal, excludeNonBusinessTypes]
   const merged = extraConditions ? [...defaults, ...extraConditions] : defaults
   const { clause, values } = buildTransactionWhere(userId, filters, {
@@ -313,7 +317,7 @@ export const getDashboardAnalytics = cache(
       alias: "t",
       extraConditions: [
         "(t.status IS NULL OR t.status NOT IN ('personal_ignored', 'personal_taxable', 'internal'))",
-        "(t.type IS NULL OR t.type NOT IN ('transfer', 'conversion'))",
+        "(t.type IS NULL OR t.type NOT IN ('transfer', 'exchange'))",
       ],
     })
     const currencyIdx = nextIdx

@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react"
 import { useTranslation } from "react-i18next"
-import { Badge, type BadgeProps } from "@/components/ui/badge"
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -42,14 +42,17 @@ import { toast } from "sonner"
 import { trpc } from "~/trpc"
 import { useConfirm } from "@/components/ui/confirm-dialog"
 import { DateRangePresetFilter, currentYearRange } from "@/components/ui/date-range-preset-filter"
+import { SortableHeader, type SortState } from "@/components/ui/sortable-header"
 
-const STATUS_COLORS: Record<string, NonNullable<BadgeProps["variant"]>> = {
-  draft: "secondary",
-  received: "default",
-  paid: "outline",
-  overdue: "destructive",
-  cancelled: "secondary",
-  refunded: "default",
+/** Distinct per-status badge colors. Matches the row-accent palette so the
+ *  side bar and badge read as one visual signal. */
+const STATUS_BADGE: Record<string, string> = {
+  draft: "bg-zinc-100 text-zinc-700 hover:bg-zinc-100 dark:bg-zinc-800 dark:text-zinc-300",
+  received: "bg-sky-100 text-sky-800 hover:bg-sky-100 dark:bg-sky-950 dark:text-sky-300",
+  paid: "bg-emerald-100 text-emerald-800 hover:bg-emerald-100 dark:bg-emerald-950 dark:text-emerald-300",
+  overdue: "bg-rose-100 text-rose-800 hover:bg-rose-100 dark:bg-rose-950 dark:text-rose-300",
+  cancelled: "bg-stone-100 text-stone-500 line-through hover:bg-stone-100 dark:bg-stone-900 dark:text-stone-400",
+  refunded: "bg-amber-100 text-amber-800 hover:bg-amber-100 dark:bg-amber-950 dark:text-amber-300",
 }
 
 /** Delicate left-border accent per purchase status. */
@@ -70,9 +73,24 @@ const STATUS_OPTIONS = [
   "cancelled",
   "refunded",
 ] as const
+const STATUS_KEYS = STATUS_OPTIONS as readonly string[]
 
 type StatusFilter = (typeof STATUS_OPTIONS)[number] | "all"
 type FileFilter = "all" | "missing" | "attached"
+type SortKey = "issueDate" | "dueDate" | "number" | "supplier" | "total" | "status"
+
+function cmpStr(a: string | null | undefined, b: string | null | undefined): number {
+  const av = (a ?? "").toLowerCase()
+  const bv = (b ?? "").toLowerCase()
+  return av < bv ? -1 : av > bv ? 1 : 0
+}
+
+function cmpDate(a: Date | null | undefined, b: Date | null | undefined): number {
+  if (!a && !b) return 0
+  if (!a) return 1
+  if (!b) return -1
+  return a.getTime() - b.getTime()
+}
 
 export function PurchaseList({
   purchases,
@@ -92,12 +110,13 @@ export function PurchaseList({
   // paperwork on first load. Cleared via the date filter's × button.
   const [dateFrom, setDateFrom] = useState(() => currentYearRange().from)
   const [dateTo, setDateTo] = useState(() => currentYearRange().to)
+  const [sort, setSort] = useState<SortState<SortKey>>({ key: "issueDate", direction: "desc" })
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
     const from = dateFrom ? new Date(dateFrom) : null
     const to = dateTo ? new Date(`${dateTo}T23:59:59`) : null
-    return purchases.filter((p) => {
+    const list = purchases.filter((p) => {
       if (statusFilter !== "all" && p.status !== statusFilter) return false
       if (fileFilter === "missing" && p.pdfFileId) return false
       if (fileFilter === "attached" && !p.pdfFileId) return false
@@ -116,7 +135,31 @@ export function PurchaseList({
       }
       return true
     })
-  }, [purchases, search, statusFilter, fileFilter, dateFrom, dateTo])
+
+    if (!sort) return list
+    const sign = sort.direction === "asc" ? 1 : -1
+    return [...list].sort((a, b) => {
+      switch (sort.key) {
+        case "issueDate":
+          return sign * cmpDate(a.issueDate, b.issueDate)
+        case "dueDate":
+          return sign * cmpDate(a.dueDate, b.dueDate)
+        case "number":
+          return sign * cmpStr(a.supplierInvoiceNumber, b.supplierInvoiceNumber)
+        case "supplier":
+          return sign * cmpStr(a.contact?.name, b.contact?.name)
+        case "total": {
+          const ta = calcInvoiceTotals(a.items, a.totalCents).total
+          const tb = calcInvoiceTotals(b.items, b.totalCents).total
+          return sign * (ta - tb)
+        }
+        case "status":
+          return sign * cmpStr(a.status, b.status)
+        default:
+          return 0
+      }
+    })
+  }, [purchases, search, statusFilter, fileFilter, dateFrom, dateTo, sort])
 
   const deletePurchase = trpc.purchases.delete.useMutation({
     onSuccess: () => {
@@ -234,18 +277,30 @@ export function PurchaseList({
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>{t("issueDate")}</TableHead>
-              <TableHead>{t("dueDate")}</TableHead>
-              <TableHead>{t("supplierNumber")}</TableHead>
-              <TableHead>{t("supplier")}</TableHead>
-              <TableHead>{t("total")}</TableHead>
-              <TableHead>{t("status")}</TableHead>
+              <SortableHeader<SortKey> columnKey="issueDate" sort={sort} onSort={setSort}>
+                {t("issueDate")}
+              </SortableHeader>
+              <SortableHeader<SortKey> columnKey="dueDate" sort={sort} onSort={setSort}>
+                {t("dueDate")}
+              </SortableHeader>
+              <SortableHeader<SortKey> columnKey="number" sort={sort} onSort={setSort}>
+                {t("supplierNumber")}
+              </SortableHeader>
+              <SortableHeader<SortKey> columnKey="supplier" sort={sort} onSort={setSort}>
+                {t("supplier")}
+              </SortableHeader>
+              <SortableHeader<SortKey> columnKey="total" sort={sort} onSort={setSort}>
+                {t("total")}
+              </SortableHeader>
+              <SortableHeader<SortKey> columnKey="status" sort={sort} onSort={setSort}>
+                {t("status")}
+              </SortableHeader>
               <TableHead className="text-right">{t("actions")}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {filtered.map((purchase) => {
-              const { total } = calcInvoiceTotals(purchase.items)
+              const { total } = calcInvoiceTotals(purchase.items, purchase.totalCents)
               const missingFile = !purchase.pdfFileId
               return (
                 <TableRow
@@ -297,7 +352,12 @@ export function PurchaseList({
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <span className="inline-block">
-                          <Badge variant={STATUS_COLORS[purchase.status] ?? "secondary"}>
+                          <Badge
+                            variant="outline"
+                            className={STATUS_KEYS.includes(purchase.status)
+                              ? `border-transparent ${STATUS_BADGE[purchase.status] ?? ""}`
+                              : ""}
+                          >
                             {t(`statuses.${purchase.status}`, {
                               defaultValue: purchase.status,
                             })}

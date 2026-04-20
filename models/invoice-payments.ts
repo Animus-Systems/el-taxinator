@@ -85,3 +85,28 @@ export async function getInvoicePaymentById(
     sql`SELECT * FROM invoice_payments WHERE id = ${id} AND user_id = ${userId}`,
   )
 }
+
+/** Overwrite amount_cents on one payment row. Returns the updated row, or
+ *  null if no row matched (wrong id or wrong user). */
+export async function updateInvoicePaymentAmount(
+  id: string,
+  userId: string,
+  amountCents: number,
+): Promise<InvoicePayment | null> {
+  return queryOne<InvoicePayment>(
+    sql`UPDATE invoice_payments
+        SET amount_cents = ${amountCents}
+        WHERE id = ${id} AND user_id = ${userId}
+        RETURNING *`,
+  )
+}
+
+/** Same, for every-payment list queries that need the joined invoice info. */
+export async function listAllInvoicePayments(userId: string): Promise<InvoicePayment[]> {
+  return queryMany<InvoicePayment>(
+    sql`SELECT * FROM invoice_payments
+        WHERE user_id = ${userId}
+        ORDER BY created_at DESC
+        LIMIT 1000`,
+  )
+}

@@ -268,11 +268,13 @@ CREATE TABLE invoices (
     notes text,
     currency_code text NOT NULL DEFAULT 'EUR',
     total_cents integer,
+    kind text NOT NULL DEFAULT 'invoice' CHECK (kind IN ('invoice', 'simplified')),
     created_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updated_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL,
     irpf_rate double precision DEFAULT 0.0 NOT NULL
 );
 CREATE INDEX invoices_user_id_idx ON invoices (user_id);
+CREATE INDEX invoices_user_kind_idx ON invoices (user_id, kind);
 CREATE INDEX invoices_pdf_file_id_idx ON invoices (pdf_file_id) WHERE pdf_file_id IS NOT NULL;
 
 CREATE TABLE invoice_items (
@@ -314,6 +316,7 @@ CREATE TABLE purchases (
     due_date timestamp(3),
     paid_at timestamp(3),
     currency_code text NOT NULL DEFAULT 'EUR',
+    total_cents integer,
     irpf_rate double precision DEFAULT 0.0 NOT NULL,
     notes text,
     created_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL,

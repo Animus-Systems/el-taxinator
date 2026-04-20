@@ -83,10 +83,10 @@ export async function queryInvoiceRevenue(pool: Awaited<ReturnType<typeof getPoo
 /** Total deductible expenses in a date range. Excludes rows marked
  * `personal_ignored`, `personal_taxable`, or `internal` — personal activity
  * (own-account transfers, mistaken deposits, crypto disposals, staking
- * rewards, FX conversions) must never leak into business expense totals
+ * rewards, FX exchanges) must never leak into business expense totals
  * regardless of `type`. Personal taxable rows surface on Modelo 100 via the
  * FIFO ledger / category queries. Also defensively excludes
- * `type IN ('transfer', 'conversion')` (first-class non-business movements);
+ * `type IN ('transfer', 'exchange')` (first-class non-business movements);
  * the outer `type = 'expense'` filter already rules them out, but the
  * redundant clause keeps the intent explicit and future-proof. */
 export async function queryExpenses(pool: Awaited<ReturnType<typeof getPool>>, userId: string, start: Date, end: Date, requireConverted = false) {
@@ -98,7 +98,7 @@ export async function queryExpenses(pool: Awaited<ReturnType<typeof getPool>>, u
      WHERE user_id = $1
        AND type = 'expense'
        AND (status IS NULL OR status NOT IN ('personal_ignored', 'personal_taxable', 'internal'))
-       AND (type IS NULL OR type NOT IN ('transfer', 'conversion'))
+       AND (type IS NULL OR type NOT IN ('transfer', 'exchange'))
        AND issued_at >= $2
        AND issued_at <= $3
        ${requireConverted ? "AND converted_total IS NOT NULL" : ""}`,

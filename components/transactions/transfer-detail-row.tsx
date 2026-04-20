@@ -59,7 +59,7 @@ export function TransferDetailRow({ transaction, onBeforeNavigate }: Props) {
   } = transaction
 
   const isTransfer = type === "transfer"
-  const isConversion = type === "conversion"
+  const isConversion = type === "exchange"
   const isRelevant = isTransfer || isConversion
   const isPaired = isRelevant && transferId !== null
 
