@@ -6,7 +6,7 @@ import { formDataToObject, nullableStringValue, parseJsonField, trpcMutate, type
 function quotePayload(formData: FormData): Record<string, unknown> {
   const values = formDataToObject(formData)
   return {
-    clientId: nullableStringValue(values["clientId"]),
+    contactId: nullableStringValue(values["contactId"]),
     number: values["number"],
     status: nullableStringValue(values["status"]),
     issueDate: values["issueDate"],

@@ -148,7 +148,7 @@ export function AppSidebar({
                 />
                 <NavItem href="/invoices" icon={Receipt} label={t("invoices")} />
                 <NavItem href="/quotes" icon={ScrollText} label={t("quotes")} />
-                <NavItem href="/clients" icon={Users} label={t("clients")} />
+                <NavItem href="/contacts" icon={Users} label={t("contacts")} />
                 <NavItem href="/products" icon={Package} label={t("products")} />
                 {entityType !== "sl" && (
                   <NavItem href="/personal" icon={UserRound} label={t("personal")} />

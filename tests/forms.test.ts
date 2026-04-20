@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { transactionFormSchema } from "@/forms/transactions"
-import { clientFormSchema } from "@/forms/clients"
+import { contactFormSchema } from "@/forms/contacts"
 import { productFormSchema } from "@/forms/products"
 import { invoiceFormSchema, quoteFormSchema } from "@/forms/invoices"
 import { settingsFormSchema, currencyFormSchema, projectFormSchema, categoryFormSchema, fieldFormSchema } from "@/forms/settings"
@@ -88,9 +88,9 @@ describe("transactionFormSchema", () => {
   })
 })
 
-describe("clientFormSchema", () => {
+describe("contactFormSchema", () => {
   it("parses valid client data", () => {
-    const result = clientFormSchema.parse({
+    const result = contactFormSchema.parse({
       name: "Acme Corp",
       email: "contact@acme.com",
       phone: "+34 600 000 000",
@@ -102,29 +102,29 @@ describe("clientFormSchema", () => {
 
   it("requires name (min 1 char)", () => {
     expect(() =>
-      clientFormSchema.parse({ name: "" })
+      contactFormSchema.parse({ name: "" })
     ).toThrow()
   })
 
   it("rejects name over 256 chars", () => {
     expect(() =>
-      clientFormSchema.parse({ name: "a".repeat(257) })
+      contactFormSchema.parse({ name: "a".repeat(257) })
     ).toThrow()
   })
 
   it("allows empty string for email", () => {
-    const result = clientFormSchema.parse({ name: "Test", email: "" })
+    const result = contactFormSchema.parse({ name: "Test", email: "" })
     expect(result.email).toBe("")
   })
 
   it("validates email format", () => {
     expect(() =>
-      clientFormSchema.parse({ name: "Test", email: "not-an-email" })
+      contactFormSchema.parse({ name: "Test", email: "not-an-email" })
     ).toThrow()
   })
 
   it("allows optional fields to be omitted", () => {
-    const result = clientFormSchema.parse({ name: "Minimal Client" })
+    const result = contactFormSchema.parse({ name: "Minimal Client" })
     expect(result.phone).toBeUndefined()
     expect(result.address).toBeUndefined()
     expect(result.taxId).toBeUndefined()
@@ -233,9 +233,9 @@ describe("invoiceFormSchema", () => {
     expect(result.irpfRate).toBe(0)
   })
 
-  it("allows nullable clientId", () => {
-    const result = invoiceFormSchema.parse({ ...validInvoice, clientId: null })
-    expect(result.clientId).toBeNull()
+  it("allows nullable contactId", () => {
+    const result = invoiceFormSchema.parse({ ...validInvoice, contactId: null })
+    expect(result.contactId).toBeNull()
   })
 
   it("allows nullable dueDate", () => {

@@ -43,7 +43,7 @@ const invoiceItemInputSchema = z.object({
 })
 
 const invoiceInputSchema = z.object({
-  clientId: z.string().nullish(),
+  contactId: z.string().nullish(),
   quoteId: z.string().nullish(),
   pdfFileId: z.string().nullish(),
   number: z.string(),

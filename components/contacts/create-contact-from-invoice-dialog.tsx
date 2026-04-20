@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 
-type SuggestedClient = {
+type SuggestedContact = {
   clientName: string | null
   clientTaxId: string | null
   clientEmail: string | null
@@ -24,13 +24,13 @@ type SuggestedClient = {
 type Props = {
   open: boolean
   onOpenChange: (open: boolean) => void
-  suggested: SuggestedClient | null
-  onCreated: (clientId: string) => void
+  suggested: SuggestedContact | null
+  onCreated: (contactId: string) => void
 }
 
 const emptyFields = { name: "", taxId: "", email: "", phone: "", address: "" }
 
-export function CreateClientFromInvoiceDialog({ open, onOpenChange, suggested, onCreated }: Props) {
+export function CreateContactFromInvoiceDialog({ open, onOpenChange, suggested, onCreated }: Props) {
   const { t } = useTranslation("invoices")
   const utils = trpc.useUtils()
   const [fields, setFields] = useState(emptyFields)
@@ -46,11 +46,11 @@ export function CreateClientFromInvoiceDialog({ open, onOpenChange, suggested, o
     })
   }, [open, suggested])
 
-  const createClient = trpc.clients.create.useMutation({
-    onSuccess: (newClient) => {
-      if (!newClient) return
-      utils.clients.list.invalidate()
-      onCreated(newClient.id)
+  const createContact = trpc.contacts.create.useMutation({
+    onSuccess: (newContact) => {
+      if (!newContact) return
+      utils.contacts.list.invalidate()
+      onCreated(newContact.id)
       onOpenChange(false)
     },
   })
@@ -58,7 +58,7 @@ export function CreateClientFromInvoiceDialog({ open, onOpenChange, suggested, o
   const onSubmit = () => {
     const name = fields.name.trim()
     if (!name) return
-    createClient.mutate({
+    createContact.mutate({
       name,
       ...(fields.email.trim() ? { email: fields.email.trim() } : {}),
       ...(fields.phone.trim() ? { phone: fields.phone.trim() } : {}),
@@ -75,49 +75,49 @@ export function CreateClientFromInvoiceDialog({ open, onOpenChange, suggested, o
         </DialogHeader>
         <div className="grid grid-cols-2 gap-3">
           <div className="col-span-2">
-            <Label htmlFor="new-client-name">{t("uploadExternal.clientNameLabel")}</Label>
+            <Label htmlFor="new-contact-name">{t("uploadExternal.clientNameLabel")}</Label>
             <Input
-              id="new-client-name"
+              id="new-contact-name"
               value={fields.name}
               onChange={(e) => setFields((prev) => ({ ...prev, name: e.target.value }))}
             />
           </div>
           <div>
-            <Label htmlFor="new-client-taxid">{t("uploadExternal.clientTaxIdLabel")}</Label>
+            <Label htmlFor="new-contact-taxid">{t("uploadExternal.clientTaxIdLabel")}</Label>
             <Input
-              id="new-client-taxid"
+              id="new-contact-taxid"
               value={fields.taxId}
               onChange={(e) => setFields((prev) => ({ ...prev, taxId: e.target.value }))}
             />
           </div>
           <div>
-            <Label htmlFor="new-client-email">{t("uploadExternal.clientEmailLabel")}</Label>
+            <Label htmlFor="new-contact-email">{t("uploadExternal.clientEmailLabel")}</Label>
             <Input
-              id="new-client-email"
+              id="new-contact-email"
               type="email"
               value={fields.email}
               onChange={(e) => setFields((prev) => ({ ...prev, email: e.target.value }))}
             />
           </div>
           <div className="col-span-2">
-            <Label htmlFor="new-client-phone">{t("uploadExternal.clientPhoneLabel")}</Label>
+            <Label htmlFor="new-contact-phone">{t("uploadExternal.clientPhoneLabel")}</Label>
             <Input
-              id="new-client-phone"
+              id="new-contact-phone"
               value={fields.phone}
               onChange={(e) => setFields((prev) => ({ ...prev, phone: e.target.value }))}
             />
           </div>
           <div className="col-span-2">
-            <Label htmlFor="new-client-address">{t("uploadExternal.clientAddressLabel")}</Label>
+            <Label htmlFor="new-contact-address">{t("uploadExternal.clientAddressLabel")}</Label>
             <Textarea
-              id="new-client-address"
+              id="new-contact-address"
               rows={2}
               value={fields.address}
               onChange={(e) => setFields((prev) => ({ ...prev, address: e.target.value }))}
             />
           </div>
-          {createClient.error && (
-            <p className="col-span-2 text-xs text-destructive">{createClient.error.message}</p>
+          {createContact.error && (
+            <p className="col-span-2 text-xs text-destructive">{createContact.error.message}</p>
           )}
         </div>
         <DialogFooter>
@@ -125,16 +125,16 @@ export function CreateClientFromInvoiceDialog({ open, onOpenChange, suggested, o
             type="button"
             variant="ghost"
             onClick={() => onOpenChange(false)}
-            disabled={createClient.isPending}
+            disabled={createContact.isPending}
           >
             {t("uploadExternal.cancel")}
           </Button>
           <Button
             type="button"
             onClick={onSubmit}
-            disabled={createClient.isPending || !fields.name.trim()}
+            disabled={createContact.isPending || !fields.name.trim()}
           >
-            {createClient.isPending
+            {createContact.isPending
               ? t("uploadExternal.creatingClient")
               : t("uploadExternal.createClientSubmit")}
           </Button>

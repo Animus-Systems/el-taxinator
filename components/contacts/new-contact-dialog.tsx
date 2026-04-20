@@ -1,5 +1,4 @@
-
-import { createClientAction } from "@/actions/clients"
+import { createContactAction } from "@/actions/contacts"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -9,21 +8,23 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { useState, useTransition } from "react"
+import { useTranslations } from "next-intl"
 import { toast } from "sonner"
-import { ClientForm } from "./client-form"
+import { ContactForm } from "./contact-form"
 
-export function NewClientDialog({ children }: { children: React.ReactNode }) {
+export function NewContactDialog({ children }: { children: React.ReactNode }) {
+  const t = useTranslations("contacts")
   const [open, setOpen] = useState(false)
   const [isPending, startTransition] = useTransition()
 
   function handleSubmit(formData: FormData) {
     startTransition(async () => {
-      const result = await createClientAction(null, formData)
+      const result = await createContactAction(null, formData)
       if (result.success) {
-        toast.success("Client created")
+        toast.success(t("createContact"))
         setOpen(false)
       } else {
-        toast.error(result.error || "Failed to create client")
+        toast.error(result.error || t("failedToUpdate"))
       }
     })
   }
@@ -33,11 +34,11 @@ export function NewClientDialog({ children }: { children: React.ReactNode }) {
       <DialogTrigger asChild>
         <Button>{children}</Button>
       </DialogTrigger>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-2xl">
         <DialogHeader>
-          <DialogTitle>New Client</DialogTitle>
+          <DialogTitle>{t("createContact")}</DialogTitle>
         </DialogHeader>
-        <ClientForm onSubmit={handleSubmit} isPending={isPending} />
+        <ContactForm onSubmit={handleSubmit} isPending={isPending} />
       </DialogContent>
     </Dialog>
   )

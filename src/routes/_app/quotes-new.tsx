@@ -10,7 +10,7 @@ import { QuoteForm } from "@/components/invoicing/quote-form"
 export function NewQuotePage() {
   const { t } = useTranslation("quotes")
 
-  const { data: clients, isLoading: clientsLoading } = trpc.clients.list.useQuery({})
+  const { data: clients, isLoading: clientsLoading } = trpc.contacts.list.useQuery({})
   const { data: products, isLoading: productsLoading } = trpc.products.list.useQuery({})
 
   if (clientsLoading || productsLoading) {

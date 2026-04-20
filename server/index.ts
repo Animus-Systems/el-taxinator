@@ -33,6 +33,7 @@ import { exportRoutes } from "./routes/export"
 import { invoicesRoutes } from "./routes/invoices"
 import { receiptsRoutes } from "./routes/receipts"
 import { personalRoutes } from "./routes/personal"
+import { contactsRoutes } from "./routes/contacts"
 import { backupRoutes } from "./routes/backups"
 import { registerFastifyTrpcRoutes } from "./trpc-fastify"
 
@@ -202,6 +203,7 @@ async function main() {
   await app.register(invoicesRoutes)
   await app.register(receiptsRoutes)
   await app.register(personalRoutes)
+  await app.register(contactsRoutes)
   await app.register(backupRoutes)
 
   // 8. Health check endpoint

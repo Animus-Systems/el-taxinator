@@ -3,7 +3,7 @@ import { transactionsRouter } from "./routers/transactions"
 import { invoicesRouter } from "./routers/invoices"
 import { invoicePaymentsRouter } from "./routers/invoice-payments"
 import { quotesRouter } from "./routers/quotes"
-import { clientsRouter } from "./routers/clients"
+import { contactsRouter } from "./routers/contacts"
 import { productsRouter } from "./routers/products"
 import { categoriesRouter } from "./routers/categories"
 import { projectsRouter } from "./routers/projects"
@@ -35,7 +35,7 @@ export const appRouter = router({
   invoices: invoicesRouter,
   invoicePayments: invoicePaymentsRouter,
   quotes: quotesRouter,
-  clients: clientsRouter,
+  contacts: contactsRouter,
   products: productsRouter,
   categories: categoriesRouter,
   projects: projectsRouter,

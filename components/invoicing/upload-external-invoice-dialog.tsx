@@ -15,7 +15,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Loader2, Sparkles, Upload } from "lucide-react"
-import { CreateClientFromInvoiceDialog } from "./create-client-from-invoice-dialog"
+import { CreateContactFromInvoiceDialog } from "@/components/contacts/create-contact-from-invoice-dialog"
 
 type Suggested = {
   number: string | null
@@ -65,7 +65,7 @@ function matchClient(clients: Client[], suggested: Suggested): string | null {
 export function UploadExternalInvoiceDialog({ triggerLabel }: { triggerLabel: string }) {
   const { t } = useTranslation("invoices")
   const utils = trpc.useUtils()
-  const { data: clientsData = [] } = trpc.clients.list.useQuery({})
+  const { data: clientsData = [] } = trpc.contacts.list.useQuery({})
   const clients: Client[] = clientsData.map((c) => ({
     id: c.id,
     name: c.name,
@@ -303,7 +303,7 @@ export function UploadExternalInvoiceDialog({ triggerLabel }: { triggerLabel: st
                   <Label htmlFor="ext-client">{t("uploadExternal.client")}</Label>
                   <select
                     id="ext-client"
-                    name="clientId"
+                    name="contactId"
                     value={selectedClientId}
                     onChange={(e) => setSelectedClientId(e.target.value)}
                     className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
@@ -338,7 +338,7 @@ export function UploadExternalInvoiceDialog({ triggerLabel }: { triggerLabel: st
         </DialogContent>
       </Dialog>
 
-      <CreateClientFromInvoiceDialog
+      <CreateContactFromInvoiceDialog
         open={createClientOpen}
         onOpenChange={setCreateClientOpen}
         suggested={suggested}

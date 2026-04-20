@@ -6,7 +6,7 @@ import { formDataToObject, nullableStringValue, numberValue, parseJsonField, trp
 function invoicePayload(formData: FormData): Record<string, unknown> {
   const values = formDataToObject(formData)
   return {
-    clientId: nullableStringValue(values["clientId"]),
+    contactId: nullableStringValue(values["contactId"]),
     quoteId: nullableStringValue(values["quoteId"]),
     number: values["number"],
     status: nullableStringValue(values["status"]),

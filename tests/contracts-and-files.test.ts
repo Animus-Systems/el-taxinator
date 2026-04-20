@@ -17,7 +17,7 @@ describe("safePathJoin", () => {
 describe("invoiceFormSchema", () => {
   it("parses string dates into Date instances", () => {
     const parsed = invoiceFormSchema.parse({
-      clientId: null,
+      contactId: null,
       number: "INV-2026-001",
       status: "draft",
       issueDate: "2026-03-30",
@@ -43,7 +43,7 @@ describe("invoiceFormSchema", () => {
   it("requires at least one line item", () => {
     expect(() =>
       invoiceFormSchema.parse({
-        clientId: null,
+        contactId: null,
         number: "INV-2026-002",
         status: "draft",
         issueDate: "2026-03-30",

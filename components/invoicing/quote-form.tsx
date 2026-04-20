@@ -54,8 +54,8 @@ export function QuoteForm({ clients, products }: Props) {
           <Input id="number" name="number" defaultValue={generateQuoteNumber()} required />
         </div>
         <div className="space-y-1">
-          <Label htmlFor="clientId">{t("client")}</Label>
-          <Select name="clientId">
+          <Label htmlFor="contactId">{t("client")}</Label>
+          <Select name="contactId">
             <SelectTrigger>
               <SelectValue placeholder={t("selectClient")} />
             </SelectTrigger>

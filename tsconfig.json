@@ -80,8 +80,8 @@
       "@/actions/bundle": [
         "./src/compat/actions/bundle.ts"
       ],
-      "@/actions/clients": [
-        "./src/compat/actions/clients.ts"
+      "@/actions/contacts": [
+        "./src/compat/actions/contacts.ts"
       ],
       "@/actions/config": [
         "./src/compat/actions/config.ts"

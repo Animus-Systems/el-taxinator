@@ -36,7 +36,7 @@ export type InvoiceItemData = {
 }
 
 export type InvoiceData = {
-  clientId?: string | null
+  contactId?: string | null
   quoteId?: string | null
   pdfFileId?: string | null
   number: string
@@ -58,7 +58,7 @@ export type QuoteItemData = {
 }
 
 export type QuoteData = {
-  clientId?: string | null
+  contactId?: string | null
   number: string
   status?: string
   issueDate: Date
@@ -113,7 +113,7 @@ export type InvoiceListFilters = {
 }
 
 /** Fetch a list of documents with their items and clients. */
-async function fetchDocumentsWithItems<TDoc extends { id: string; clientId: string | null }, TItem>(
+async function fetchDocumentsWithItems<TDoc extends { id: string; contactId: string | null }, TItem>(
   userId: string,
   config: DocumentConfig,
   itemParentKey: keyof TItem & string,
@@ -161,13 +161,13 @@ async function fetchDocumentsWithItems<TDoc extends { id: string; clientId: stri
   const allItems = itemsResult.rows.map((r) => mapRow<TItem>(r))
 
   // Fetch clients
-  const clientIds = [...new Set(docs.map((d) => d.clientId).filter(Boolean))]
+  const contactIds = [...new Set(docs.map((d) => d.contactId).filter(Boolean))]
   let clientMap = new Map<string, Client>()
-  if (clientIds.length > 0) {
-    const cPlaceholders = clientIds.map((_, i) => `$${i + 1}`).join(", ")
+  if (contactIds.length > 0) {
+    const cPlaceholders = contactIds.map((_, i) => `$${i + 1}`).join(", ")
     const clientsResult = await pool.query(
-      `SELECT * FROM clients WHERE id IN (${cPlaceholders})`,
-      clientIds,
+      `SELECT * FROM contacts WHERE id IN (${cPlaceholders})`,
+      contactIds,
     )
     clientMap = new Map(clientsResult.rows.map((r) => {
       const c = mapRow<Client>(r)
@@ -186,7 +186,7 @@ async function fetchDocumentsWithItems<TDoc extends { id: string; clientId: stri
 
   return docs.map((doc) => ({
     ...doc,
-    client: doc.clientId ? clientMap.get(doc.clientId) ?? null : null,
+    client: doc.contactId ? clientMap.get(doc.contactId) ?? null : null,
     items: itemsByDoc.get(doc.id) ?? [],
   }))
 }
@@ -223,9 +223,9 @@ async function fetchItemsWithProducts<TItem>(
 }
 
 /** Fetch a Client by id, or null. */
-async function fetchClient(clientId: string | null | undefined): Promise<Client | null> {
-  if (!clientId) return null
-  return queryOne<Client>(sql`SELECT * FROM clients WHERE id = ${clientId}`)
+async function fetchClient(contactId: string | null | undefined): Promise<Client | null> {
+  if (!contactId) return null
+  return queryOne<Client>(sql`SELECT * FROM contacts WHERE id = ${contactId}`)
 }
 
 /** Take the first row of a pg result and map it, throwing if absent. */
@@ -257,10 +257,10 @@ async function insertItems<TItem>(
 /** Fetch client within a transaction. */
 async function fetchClientInTx(
   txClient: PoolClient,
-  clientId: string | null | undefined,
+  contactId: string | null | undefined,
 ): Promise<Client | null> {
-  if (!clientId) return null
-  const result = await txClient.query(`SELECT * FROM clients WHERE id = $1`, [clientId])
+  if (!contactId) return null
+  const result = await txClient.query(`SELECT * FROM contacts WHERE id = $1`, [contactId])
   const row = result.rows[0]
   return row ? mapRow<Client>(row) : null
 }
@@ -290,7 +290,7 @@ export const getInvoiceById = cache(
 
     const [items, client, quote] = await Promise.all([
       fetchItemsWithProducts<InvoiceItem>(id, INVOICE_CONFIG),
-      fetchClient(invoice.clientId),
+      fetchClient(invoice.contactId),
       invoice.quoteId
         ? queryOne<Quote>(sql`SELECT * FROM quotes WHERE id = ${invoice.quoteId}`)
         : null,
@@ -312,7 +312,7 @@ export async function createInvoice(
     const invoice = firstRowOrThrow<Invoice>(invResult.rows, "insert invoices")
 
     const insertedItems = await insertItems<InvoiceItem>(txClient, items, INVOICE_CONFIG, invoice.id)
-    const client = await fetchClientInTx(txClient, invoice.clientId)
+    const client = await fetchClientInTx(txClient, invoice.contactId)
 
     return { ...invoice, client, items: insertedItems }
   })
@@ -390,7 +390,7 @@ export const getQuoteById = cache(
 
     const [items, client, invoice] = await Promise.all([
       fetchItemsWithProducts<QuoteItem>(id, QUOTE_CONFIG),
-      fetchClient(quote.clientId),
+      fetchClient(quote.contactId),
       queryOne<Invoice>(sql`SELECT * FROM invoices WHERE quote_id = ${id}`),
     ])
 
@@ -410,7 +410,7 @@ export async function createQuote(
     const quote = firstRowOrThrow<Quote>(qResult.rows, "insert quotes")
 
     const insertedItems = await insertItems<QuoteItem>(txClient, items, QUOTE_CONFIG, quote.id)
-    const client = await fetchClientInTx(txClient, quote.clientId)
+    const client = await fetchClientInTx(txClient, quote.contactId)
 
     return { ...quote, client, items: insertedItems }
   })
@@ -469,7 +469,7 @@ export async function convertQuoteToInvoice(
 
     const invoiceInsert = buildInsert("invoices", {
       userId,
-      clientId: quote.clientId,
+      contactId: quote.contactId,
       quoteId: quote.id,
       number: invoiceNumber,
       status: "draft",
@@ -490,7 +490,7 @@ export async function convertQuoteToInvoice(
 
     await txClient.query(`UPDATE quotes SET status = 'converted' WHERE id = $1`, [quoteId])
 
-    const client = await fetchClientInTx(txClient, invoice.clientId)
+    const client = await fetchClientInTx(txClient, invoice.contactId)
 
     return { ...invoice, client, items: insertedItems }
   })

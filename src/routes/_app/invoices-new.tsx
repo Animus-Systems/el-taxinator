@@ -10,7 +10,7 @@ import { InvoiceForm } from "@/components/invoicing/invoice-form"
 export function NewInvoicePage() {
   const { t } = useTranslation("invoices")
 
-  const { data: clients, isLoading: clientsLoading } = trpc.clients.list.useQuery({})
+  const { data: clients, isLoading: clientsLoading } = trpc.contacts.list.useQuery({})
   const { data: products, isLoading: productsLoading } = trpc.products.list.useQuery({})
 
   if (clientsLoading || productsLoading) {

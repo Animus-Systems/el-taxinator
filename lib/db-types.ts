@@ -730,18 +730,33 @@ export const progressSchema = z.object({
   createdAt: z.date(),
 })
 
-export const clientSchema = z.object({
+/**
+ * A party the user transacts with — customer (invoices/quotes) OR supplier
+ * (purchases) OR both. Historically this was modelled as "clients"; renamed
+ * to "contacts" so the same row can back both sides of the ledger.
+ */
+export const contactSchema = z.object({
   id: z.string(),
   userId: z.string(),
   name: z.string(),
   email: z.string().nullable(),
   phone: z.string().nullable(),
+  mobile: z.string().nullable(),
   address: z.string().nullable(),
+  city: z.string().nullable(),
+  postalCode: z.string().nullable(),
+  province: z.string().nullable(),
+  country: z.string().nullable(),
   taxId: z.string().nullable(),
+  bankDetails: z.string().nullable(),
   notes: z.string().nullable(),
+  role: z.enum(["client", "supplier", "both"]),
+  kind: z.enum(["company", "person"]),
   createdAt: z.date(),
   updatedAt: z.date(),
 })
+/** @deprecated Use `contactSchema`. Kept as alias during the client→contact rename. */
+export const clientSchema = contactSchema
 
 export const productSchema = z.object({
   id: z.string(),
@@ -759,7 +774,7 @@ export const productSchema = z.object({
 export const quoteSchema = z.object({
   id: z.string(),
   userId: z.string(),
-  clientId: z.string().nullable(),
+  contactId: z.string().nullable(),
   number: z.string(),
   status: z.string(),
   issueDate: z.date(),
@@ -783,7 +798,7 @@ export const quoteItemSchema = z.object({
 export const invoiceSchema = z.object({
   id: z.string(),
   userId: z.string(),
-  clientId: z.string().nullable(),
+  contactId: z.string().nullable(),
   quoteId: z.string().nullable(),
   pdfFileId: z.string().nullable(),
   number: z.string(),
@@ -885,7 +900,9 @@ export type Transaction = z.infer<typeof transactionSchema>
 export type Currency = z.infer<typeof currencySchema>
 export type AppData = z.infer<typeof appDataSchema>
 export type Progress = z.infer<typeof progressSchema>
-export type Client = z.infer<typeof clientSchema>
+export type Contact = z.infer<typeof contactSchema>
+/** @deprecated Use `Contact`. Kept as alias during the client→contact rename. */
+export type Client = Contact
 export type Product = z.infer<typeof productSchema>
 export type Quote = z.infer<typeof quoteSchema>
 export type QuoteItem = z.infer<typeof quoteItemSchema>
@@ -954,7 +971,7 @@ export interface InvoiceItemInput {
 
 export interface InvoiceCreateInput {
   userId: string
-  clientId?: string | null
+  contactId?: string | null
   quoteId?: string | null
   number: string
   status?: string
@@ -976,7 +993,7 @@ export interface QuoteItemInput {
 
 export interface QuoteCreateInput {
   userId: string
-  clientId?: string | null
+  contactId?: string | null
   number: string
   status?: string
   issueDate: Date

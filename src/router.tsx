@@ -17,7 +17,7 @@ import { InvoicesPage } from "./routes/_app/invoices"
 import { NewInvoicePage } from "./routes/_app/invoices-new"
 import { InvoiceDetailPage } from "./routes/_app/invoice-detail"
 import { ReconcilePage } from "./routes/_app/reconcile"
-import { ClientsPage } from "./routes/_app/clients"
+import { ContactsPage } from "./routes/_app/contacts"
 import { ProductsPage } from "./routes/_app/products"
 import { QuotesPage } from "./routes/_app/quotes"
 import { NewQuotePage } from "./routes/_app/quotes-new"
@@ -163,10 +163,10 @@ const reconcileRoute = createRoute({
   component: ReconcilePage,
 })
 
-const clientsRoute = createRoute({
+const contactsRoute = createRoute({
   getParentRoute: () => appLayoutRoute,
-  path: "/clients",
-  component: ClientsPage,
+  path: "/contacts",
+  component: ContactsPage,
 })
 
 const productsRoute = createRoute({
@@ -429,7 +429,7 @@ const appChildren = appLayoutRoute.addChildren([
   invoicesNewRoute,
   invoiceDetailRoute,
   reconcileRoute,
-  clientsRoute,
+  contactsRoute,
   productsRoute,
   quotesRoute,
   quotesNewRoute,

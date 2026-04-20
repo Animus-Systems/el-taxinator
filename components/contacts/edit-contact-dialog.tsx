@@ -1,31 +1,30 @@
-
-import { updateClientAction } from "@/actions/clients"
+import { updateContactAction } from "@/actions/contacts"
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import type { Client } from "@/lib/db-types"
+import type { Contact } from "@/lib/db-types"
 import { useTransition } from "react"
 import { useTranslations } from "next-intl"
 import { toast } from "sonner"
-import { ClientForm } from "./client-form"
+import { ContactForm } from "./contact-form"
 
 type Props = {
-  client: Client
+  contact: Contact
   onClose: () => void
 }
 
-export function EditClientDialog({ client, onClose }: Props) {
-  const t = useTranslations("clients")
+export function EditContactDialog({ contact, onClose }: Props) {
+  const t = useTranslations("contacts")
   const [isPending, startTransition] = useTransition()
 
   function handleSubmit(formData: FormData) {
     startTransition(async () => {
-      const result = await updateClientAction(null, formData)
+      const result = await updateContactAction(null, formData)
       if (result.success) {
-        toast.success(t("clientUpdated"))
+        toast.success(t("contactUpdated"))
         onClose()
       } else {
         toast.error(result.error || t("failedToUpdate"))
@@ -35,11 +34,11 @@ export function EditClientDialog({ client, onClose }: Props) {
 
   return (
     <Dialog open onOpenChange={(open) => { if (!open) onClose() }}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-2xl">
         <DialogHeader>
-          <DialogTitle>{t("editClient")}</DialogTitle>
+          <DialogTitle>{t("editContact")}</DialogTitle>
         </DialogHeader>
-        <ClientForm client={client} onSubmit={handleSubmit} isPending={isPending} />
+        <ContactForm contact={contact} onSubmit={handleSubmit} isPending={isPending} />
       </DialogContent>
     </Dialog>
   )

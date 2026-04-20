@@ -192,19 +192,28 @@ CREATE INDEX crypto_disposal_matches_user_year_idx
 
 -- ─── Invoicing ───────────────────────────────────────────────────────────────
 
-CREATE TABLE clients (
+CREATE TABLE contacts (
     id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
     user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     name text NOT NULL,
     email text,
     phone text,
+    mobile text,
     address text,
+    city text,
+    postal_code text,
+    province text,
+    country text,
     tax_id text,
+    bank_details text,
     notes text,
+    role text NOT NULL DEFAULT 'client' CHECK (role IN ('client', 'supplier', 'both')),
+    kind text NOT NULL DEFAULT 'company' CHECK (kind IN ('company', 'person')),
     created_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updated_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
-CREATE INDEX clients_user_id_idx ON clients (user_id);
+CREATE INDEX contacts_user_id_idx ON contacts (user_id);
+CREATE INDEX contacts_user_role_idx ON contacts (user_id, role);
 
 CREATE TABLE products (
     id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
@@ -223,7 +232,7 @@ CREATE INDEX products_user_id_idx ON products (user_id);
 CREATE TABLE quotes (
     id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
     user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    client_id uuid REFERENCES clients(id) ON DELETE SET NULL,
+    contact_id uuid REFERENCES contacts(id) ON DELETE SET NULL,
     number text NOT NULL,
     status text DEFAULT 'draft' NOT NULL,
     issue_date timestamp(3) NOT NULL,
@@ -248,7 +257,7 @@ CREATE TABLE quote_items (
 CREATE TABLE invoices (
     id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
     user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    client_id uuid REFERENCES clients(id) ON DELETE SET NULL,
+    contact_id uuid REFERENCES contacts(id) ON DELETE SET NULL,
     quote_id uuid UNIQUE REFERENCES quotes(id) ON DELETE SET NULL,
     pdf_file_id uuid REFERENCES files(id) ON DELETE SET NULL,
     number text NOT NULL,

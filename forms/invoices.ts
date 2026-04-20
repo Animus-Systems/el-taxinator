@@ -10,7 +10,7 @@ const invoiceItemSchema = z.object({
 })
 
 export const invoiceFormSchema = z.object({
-  clientId: z.string().uuid().optional().nullable(),
+  contactId: z.string().uuid().optional().nullable(),
   number: z.string().min(1).max(64),
   status: z.enum(["draft", "sent", "paid", "overdue", "cancelled"]).default("draft"),
   issueDate: z.union([
@@ -27,7 +27,7 @@ export const invoiceFormSchema = z.object({
 })
 
 export const quoteFormSchema = z.object({
-  clientId: z.string().uuid().optional().nullable(),
+  contactId: z.string().uuid().optional().nullable(),
   number: z.string().min(1).max(64),
   status: z.enum(["draft", "sent", "accepted", "rejected", "converted"]).default("draft"),
   issueDate: z.union([

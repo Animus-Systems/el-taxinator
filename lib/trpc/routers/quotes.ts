@@ -38,7 +38,7 @@ const quoteItemInputSchema = z.object({
 })
 
 const quoteInputSchema = z.object({
-  clientId: z.string().nullish(),
+  contactId: z.string().nullish(),
   number: z.string(),
   status: z.string().optional(),
   issueDate: z.union([z.date(), z.string().transform((v) => new Date(v))]),

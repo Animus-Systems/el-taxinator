@@ -15,7 +15,7 @@ import path from "path"
 // 2. Add a migration entry here with the next version number
 // 3. The migration SQL should be idempotent (use IF NOT EXISTS, etc.)
 
-export const SCHEMA_VERSION = 26 // bump this when adding a migration
+export const SCHEMA_VERSION = 28 // bump this when adding a migration
 
 export const migrations: { version: number; description: string; sql: string }[] = [
   {
@@ -699,6 +699,69 @@ export const migrations: { version: number; description: string; sql: string }[]
         ADD COLUMN IF NOT EXISTS filing_source text;
     `,
   },
+  {
+    version: 27,
+    description: "Rename clients→contacts so invoices AND the new purchases surface can share one contact entity",
+    sql: `
+      DO $$
+      BEGIN
+        IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'clients')
+           AND NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'contacts') THEN
+          ALTER TABLE clients RENAME TO contacts;
+        END IF;
+        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'invoices' AND column_name = 'client_id') THEN
+          ALTER TABLE invoices RENAME COLUMN client_id TO contact_id;
+        END IF;
+        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'quotes' AND column_name = 'client_id') THEN
+          ALTER TABLE quotes RENAME COLUMN client_id TO contact_id;
+        END IF;
+      END $$;
+      ALTER INDEX IF EXISTS clients_user_id_idx RENAME TO contacts_user_id_idx;
+    `,
+  },
+  {
+    version: 28,
+    description: "Expand contacts with address detail (mobile, city, postal_code, province, country), bank_details, role (client/supplier/both) and kind (company/person)",
+    sql: `
+      DO $$
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'contacts') THEN
+          RETURN;  -- nothing to do on minimal test schemas that don't have contacts
+        END IF;
+        ALTER TABLE contacts
+          ADD COLUMN IF NOT EXISTS mobile text,
+          ADD COLUMN IF NOT EXISTS city text,
+          ADD COLUMN IF NOT EXISTS postal_code text,
+          ADD COLUMN IF NOT EXISTS province text,
+          ADD COLUMN IF NOT EXISTS country text,
+          ADD COLUMN IF NOT EXISTS bank_details text,
+          ADD COLUMN IF NOT EXISTS role text NOT NULL DEFAULT 'client',
+          ADD COLUMN IF NOT EXISTS kind text NOT NULL DEFAULT 'company';
+        IF NOT EXISTS (
+          SELECT 1 FROM information_schema.table_constraints
+          WHERE table_name = 'contacts' AND constraint_name = 'contacts_role_check'
+        ) THEN
+          ALTER TABLE contacts
+            ADD CONSTRAINT contacts_role_check
+            CHECK (role IN ('client', 'supplier', 'both'));
+        END IF;
+        IF NOT EXISTS (
+          SELECT 1 FROM information_schema.table_constraints
+          WHERE table_name = 'contacts' AND constraint_name = 'contacts_kind_check'
+        ) THEN
+          ALTER TABLE contacts
+            ADD CONSTRAINT contacts_kind_check
+            CHECK (kind IN ('company', 'person'));
+        END IF;
+      END $$;
+      DO $$
+      BEGIN
+        IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'contacts') THEN
+          CREATE INDEX IF NOT EXISTS contacts_user_role_idx ON contacts (user_id, role);
+        END IF;
+      END $$;
+    `,
+  },
 ]
 
 // ---------------------------------------------------------------------------
@@ -751,7 +814,7 @@ export async function applySchema(pool: Pool): Promise<void> {
 async function ensureDefaults(pool: Pool): Promise<void> {
   const tables = [
     "users", "settings", "categories", "projects", "fields", "currencies",
-    "files", "transactions", "app_data", "progress", "clients", "products",
+    "files", "transactions", "app_data", "progress", "contacts", "products",
     "quotes", "quote_items", "invoices", "invoice_items",
     "accountant_invites", "accountant_access_logs", "accountant_comments",
     "sessions", "account", "verification", "past_searches",

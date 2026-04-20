@@ -308,18 +308,28 @@ export function mapProjectFromRow(row: Record<string, unknown>, prefix = "proj_"
   }
 }
 
-/** Maps prefixed columns (e.g. cl_id, cl_name) to a Client, or null. */
+/** Maps prefixed columns (e.g. cl_id, cl_name) to a Client (Contact), or null. */
 export function mapClientFromRow(row: Record<string, unknown>, prefix = "cl_"): Client | null {
   if (!row[`${prefix}id`]) return null
+  const role = (row[`${prefix}role`] as string) ?? "client"
+  const kind = (row[`${prefix}kind`] as string) ?? "company"
   return {
     id: row[`${prefix}id`] as string,
     userId: row[`${prefix}user_id`] as string,
     name: row[`${prefix}name`] as string,
     email: (row[`${prefix}email`] as string) ?? null,
     phone: (row[`${prefix}phone`] as string) ?? null,
+    mobile: (row[`${prefix}mobile`] as string) ?? null,
     address: (row[`${prefix}address`] as string) ?? null,
+    city: (row[`${prefix}city`] as string) ?? null,
+    postalCode: (row[`${prefix}postal_code`] as string) ?? null,
+    province: (row[`${prefix}province`] as string) ?? null,
+    country: (row[`${prefix}country`] as string) ?? null,
     taxId: (row[`${prefix}tax_id`] as string) ?? null,
+    bankDetails: (row[`${prefix}bank_details`] as string) ?? null,
     notes: (row[`${prefix}notes`] as string) ?? null,
+    role: role === "supplier" || role === "both" ? role : "client",
+    kind: kind === "person" ? "person" : "company",
     createdAt: row[`${prefix}created_at`] ? new Date(row[`${prefix}created_at`] as string) : new Date(),
     updatedAt: row[`${prefix}updated_at`] ? new Date(row[`${prefix}updated_at`] as string) : new Date(),
   }

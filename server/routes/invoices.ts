@@ -26,7 +26,7 @@ type Fields = {
   number?: string
   issueDate?: string
   dueDate?: string
-  clientId?: string
+  contactId?: string
   fileId?: string
   status?: string
   notes?: string
@@ -174,7 +174,7 @@ export async function invoicesRoutes(app: FastifyInstance) {
         : totalCents
 
       const invoice = await createInvoice(user.id, {
-        clientId: fields.clientId ? fields.clientId : null,
+        contactId: fields.contactId ? fields.contactId : null,
         pdfFileId,
         number: fields.number,
         status: fields.status ?? "sent",
