@@ -41,6 +41,7 @@ import {
 import { toast } from "sonner"
 import { trpc } from "~/trpc"
 import { useConfirm } from "@/components/ui/confirm-dialog"
+import { DateRangePresetFilter, currentYearRange } from "@/components/ui/date-range-preset-filter"
 
 const STATUS_COLORS: Record<string, NonNullable<BadgeProps["variant"]>> = {
   draft: "secondary",
@@ -49,6 +50,16 @@ const STATUS_COLORS: Record<string, NonNullable<BadgeProps["variant"]>> = {
   overdue: "destructive",
   cancelled: "secondary",
   refunded: "default",
+}
+
+/** Delicate left-border accent per purchase status. */
+const STATUS_ROW_ACCENT: Record<string, string> = {
+  draft: "border-l-2 border-l-zinc-400/40",
+  received: "border-l-2 border-l-sky-500/60",
+  paid: "border-l-2 border-l-emerald-500/70",
+  overdue: "border-l-2 border-l-rose-500/70",
+  cancelled: "border-l-2 border-l-zinc-400/30 opacity-60",
+  refunded: "border-l-2 border-l-amber-500/60",
 }
 
 const STATUS_OPTIONS = [
@@ -77,8 +88,10 @@ export function PurchaseList({
   const [search, setSearch] = useState("")
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all")
   const [fileFilter, setFileFilter] = useState<FileFilter>("all")
-  const [dateFrom, setDateFrom] = useState("")
-  const [dateTo, setDateTo] = useState("")
+  // Default to the current tax year so users don't see last year's closed
+  // paperwork on first load. Cleared via the date filter's × button.
+  const [dateFrom, setDateFrom] = useState(() => currentYearRange().from)
+  const [dateTo, setDateTo] = useState(() => currentYearRange().to)
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -189,21 +202,12 @@ export function PurchaseList({
             <SelectItem value="attached">{t("filters.withFiles")}</SelectItem>
           </SelectContent>
         </Select>
-        <Input
-          type="date"
-          value={dateFrom}
-          onChange={(e) => setDateFrom(e.target.value)}
-          className="w-[150px]"
-          aria-label={t("filters.dateFrom")}
-          title={t("filters.dateFrom")}
-        />
-        <Input
-          type="date"
-          value={dateTo}
-          onChange={(e) => setDateTo(e.target.value)}
-          className="w-[150px]"
-          aria-label={t("filters.dateTo")}
-          title={t("filters.dateTo")}
+        <DateRangePresetFilter
+          value={{ from: dateFrom, to: dateTo }}
+          onChange={(r) => {
+            setDateFrom(r.from)
+            setDateTo(r.to)
+          }}
         />
         {filtersActive && (
           <Button
@@ -244,7 +248,10 @@ export function PurchaseList({
               const { total } = calcInvoiceTotals(purchase.items)
               const missingFile = !purchase.pdfFileId
               return (
-                <TableRow key={purchase.id}>
+                <TableRow
+                  key={purchase.id}
+                  className={STATUS_ROW_ACCENT[purchase.status] ?? ""}
+                >
                   <TableCell>{format(purchase.issueDate, "yyyy-MM-dd")}</TableCell>
                   <TableCell>
                     {purchase.dueDate ? format(purchase.dueDate, "yyyy-MM-dd") : "—"}

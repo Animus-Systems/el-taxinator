@@ -11,10 +11,16 @@ import { useRef, useState, useTransition } from "react"
 import { useTranslations } from "next-intl"
 import { toast } from "sonner"
 import { LineItem, LineItemsEditor } from "./line-items-editor"
+import { ContactPicker } from "@/components/contacts/contact-picker"
 
 type Props = {
   clients: Client[]
   products: Product[]
+  /** When provided the form skips `router.push` and hands the new invoice id
+   * to the caller — lets a dialog close itself and navigate deliberately. */
+  onCreated?: (invoiceId: string) => void
+  /** When provided the Cancel button calls this instead of `router.back()`. */
+  onCancel?: () => void
 }
 
 function generateInvoiceNumber() {
@@ -22,12 +28,13 @@ function generateInvoiceNumber() {
   return `F-${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}-001`
 }
 
-export function InvoiceForm({ clients, products }: Props) {
+export function InvoiceForm({ clients, products, onCreated, onCancel }: Props) {
   const router = useRouter()
   const t = useTranslations("invoices")
   const tSettings = useTranslations("settings")
   const [isPending, startTransition] = useTransition()
   const [items, setItems] = useState<LineItem[]>([])
+  const [contactId, setContactId] = useState<string>("")
   const formRef = useRef<HTMLFormElement>(null)
   const today = format(new Date(), "yyyy-MM-dd")
 
@@ -40,7 +47,11 @@ export function InvoiceForm({ clients, products }: Props) {
       const result = await createInvoiceAction(null, formData)
       if (result.success && result.data) {
         toast.success(t("invoiceCreated"))
-        router.push(`/invoices/${result.data.id}`)
+        if (onCreated) {
+          onCreated(result.data.id)
+        } else {
+          router.push(`/invoices/${result.data.id}`)
+        }
       } else {
         toast.error(result.error || t("failedToCreate"))
       }
@@ -55,23 +66,31 @@ export function InvoiceForm({ clients, products }: Props) {
           <Input id="number" name="number" defaultValue={generateInvoiceNumber()} required />
         </div>
         <div className="space-y-1">
-          <Label htmlFor="contactId">{t("client")}</Label>
-          <Select name="contactId">
-            <SelectTrigger>
-              <SelectValue placeholder={t("selectClient")} />
-            </SelectTrigger>
-            <SelectContent>
-              {clients.map((c) => (
-                <SelectItem key={c.id} value={c.id}>
-                  {c.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <Label>{t("client")}</Label>
+          <input type="hidden" name="contactId" value={contactId} />
+          <ContactPicker
+            contacts={clients}
+            value={contactId}
+            onChange={setContactId}
+            role="client"
+            labels={{
+              trigger: t("selectClient"),
+              searchPlaceholder: t("clientSearchPlaceholder"),
+              createNew: t("clientCreateNew"),
+              createNewNamed: t("clientCreateNewNamed", {
+                name: "{name}",
+                defaultValue: 'Create "{name}"',
+              }),
+              noneYet: t("noClientsYet", { defaultValue: "No clients yet." }),
+              createdToast: t("clientCreated", { defaultValue: "Client created" }),
+              createDialogTitle: t("clientCreateNew"),
+              createError: t("failedToCreate"),
+            }}
+          />
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-4 gap-4">
         <div className="space-y-1">
           <Label htmlFor="issueDate">{t("issueDate")}</Label>
           <Input id="issueDate" name="issueDate" type="date" defaultValue={today} required />
@@ -79,6 +98,18 @@ export function InvoiceForm({ clients, products }: Props) {
         <div className="space-y-1">
           <Label htmlFor="dueDate">{t("dueDate")}</Label>
           <Input id="dueDate" name="dueDate" type="date" />
+        </div>
+        <div className="space-y-1">
+          <Label htmlFor="currencyCode">{t("currency", { defaultValue: "Currency" })}</Label>
+          <Input
+            id="currencyCode"
+            name="currencyCode"
+            defaultValue="EUR"
+            maxLength={3}
+            className="uppercase"
+            placeholder="EUR"
+            required
+          />
         </div>
         <div className="space-y-1">
           <Label htmlFor="status">{t("statusLabel")}</Label>
@@ -125,7 +156,7 @@ export function InvoiceForm({ clients, products }: Props) {
       </div>
 
       <div className="flex gap-2 justify-end">
-        <Button type="button" variant="outline" onClick={() => router.back()}>
+        <Button type="button" variant="outline" onClick={() => (onCancel ?? (() => router.back()))()}>
           {t("cancel")}
         </Button>
         <Button type="submit" disabled={isPending}>

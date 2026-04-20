@@ -110,7 +110,7 @@ const defaultLabels: Labels = {
 
 export function InvoicePDF({ invoice, businessName, businessAddress, businessTaxId, labels: labelOverrides }: Props) {
   const l = { ...defaultLabels, ...labelOverrides }
-  const { subtotal, vatTotal, total } = calcInvoiceTotals(invoice.items)
+  const { subtotal, vatTotal, total } = calcInvoiceTotals(invoice.items, invoice.totalCents)
 
   return (
     <Document title={`Invoice ${invoice.number}`}>

@@ -15,7 +15,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { LineItem, LineItemsEditor } from "@/components/invoicing/line-items-editor"
-import { SupplierPicker } from "./supplier-picker"
+import { ContactPicker } from "@/components/contacts/contact-picker"
 import { Loader2, Paperclip, Upload, X } from "lucide-react"
 import type { Contact, Currency, Product } from "@/lib/db-types"
 
@@ -140,10 +140,24 @@ export function PurchaseForm({
         </div>
         <div className="space-y-1">
           <Label>{t("supplier")}</Label>
-          <SupplierPicker
+          <ContactPicker
             contacts={contacts}
             value={contactId}
             onChange={setContactId}
+            role="supplier"
+            labels={{
+              trigger: t("selectSupplier"),
+              searchPlaceholder: t("supplierSearchPlaceholder"),
+              createNew: t("supplierCreateNew"),
+              createNewNamed: t("supplierCreateNewNamed", {
+                name: "{name}",
+                defaultValue: 'Create "{name}"',
+              }),
+              noneYet: t("noSuppliersYet", { defaultValue: "No suppliers yet." }),
+              createdToast: t("supplierCreated", { defaultValue: "Supplier created" }),
+              createDialogTitle: t("supplierCreateNew"),
+              createError: t("attach.uploadFailed"),
+            }}
           />
         </div>
       </div>

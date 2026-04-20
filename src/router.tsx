@@ -14,7 +14,6 @@ import { UnsortedPage } from "./routes/_app/unsorted"
 import { FilesPage } from "./routes/_app/files"
 import { ReportsPage } from "./routes/_app/reports"
 import { InvoicesPage } from "./routes/_app/invoices"
-import { NewInvoicePage } from "./routes/_app/invoices-new"
 import { InvoiceDetailPage } from "./routes/_app/invoice-detail"
 import { PurchasesPage } from "./routes/_app/purchases"
 import { PurchaseDetailPage } from "./routes/_app/purchase-detail"
@@ -145,12 +144,6 @@ const invoicesRoute = createRoute({
   getParentRoute: () => appLayoutRoute,
   path: "/invoices",
   component: InvoicesPage,
-})
-
-const invoicesNewRoute = createRoute({
-  getParentRoute: () => appLayoutRoute,
-  path: "/invoices/new",
-  component: NewInvoicePage,
 })
 
 const invoiceDetailRoute = createRoute({
@@ -440,7 +433,6 @@ const appChildren = appLayoutRoute.addChildren([
   filesRoute,
   reportsRoute,
   invoicesRoute,
-  invoicesNewRoute,
   invoiceDetailRoute,
   purchasesRoute,
   purchaseDetailRoute,

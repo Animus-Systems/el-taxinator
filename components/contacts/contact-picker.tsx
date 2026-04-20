@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState, useTransition } from "react"
-import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 import { trpc } from "~/trpc"
 import { createContactAction } from "@/actions/contacts"
@@ -14,16 +13,32 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { ContactForm } from "@/components/contacts/contact-form"
 import type { Contact } from "@/lib/db-types"
+import type { ContactRole } from "@/models/contacts"
 import { ChevronsUpDown, Check, Plus } from "lucide-react"
+
+export type ContactPickerLabels = {
+  trigger: string
+  searchPlaceholder: string
+  createNew: string
+  /** Accepts a `{name}` placeholder substituted with the current search text. */
+  createNewNamed: string
+  noneYet: string
+  createdToast: string
+  createDialogTitle: string
+  createError: string
+}
 
 type Props = {
   contacts: Contact[]
   value: string
   onChange: (contactId: string) => void
+  /** Used both for filtering the visible pool and as the default role on the
+   *  inline create form. Accepts "client" | "supplier" | "both". */
+  role: ContactRole
+  labels: ContactPickerLabels
 }
 
-export function SupplierPicker({ contacts, value, onChange }: Props) {
-  const { t } = useTranslation("purchases")
+export function ContactPicker({ contacts, value, onChange, role, labels }: Props) {
   const utils = trpc.useUtils()
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState("")
@@ -34,8 +49,12 @@ export function SupplierPicker({ contacts, value, onChange }: Props) {
     if (open) setTimeout(() => inputRef.current?.focus(), 10)
   }, [open])
 
-  const suppliers = contacts.filter((c) => c.role === "supplier" || c.role === "both")
-  const pool = suppliers.length > 0 ? suppliers : contacts
+  const matching =
+    role === "both"
+      ? contacts
+      : contacts.filter((c) => c.role === role || c.role === "both")
+  const pool = matching.length > 0 ? matching : contacts
+
   const q = query.trim().toLowerCase()
   const filtered = q
     ? pool.filter(
@@ -57,12 +76,16 @@ export function SupplierPicker({ contacts, value, onChange }: Props) {
         onChange(result.data.id)
         setCreateOpen(false)
         setOpen(false)
-        toast.success(t("supplierCreated", { defaultValue: "Supplier created" }))
+        toast.success(labels.createdToast)
       } else {
-        toast.error(result.error || t("attach.uploadFailed"))
+        toast.error(result.error || labels.createError)
       }
     })
   }
+
+  const createLabel = query.trim()
+    ? labels.createNewNamed.replace("{name}", query.trim())
+    : labels.createNew
 
   return (
     <>
@@ -76,7 +99,7 @@ export function SupplierPicker({ contacts, value, onChange }: Props) {
             className="w-full justify-between font-normal"
           >
             <span className={selected ? "" : "text-muted-foreground"}>
-              {selected?.name ?? t("selectSupplier")}
+              {selected?.name ?? labels.trigger}
             </span>
             <ChevronsUpDown className="h-4 w-4 opacity-50" />
           </Button>
@@ -87,7 +110,7 @@ export function SupplierPicker({ contacts, value, onChange }: Props) {
               ref={inputRef}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder={t("supplierSearchPlaceholder")}
+              placeholder={labels.searchPlaceholder}
               className="h-8"
             />
           </div>
@@ -98,16 +121,11 @@ export function SupplierPicker({ contacts, value, onChange }: Props) {
               onClick={() => setCreateOpen(true)}
             >
               <Plus className="h-4 w-4" />
-              {query.trim()
-                ? t("supplierCreateNewNamed", {
-                    name: query.trim(),
-                    defaultValue: `Create "${query.trim()}"`,
-                  })
-                : t("supplierCreateNew")}
+              {createLabel}
             </button>
             {filtered.length === 0 && !q && (
               <p className="px-3 py-4 text-center text-xs text-muted-foreground">
-                {t("noSuppliersYet", { defaultValue: "No suppliers yet." })}
+                {labels.noneYet}
               </p>
             )}
             {filtered.map((c) => (
@@ -141,10 +159,10 @@ export function SupplierPicker({ contacts, value, onChange }: Props) {
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>{t("supplierCreateNew")}</DialogTitle>
+            <DialogTitle>{labels.createDialogTitle}</DialogTitle>
           </DialogHeader>
           <ContactForm
-            defaultRole="supplier"
+            defaultRole={role === "both" ? "client" : role}
             onSubmit={handleCreateSubmit}
             isPending={isPending}
           />

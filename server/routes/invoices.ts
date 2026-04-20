@@ -32,6 +32,7 @@ type Fields = {
   notes?: string
   total?: string
   vatRate?: string
+  currencyCode?: string
 }
 
 type ParsedMultipart = {
@@ -127,13 +128,17 @@ export async function invoicesRoutes(app: FastifyInstance) {
         return reply.code(400).send({ success: false, error: "Issue date is required" })
       }
 
-      const totalEuros = Number.parseFloat(fields.total ?? "0")
-      if (!Number.isFinite(totalEuros) || totalEuros < 0) {
+      const totalAmount = Number.parseFloat(fields.total ?? "0")
+      if (!Number.isFinite(totalAmount) || totalAmount < 0) {
         return reply.code(400).send({ success: false, error: "Invalid total" })
       }
       const vatRate = Number.parseFloat(fields.vatRate ?? "0")
       if (!Number.isFinite(vatRate) || vatRate < 0 || vatRate > 100) {
         return reply.code(400).send({ success: false, error: "Invalid VAT rate" })
+      }
+      const currencyCode = (fields.currencyCode ?? "EUR").toUpperCase()
+      if (!/^[A-Z]{3}$/.test(currencyCode)) {
+        return reply.code(400).send({ success: false, error: "Invalid currency code" })
       }
 
       const issueDate = new Date(fields.issueDate)
@@ -168,10 +173,14 @@ export async function invoicesRoutes(app: FastifyInstance) {
         displayName = persistedFile.filename
       }
 
-      const totalCents = Math.round(totalEuros * 100)
-      const preTaxCents = vatRate > 0
-        ? Math.round(totalCents / (1 + vatRate / 100))
-        : totalCents
+      const totalMinorUnits = Math.round(totalAmount * 100)
+      // Approximate pre-tax for the single line item. The authoritative total
+      // is stored separately on the invoice row (`totalCents`) — display
+      // layer trusts that value and derives the VAT as total − subtotal, so
+      // this rounding only affects the visual subtotal split.
+      const preTaxMinorUnits = vatRate > 0
+        ? Math.round(totalMinorUnits / (1 + vatRate / 100))
+        : totalMinorUnits
 
       const invoice = await createInvoice(user.id, {
         contactId: fields.contactId ? fields.contactId : null,
@@ -180,12 +189,14 @@ export async function invoicesRoutes(app: FastifyInstance) {
         status: fields.status ?? "sent",
         issueDate,
         dueDate,
+        currencyCode,
+        totalCents: totalMinorUnits,
         notes: fields.notes ?? null,
         items: [
           {
             description: displayName,
             quantity: 1,
-            unitPrice: preTaxCents,
+            unitPrice: preTaxMinorUnits,
             vatRate,
             position: 0,
           },

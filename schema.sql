@@ -266,6 +266,8 @@ CREATE TABLE invoices (
     due_date timestamp(3),
     paid_at timestamp(3),
     notes text,
+    currency_code text NOT NULL DEFAULT 'EUR',
+    total_cents integer,
     created_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updated_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL,
     irpf_rate double precision DEFAULT 0.0 NOT NULL

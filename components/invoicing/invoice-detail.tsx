@@ -2,6 +2,7 @@
 import { deleteInvoiceAction, updateInvoiceStatusAction } from "@/actions/invoices"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { calcInvoiceTotals } from "@/lib/invoice-calculations"
@@ -10,7 +11,7 @@ import type { InvoiceWithRelations } from "@/models/invoices"
 import { format } from "date-fns"
 import { ArrowLeft, Download, Eye, Link2, Paperclip, RefreshCw, Trash2, X } from "lucide-react"
 import { Link, useRouter } from "@/lib/navigation"
-import { useRef, useState, useTransition } from "react"
+import { useEffect, useRef, useState, useTransition } from "react"
 import { useTranslations } from "next-intl"
 import { toast } from "sonner"
 import { trpc } from "~/trpc"
@@ -18,6 +19,7 @@ import { LinkInvoiceToTransactionDialog } from "./link-invoice-to-transaction-di
 import { PdfPreviewDialog } from "./pdf-preview-dialog"
 import { AttachPdfDialog } from "./attach-pdf-dialog"
 import { useConfirm } from "@/components/ui/confirm-dialog"
+import { ContactPicker } from "@/components/contacts/contact-picker"
 
 const STATUSES = ["draft", "sent", "paid", "overdue", "cancelled"] as const
 
@@ -30,9 +32,44 @@ export function InvoiceDetail({
   const t = useTranslations("invoices")
   const confirm = useConfirm()
   const [isPending, startTransition] = useTransition()
-  const { subtotal, vatTotal, total } = calcInvoiceTotals(invoice.items)
+  const { subtotal, vatTotal, total } = calcInvoiceTotals(invoice.items, invoice.totalCents)
 
   const utils = trpc.useUtils()
+  const invoiceCurrency = (invoice.currencyCode || "EUR").toUpperCase()
+  const { data: contacts = [] } = trpc.contacts.list.useQuery({})
+  const updateContact = trpc.invoices.updateContact.useMutation({
+    onSuccess: () => {
+      utils.invoices.getById.invalidate({ id: invoice.id })
+      utils.invoices.list.invalidate()
+      toast.success(t("contactUpdated", { defaultValue: "Contact updated" }))
+    },
+    onError: (err) => {
+      toast.error(err.message || t("failedToUpdate"))
+    },
+  })
+  const updateCurrency = trpc.invoices.updateCurrency.useMutation({
+    onSuccess: () => {
+      utils.invoices.getById.invalidate({ id: invoice.id })
+      utils.invoices.list.invalidate()
+      toast.success(t("currencyUpdated", { defaultValue: "Currency updated" }))
+    },
+    onError: (err) => {
+      toast.error(err.message || t("failedToUpdate"))
+    },
+  })
+  const [currencyDraft, setCurrencyDraft] = useState(invoiceCurrency)
+  useEffect(() => {
+    setCurrencyDraft(invoiceCurrency)
+  }, [invoiceCurrency])
+
+  function commitCurrency(): void {
+    const next = currencyDraft.trim().toUpperCase()
+    if (next.length !== 3 || next === invoiceCurrency) {
+      setCurrencyDraft(invoiceCurrency)
+      return
+    }
+    updateCurrency.mutate({ id: invoice.id, currencyCode: next })
+  }
   const { data: payments = [] } = trpc.invoicePayments.listForInvoice.useQuery({
     invoiceId: invoice.id,
   })
@@ -165,7 +202,30 @@ export function InvoiceDetail({
           <h2 className="text-2xl font-bold">{invoice.number}</h2>
           <Badge>{invoice.status}</Badge>
         </div>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1">
+            <label className="text-xs text-muted-foreground">
+              {t("currency", { defaultValue: "Currency" })}
+            </label>
+            <Input
+              value={currencyDraft}
+              onChange={(e) =>
+                setCurrencyDraft(e.target.value.toUpperCase().slice(0, 3))
+              }
+              onBlur={commitCurrency}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault()
+                  commitCurrency()
+                }
+              }}
+              disabled={updateCurrency.isPending}
+              maxLength={3}
+              className="h-9 w-20 uppercase"
+              placeholder="EUR"
+              aria-label={t("currency", { defaultValue: "Currency" })}
+            />
+          </div>
           <Select value={invoice.status} onValueChange={handleStatusChange} disabled={isPending}>
             <SelectTrigger className="w-36">
               <SelectValue />
@@ -185,10 +245,32 @@ export function InvoiceDetail({
       </div>
 
       <div className="grid grid-cols-2 gap-6 p-6 border rounded-lg">
-        <div className="space-y-1">
-          <p className="text-sm text-muted-foreground">Client</p>
-          <p className="font-medium">{invoice.client?.name || "—"}</p>
-          {invoice.client?.taxId && <p className="text-sm text-muted-foreground">NIF: {invoice.client.taxId}</p>}
+        <div className="space-y-2">
+          <p className="text-sm text-muted-foreground">{t("client")}</p>
+          <ContactPicker
+            contacts={contacts}
+            value={invoice.contactId ?? ""}
+            onChange={(id) =>
+              updateContact.mutate({ id: invoice.id, contactId: id || null })
+            }
+            role="client"
+            labels={{
+              trigger: t("selectClient"),
+              searchPlaceholder: t("clientSearchPlaceholder"),
+              createNew: t("clientCreateNew"),
+              createNewNamed: t("clientCreateNewNamed", {
+                name: "{name}",
+                defaultValue: 'Create "{name}"',
+              }),
+              noneYet: t("noClientsYet", { defaultValue: "No clients yet." }),
+              createdToast: t("clientCreated", { defaultValue: "Client created" }),
+              createDialogTitle: t("clientCreateNew"),
+              createError: t("failedToCreate"),
+            }}
+          />
+          {invoice.client?.taxId && (
+            <p className="text-sm text-muted-foreground">NIF: {invoice.client.taxId}</p>
+          )}
           {invoice.client?.address && <p className="text-sm">{invoice.client.address}</p>}
           {invoice.client?.email && <p className="text-sm">{invoice.client.email}</p>}
         </div>
@@ -227,31 +309,31 @@ export function InvoiceDetail({
             <TableRow key={item.id}>
               <TableCell>{item.description}</TableCell>
               <TableCell className="text-right">{item.quantity}</TableCell>
-              <TableCell className="text-right">{formatCurrency(item.unitPrice, "EUR")}</TableCell>
+              <TableCell className="text-right">{formatCurrency(item.unitPrice, invoiceCurrency)}</TableCell>
               <TableCell className="text-right">{item.vatRate}%</TableCell>
-              <TableCell className="text-right">{formatCurrency(item.quantity * item.unitPrice, "EUR")}</TableCell>
+              <TableCell className="text-right">{formatCurrency(item.quantity * item.unitPrice, invoiceCurrency)}</TableCell>
             </TableRow>
           ))}
         </TableBody>
         <TableFooter>
           <TableRow>
             <TableCell colSpan={4}>{t("subtotal")}</TableCell>
-            <TableCell className="text-right">{formatCurrency(subtotal, "EUR")}</TableCell>
+            <TableCell className="text-right">{formatCurrency(subtotal, invoiceCurrency)}</TableCell>
           </TableRow>
           <TableRow>
             <TableCell colSpan={4}>{t("iva")}</TableCell>
-            <TableCell className="text-right">{formatCurrency(vatTotal, "EUR")}</TableCell>
+            <TableCell className="text-right">{formatCurrency(vatTotal, invoiceCurrency)}</TableCell>
           </TableRow>
           {invoice.irpfRate > 0 && (
             <TableRow className="text-muted-foreground">
               <TableCell colSpan={4}>{t("irpfRetention", { rate: invoice.irpfRate })}</TableCell>
-              <TableCell className="text-right">−{formatCurrency(Math.round(subtotal * invoice.irpfRate / 100), "EUR")}</TableCell>
+              <TableCell className="text-right">−{formatCurrency(Math.round(subtotal * invoice.irpfRate / 100), invoiceCurrency)}</TableCell>
             </TableRow>
           )}
           <TableRow className="font-bold">
             <TableCell colSpan={4}>{t("totalToPay")}</TableCell>
             <TableCell className="text-right">
-              {formatCurrency(total - (invoice.irpfRate > 0 ? Math.round(subtotal * invoice.irpfRate / 100) : 0), "EUR")}
+              {formatCurrency(total - (invoice.irpfRate > 0 ? Math.round(subtotal * invoice.irpfRate / 100) : 0), invoiceCurrency)}
             </TableCell>
           </TableRow>
         </TableFooter>
@@ -270,9 +352,9 @@ export function InvoiceDetail({
             <p className="text-sm font-medium">{t("payments.heading")}</p>
             <p className="text-xs text-muted-foreground">
               {t("payments.outstanding", {
-                allocated: formatCurrency(allocated, "EUR"),
-                total: formatCurrency(invoiceTotalCents, "EUR"),
-                outstanding: formatCurrency(outstanding, "EUR"),
+                allocated: formatCurrency(allocated, invoiceCurrency),
+                total: formatCurrency(invoiceTotalCents, invoiceCurrency),
+                outstanding: formatCurrency(outstanding, invoiceCurrency),
               })}
             </p>
           </div>
@@ -304,7 +386,7 @@ export function InvoiceDetail({
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="font-medium">{formatCurrency(p.amountCents, "EUR")}</span>
+                  <span className="font-medium">{formatCurrency(p.amountCents, invoiceCurrency)}</span>
                   <Button
                     type="button"
                     variant="ghost"
@@ -328,7 +410,7 @@ export function InvoiceDetail({
         invoiceId={invoice.id}
         invoiceTotalCents={invoiceTotalCents}
         invoiceAllocatedCents={allocated}
-        invoiceCurrency="EUR"
+        invoiceCurrency={invoiceCurrency}
         onLinked={() => {
           utils.invoicePayments.listForInvoice.invalidate({ invoiceId: invoice.id })
           utils.invoices.getById.invalidate({ id: invoice.id })

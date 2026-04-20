@@ -15,7 +15,7 @@ import path from "path"
 // 2. Add a migration entry here with the next version number
 // 3. The migration SQL should be idempotent (use IF NOT EXISTS, etc.)
 
-export const SCHEMA_VERSION = 29 // bump this when adding a migration
+export const SCHEMA_VERSION = 31 // bump this when adding a migration
 
 export const migrations: { version: number; description: string; sql: string }[] = [
   {
@@ -822,6 +822,44 @@ export const migrations: { version: number; description: string; sql: string }[]
         CREATE INDEX IF NOT EXISTS purchase_payments_user_idx ON purchase_payments (user_id);
         CREATE INDEX IF NOT EXISTS purchase_payments_purchase_idx ON purchase_payments (purchase_id);
         CREATE INDEX IF NOT EXISTS purchase_payments_transaction_idx ON purchase_payments (transaction_id);
+      END $$;
+    `,
+  },
+  {
+    version: 30,
+    description:
+      "Invoices: add currency_code column (issuing currency — GBP/EUR/USD/…). Items stay denominated in this currency; conversion to EUR happens at read time in aggregation code, consistent with purchases/quotes.",
+    sql: `
+      DO $$
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'invoices') THEN
+          RETURN;
+        END IF;
+        IF NOT EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_name = 'invoices' AND column_name = 'currency_code'
+        ) THEN
+          ALTER TABLE invoices ADD COLUMN currency_code text NOT NULL DEFAULT 'EUR';
+        END IF;
+      END $$;
+    `,
+  },
+  {
+    version: 31,
+    description:
+      "Invoices: add total_cents column — authoritative final amount as printed on the invoice (including VAT). When set, overrides the sum-from-items reconstruction so imports no longer drift from the printed total due to integer-cent rounding (e.g. €60 at 7% VAT cannot be represented exactly as pre-tax_cents × 1.07).",
+    sql: `
+      DO $$
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'invoices') THEN
+          RETURN;
+        END IF;
+        IF NOT EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_name = 'invoices' AND column_name = 'total_cents'
+        ) THEN
+          ALTER TABLE invoices ADD COLUMN total_cents integer NULL;
+        END IF;
       END $$;
     `,
   },

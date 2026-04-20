@@ -44,6 +44,8 @@ export type InvoiceData = {
   issueDate: Date
   dueDate?: Date | null
   notes?: string | null
+  currencyCode?: string
+  totalCents?: number | null
   irpfRate?: number
   items: InvoiceItemData[]
 }
@@ -365,6 +367,42 @@ export async function updateInvoiceStatus(id: string, userId: string, status: st
 
   return queryOne<Invoice>(
     buildUpdate("invoices", data, "id = $1 AND user_id = $2", [id, userId]),
+  )
+}
+
+/**
+ * Update just the contact on an existing invoice. Used by the detail-page
+ * inline contact picker — the full `updateInvoice` mutation demands the full
+ * line-items array, which is unnecessary plumbing for a contact swap.
+ */
+export async function updateInvoiceContact(
+  id: string,
+  userId: string,
+  contactId: string | null,
+) {
+  return queryOne<Invoice>(
+    buildUpdate("invoices", { contactId }, "id = $1 AND user_id = $2", [id, userId]),
+  )
+}
+
+/**
+ * Update just the issuing currency on an existing invoice. Use when fixing up
+ * a row where the wrong currency was picked at import time (e.g. a GBP invoice
+ * that got saved as EUR because the AI read the settled EUR amount). This
+ * doesn't touch line-item amounts — those stay as-is, now interpreted in the
+ * new currency.
+ */
+export async function updateInvoiceCurrency(
+  id: string,
+  userId: string,
+  currencyCode: string,
+) {
+  const normalized = currencyCode.trim().toUpperCase()
+  if (!/^[A-Z]{3}$/.test(normalized)) {
+    throw new Error(`Invalid currency code: ${currencyCode}`)
+  }
+  return queryOne<Invoice>(
+    buildUpdate("invoices", { currencyCode: normalized }, "id = $1 AND user_id = $2", [id, userId]),
   )
 }
 

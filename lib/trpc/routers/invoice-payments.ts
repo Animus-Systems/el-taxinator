@@ -71,7 +71,7 @@ async function maybeAutoFlipPaid(invoiceId: string, userId: string): Promise<voi
   if (!invoice) return
   if (invoice.status === "paid" || invoice.status === "cancelled") return
 
-  const { total } = calcInvoiceTotals(invoice.items)
+  const { total } = calcInvoiceTotals(invoice.items, invoice.totalCents)
   const allocationMap = await getAllocatedByInvoice(userId)
   const allocated = allocationMap.get(invoiceId) ?? 0
   if (allocated >= total && total > 0) {
@@ -146,7 +146,7 @@ export const invoicePaymentsRouter = router({
       const invoices = allInvoices
         .filter((inv) => inv.status !== "cancelled")
         .map((inv) => {
-          const { total } = calcInvoiceTotals(inv.items)
+          const { total } = calcInvoiceTotals(inv.items, inv.totalCents)
           const allocated = allocByInvoice.get(inv.id) ?? 0
           return {
             id: inv.id,
@@ -195,7 +195,7 @@ export const invoicePaymentsRouter = router({
       const invoices = allInvoices
         .filter((inv) => inv.status !== "cancelled")
         .map((inv) => {
-          const { total } = calcInvoiceTotals(inv.items)
+          const { total } = calcInvoiceTotals(inv.items, inv.totalCents)
           return {
             id: inv.id,
             number: inv.number,

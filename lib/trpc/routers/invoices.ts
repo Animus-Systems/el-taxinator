@@ -7,6 +7,8 @@ import {
   createInvoice,
   updateInvoice,
   updateInvoiceStatus,
+  updateInvoiceContact,
+  updateInvoiceCurrency,
   deleteInvoice,
   convertQuoteToInvoice,
   setInvoicePdfFileId,
@@ -52,6 +54,8 @@ const invoiceInputSchema = z.object({
   issueDate: z.union([z.date(), z.string().transform((v) => new Date(v))]),
   dueDate: z.union([z.date(), z.string().transform((v) => new Date(v))]).nullish(),
   notes: z.string().nullish(),
+  currencyCode: z.string().length(3).optional(),
+  totalCents: z.number().int().nullish(),
   irpfRate: z.number().min(0).max(100).optional(),
   items: z.array(invoiceItemInputSchema).min(1),
 })
@@ -126,6 +130,22 @@ export const invoicesRouter = router({
     .output(invoiceSchema.nullable())
     .mutation(async ({ ctx, input }) => {
       return updateInvoiceStatus(input.id, ctx.user.id, input.status)
+    }),
+
+  updateContact: authedProcedure
+    .meta({ openapi: { method: "PATCH", path: "/api/v1/invoices/{id}/contact" } })
+    .input(z.object({ id: z.string(), contactId: z.string().nullable() }))
+    .output(invoiceSchema.nullable())
+    .mutation(async ({ ctx, input }) => {
+      return updateInvoiceContact(input.id, ctx.user.id, input.contactId)
+    }),
+
+  updateCurrency: authedProcedure
+    .meta({ openapi: { method: "PATCH", path: "/api/v1/invoices/{id}/currency" } })
+    .input(z.object({ id: z.string(), currencyCode: z.string().length(3) }))
+    .output(invoiceSchema.nullable())
+    .mutation(async ({ ctx, input }) => {
+      return updateInvoiceCurrency(input.id, ctx.user.id, input.currencyCode)
     }),
 
   delete: authedProcedure

@@ -808,6 +808,13 @@ export const invoiceSchema = z.object({
   dueDate: z.date().nullable(),
   paidAt: z.date().nullable(),
   notes: z.string().nullable(),
+  currencyCode: z.string().default("EUR"),
+  /** Authoritative final amount (incl. VAT) as printed on the invoice, in
+   * minor units of `currencyCode`. When null, display reconstructs the total
+   * by summing items × (1 + vatRate). When set, this value wins and VAT is
+   * derived as totalCents − subtotal. Lets us preserve an imported total
+   * like €60.00 that no integer pre-tax × 1.07 can represent exactly. */
+  totalCents: z.number().int().nullable(),
   irpfRate: z.number(),
   createdAt: z.date(),
   updatedAt: z.date(),

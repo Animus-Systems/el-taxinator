@@ -3,13 +3,14 @@
  *
  * Fetches invoices via tRPC and renders InvoiceList.
  */
+import { useState, type ComponentProps } from "react"
 import { useTranslation } from "react-i18next"
-import type { ComponentProps } from "react"
 import { trpc } from "~/trpc"
 import { InvoiceList } from "@/components/invoicing/invoice-list"
-import { UploadExternalInvoiceDialog } from "@/components/invoicing/upload-external-invoice-dialog"
+import { ImportInvoicesDialog } from "@/components/invoicing/import-invoices-dialog"
+import { NewInvoiceDialog } from "@/components/invoicing/new-invoice-dialog"
 import { Button } from "@/components/ui/button"
-import { Plus } from "lucide-react"
+import { Plus, Sparkles } from "lucide-react"
 import { Link } from "@/lib/navigation"
 
 type InvoiceItem = ComponentProps<typeof InvoiceList>["invoices"][number]
@@ -28,6 +29,8 @@ function normalizeInvoice(inv: {
 export function InvoicesPage() {
   const { t } = useTranslation("invoices")
   const { t: tQuotes } = useTranslation("quotes")
+  const [newOpen, setNewOpen] = useState(false)
+  const [importOpen, setImportOpen] = useState(false)
 
   const { data: invoices, isLoading } = trpc.invoices.list.useQuery({})
 
@@ -55,17 +58,19 @@ export function InvoicesPage() {
           <Button asChild variant="outline">
             <Link href="/reconcile">{t("reconcile.trigger")}</Link>
           </Button>
-          <UploadExternalInvoiceDialog triggerLabel={t("uploadExternal.trigger")} />
-          <Button asChild>
-            <Link href="/invoices/new">
-              <Plus /> <span className="hidden md:block">{t("newInvoice")}</span>
-            </Link>
+          <Button variant="outline" onClick={() => setImportOpen(true)}>
+            <Sparkles /> <span className="hidden md:block">{t("uploadExternal.trigger")}</span>
+          </Button>
+          <Button onClick={() => setNewOpen(true)}>
+            <Plus /> <span className="hidden md:block">{t("newInvoice")}</span>
           </Button>
         </div>
       </header>
       <main>
-        <InvoiceList invoices={invoiceList} />
+        <InvoiceList invoices={invoiceList} onCreateNew={() => setNewOpen(true)} />
       </main>
+      <NewInvoiceDialog open={newOpen} onOpenChange={setNewOpen} />
+      <ImportInvoicesDialog open={importOpen} onOpenChange={setImportOpen} />
     </>
   )
 }
