@@ -1,3 +1,4 @@
+import { parse as parseDateFns, isValid as isValidDate } from "date-fns"
 import { requestLLM } from "./providers/llmProvider"
 import { getCategories } from "@/models/categories"
 import { getProjects } from "@/models/projects"
@@ -5,6 +6,32 @@ import { getSettings, getLLMSettings } from "@/models/settings"
 import { getActiveRules } from "@/models/rules"
 import type { Category, Project, I18nText } from "@/lib/db-types"
 import type { TransactionReviewStatus } from "@/lib/import-review"
+
+/**
+ *  Normalise a raw CSV date cell to an ISO YYYY-MM-DD string using the
+ *  `dateFormat` the detector captured for this bank. Returns null on unparseable
+ *  cells so the commit loop lands the row with issued_at NULL instead of
+ *  throwing on `new Date(ambiguous).toISOString()`. The fallback ISO check
+ *  covers rare cases where the detector picked the wrong format but the cell
+ *  is already ISO.
+ */
+export function normaliseCsvDate(raw: string | null, format: string): string | null {
+  if (!raw) return null
+  const trimmed = raw.trim()
+  if (!trimmed) return null
+  if (format) {
+    const parsed = parseDateFns(trimmed, format, new Date())
+    if (isValidDate(parsed)) {
+      return parsed.toISOString().slice(0, 10)
+    }
+  }
+  // Direct ISO fallback — if the cell is already YYYY-MM-DD or a full ISO.
+  const iso = new Date(trimmed)
+  if (isValidDate(iso) && !Number.isNaN(iso.getTime())) {
+    return iso.toISOString().slice(0, 10)
+  }
+  return null
+}
 
 // ---------------------------------------------------------------------------
 // Types
@@ -332,7 +359,7 @@ export function applyCSVMapping(
   mapping: CSVColumnMapping,
   defaultCurrency: string
 ): TransactionCandidate[] {
-  const { columnMapping, amountFormat, skipRows } = mapping
+  const { columnMapping, amountFormat, skipRows, dateFormat } = mapping
 
   // Build a reverse map: transaction field -> column index
   const fieldToIndex: Record<string, number> = {}
@@ -472,7 +499,7 @@ export function applyCSVMapping(
       categoryCode: null,
       projectCode: null,
       accountId: null,
-      issuedAt: getValue("issuedAt"),
+      issuedAt: normaliseCsvDate(getValue("issuedAt"), dateFormat ?? "yyyy-MM-dd"),
       status: "needs_review",
       suggestedStatus: null,
       confidence: {

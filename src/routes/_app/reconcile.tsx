@@ -46,6 +46,7 @@ import {
   Loader2,
   Pencil,
   Receipt,
+  RefreshCw,
   Sparkles,
   Unlink,
   Wrench,
@@ -360,6 +361,60 @@ export function ReconcilePage() {
     onError: (err) => toast.error(err.message),
   })
 
+  const resyncPaid = trpc.reconcile.resyncPaidStatus.useMutation({
+    onSuccess: (r) => {
+      utils.reconcile.data.invalidate()
+      utils.reconcile.links.invalidate()
+      utils.invoices.list.invalidate()
+      utils.purchases.list.invalidate()
+      const fixed = r.invoicesResynced + r.purchasesResynced
+      if (fixed === 0) {
+        toast.message(
+          t("reconcile.resync.noneFixed", {
+            defaultValue: "No stale paid documents found.",
+          }),
+        )
+      } else {
+        toast.success(
+          t("reconcile.resync.done", {
+            count: fixed,
+            defaultValue_one: "Reset {count} stale paid document.",
+            defaultValue_other: "Reset {count} stale paid documents.",
+          }),
+        )
+      }
+    },
+    onError: (err) => toast.error(err.message),
+  })
+
+  async function onResyncPaid(): Promise<void> {
+    const preview = await resyncPaid.mutateAsync({ dryRun: true }).catch(() => null)
+    if (!preview) return
+    const fixable = preview.invoicesResynced + preview.purchasesResynced
+    if (fixable === 0) {
+      toast.message(
+        t("reconcile.resync.noneFixable", {
+          defaultValue: "No stale paid documents — every paid doc still has payments linked.",
+        }),
+      )
+      return
+    }
+    const ok = await confirmDialog({
+      title: t("reconcile.resync.confirmTitle", {
+        defaultValue: "Reset stale paid status?",
+      }),
+      description: t("reconcile.resync.confirmDesc", {
+        invoices: preview.invoicesResynced,
+        purchases: preview.purchasesResynced,
+        defaultValue:
+          "{invoices} invoices and {purchases} purchases are marked 'paid' but have zero linked payments (likely because the linked transactions were deleted). Revert them to 'sent' / 'received'?",
+      }),
+      confirmLabel: t("reconcile.resync.confirm", { defaultValue: "Reset status" }),
+    })
+    if (!ok) return
+    resyncPaid.mutate({ dryRun: false })
+  }
+
   async function onSnapTotals(): Promise<void> {
     // Preview pass first, so the confirm dialog can report exact counts.
     const preview = await snapTotals.mutateAsync({ dryRun: true }).catch(() => null)
@@ -548,6 +603,23 @@ export function ReconcilePage() {
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={onResyncPaid}
+              disabled={resyncPaid.isPending}
+              title={t("reconcile.resync.tooltip", {
+                defaultValue:
+                  "Revert invoices/purchases marked 'paid' but with zero linked payments (e.g. after deleting the transactions they were matched to).",
+              })}
+            >
+              {resyncPaid.isPending ? (
+                <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="mr-1.5 h-4 w-4" />
+              )}
+              {t("reconcile.resync.trigger", { defaultValue: "Reset stale paid" })}
+            </Button>
             <Button
               type="button"
               variant="outline"

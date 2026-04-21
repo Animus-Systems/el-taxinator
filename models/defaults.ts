@@ -324,7 +324,11 @@ export const DEFAULT_FIELDS = [
     name: i18n("Project", "Proyecto"),
     type: "string",
     llmPrompt: "project code, one of: {projects.code}",
-    isVisibleInList: true,
+    // Hidden from the transactions list by default — most users don't track
+    // projects and the column takes up horizontal space. Still visible in
+    // analysis (category×project breakdowns) and can be re-enabled per user
+    // from /settings/fields.
+    isVisibleInList: false,
     isVisibleInAnalysis: true,
     isRequired: false,
     isExtra: false,

@@ -67,6 +67,10 @@ describe("summarizeImportCandidates", () => {
         rowIndex: 0,
         selected: true,
         status: "business",
+        // Category required for a business row to NOT be re-classified as
+        // needs_review by effectiveReviewStatus — the commit validator treats
+        // uncategorised business rows as blockers, so the summary reflects that.
+        categoryCode: "office_supplies",
         total: 1000,
         currencyCode: "EUR",
       },
@@ -83,6 +87,21 @@ describe("summarizeImportCandidates", () => {
     expect(summary.counts.personal_ignored).toBe(1)
     expect(summary.totals.business["EUR"]).toBe(1000)
     expect(summary.totals.personal_ignored["EUR"]).toBe(500)
+  })
+
+  it("reclassifies uncategorised business rows as needs_review", () => {
+    const summary = summarizeImportCandidates([
+      {
+        rowIndex: 0,
+        selected: true,
+        status: "business",
+        categoryCode: null,
+        total: 1000,
+        currencyCode: "EUR",
+      },
+    ])
+    expect(summary.counts.business).toBe(0)
+    expect(summary.counts.needs_review).toBe(1)
   })
 
   it("tracks unresolved rows in the summary", () => {

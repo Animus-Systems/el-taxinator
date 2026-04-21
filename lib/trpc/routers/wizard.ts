@@ -21,6 +21,7 @@ import {
   stealLock as stealLockModel,
   abandonSession as abandonSessionModel,
   reopenSession as reopenSessionModel,
+  reopenCommittedSession,
   listResumableSessions,
   listArchivedSessions,
   listCommittedSessions,
@@ -31,6 +32,7 @@ import {
   deleteBusinessFact,
   hasAnyBusinessFacts,
 } from "@/models/business-facts"
+import { listAnalysisForSession } from "@/models/ai-analysis-results"
 import { getFilesByIds } from "@/models/files"
 import { upsertIncomeSource } from "@/models/income-sources"
 import {
@@ -156,6 +158,47 @@ export const wizardRouter = router({
       }
     }),
 
+  /** Most recent AI analysis record per row in a session — reasoning text,
+   *  provider/model, and the timestamp. The candidate panel uses this to
+   *  surface "why did the AI classify this row this way?" in the expanded row
+   *  detail. Returns a plain object keyed by rowIndex as a string (JSON-safe). */
+  analysisForSession: authedProcedure
+    .input(z.object({ sessionId: z.string() }))
+    .output(
+      z.record(
+        z.string(),
+        z.object({
+          reasoning: z.string().nullable(),
+          provider: z.string(),
+          model: z.string().nullable(),
+          createdAt: z.date(),
+        }),
+      ),
+    )
+    .query(async ({ ctx, input }) => {
+      const rows = await listAnalysisForSession(input.sessionId, ctx.user.id)
+      // Rows come ordered by created_at DESC, so the first hit per rowIndex
+      // is the most recent one — that's what the UI should show.
+      const byRow: Record<string, {
+        reasoning: string | null
+        provider: string
+        model: string | null
+        createdAt: Date
+      }> = {}
+      for (const r of rows) {
+        if (r.rowIndex === null || r.rowIndex === undefined) continue
+        const key = String(r.rowIndex)
+        if (key in byRow) continue
+        byRow[key] = {
+          reasoning: r.reasoning ?? null,
+          provider: r.provider,
+          model: r.model ?? null,
+          createdAt: r.createdAt,
+        }
+      }
+      return byRow
+    }),
+
   listResumable: authedProcedure
     .input(z.object({}).optional())
     .output(z.array(resumableSessionSummarySchema))
@@ -183,6 +226,26 @@ export const wizardRouter = router({
     .mutation(async ({ ctx, input }) => {
       await reopenSessionModel(input.sessionId, ctx.user.id)
       return { ok: true }
+    }),
+
+  /** Flip a committed session back to pending so its candidates can be
+   *  re-committed. Typical use: the original commit failed silently (date
+   *  parse bug, stale FK, …) and the user fixed the underlying issue; rather
+   *  than rebuilding the whole session from the source file, reopen this one
+   *  and hit commit again. Resets every candidate's `selected` flag to true
+   *  and clears the commit diagnostics so the retry starts clean. */
+  reopenCommitted: authedProcedure
+    .input(z.object({ sessionId: z.string() }))
+    .output(z.object({ ok: z.literal(true), rowCount: z.number().int() }))
+    .mutation(async ({ ctx, input }) => {
+      const { found, rowCount } = await reopenCommittedSession(input.sessionId, ctx.user.id)
+      if (!found) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Session not found or not in a committed state.",
+        })
+      }
+      return { ok: true as const, rowCount }
     }),
 
   deleteSession: authedProcedure
@@ -478,6 +541,45 @@ export const wizardRouter = router({
       const candidates = (session.data as TransactionCandidate[]).map((c) =>
         c.rowIndex === input.rowIndex ? { ...c, selected: input.selected } : c,
       )
+      await updateImportSession(input.sessionId, ctx.user.id, { data: candidates })
+      return { ok: true }
+    }),
+
+  /** Manual per-row candidate edits from the wizard panel. Lets the user
+   *  override the AI's type / category / status / project / account pick
+   *  before commit — each field is optional so the UI can patch one at a
+   *  time. Null explicitly clears a field; omitting a field leaves it alone. */
+  updateCandidate: authedProcedure
+    .input(z.object({
+      sessionId: z.string(),
+      rowIndex: z.number().int(),
+      type: z.string().nullable().optional(),
+      categoryCode: z.string().nullable().optional(),
+      projectCode: z.string().nullable().optional(),
+      status: z.enum([
+        "needs_review",
+        "business",
+        "business_non_deductible",
+        "personal_taxable",
+        "personal_ignored",
+        "internal",
+      ]).nullable().optional(),
+      accountId: z.string().nullable().optional(),
+    }))
+    .output(z.object({ ok: z.boolean() }))
+    .mutation(async ({ ctx, input }) => {
+      const session = await getImportSessionById(input.sessionId, ctx.user.id)
+      if (!session) throw new TRPCError({ code: "NOT_FOUND", message: "Session not found" })
+      const candidates = (session.data as TransactionCandidate[]).map((c) => {
+        if (c.rowIndex !== input.rowIndex) return c
+        const patched: TransactionCandidate = { ...c }
+        if ("type" in input) patched.type = input.type ?? null
+        if ("categoryCode" in input) patched.categoryCode = input.categoryCode ?? null
+        if ("projectCode" in input) patched.projectCode = input.projectCode ?? null
+        if ("status" in input && input.status) patched.status = input.status
+        if ("accountId" in input) patched.accountId = input.accountId ?? null
+        return patched
+      })
       await updateImportSession(input.sessionId, ctx.user.id, { data: candidates })
       return { ok: true }
     }),

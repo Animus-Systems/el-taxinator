@@ -10,6 +10,9 @@ import {
   bulkDeleteTransactions,
   bulkUpdateTransactionType,
   getTransactionDateRange,
+  getAccountBalances,
+  getRunningBalancesForTransactions,
+  assignAllUnassignedToAccount,
 } from "@/models/transactions"
 import { classifyTransaction } from "@/lib/classify-transaction"
 import type { TransactionData, TransactionFilters } from "@/models/transactions"
@@ -111,6 +114,59 @@ export const transactionsRouter = router({
         ...(input.hasReceipts !== undefined && { hasReceipts: input.hasReceipts }),
       }
       return getTransactionDateRange(ctx.user.id, filters)
+    }),
+
+  /** Current signed balance per account, for the chip strip above the
+   *  transactions list. Aggregates across every transaction with an
+   *  account_id — doesn't honour the page's filters by design, since the
+   *  user wants to see what's actually in each account, not just what's
+   *  currently visible. */
+  accountBalances: authedProcedure
+    .input(z.object({}).optional())
+    .output(z.object({
+      byAccount: z.record(z.string(), z.number()),
+      unassigned: z.object({
+        balanceCents: z.number(),
+        count: z.number(),
+      }),
+    }))
+    .query(async ({ ctx }) => {
+      const { byAccount, unassigned } = await getAccountBalances(ctx.user.id)
+      return {
+        byAccount: Object.fromEntries(byAccount),
+        unassigned,
+      }
+    }),
+
+  /** Bulk-assign every transaction without an account to the given account.
+   *  Recovers rows that landed with NULL account_id during import — the user
+   *  opens the "Unassigned" chip, picks a destination account, and this
+   *  moves everything at once. Returns the count for the toast. */
+  assignAllUnassignedToAccount: authedProcedure
+    .input(z.object({ accountId: z.string() }))
+    .output(z.object({ updated: z.number().int() }))
+    .mutation(async ({ ctx, input }) => {
+      return assignAllUnassignedToAccount(ctx.user.id, input.accountId)
+    }),
+
+  /** Running balance after each listed transaction for a single account.
+   *  Only meaningful when the user has filtered to one account — the caller
+   *  is responsible for only asking in that case. Returns an empty map when
+   *  the transaction list is empty. */
+  runningBalances: authedProcedure
+    .input(z.object({
+      accountId: z.string(),
+      transactionIds: z.array(z.string()),
+    }))
+    .output(z.record(z.string(), z.number()))
+    .query(async ({ ctx, input }) => {
+      if (input.transactionIds.length === 0) return {}
+      const balances = await getRunningBalancesForTransactions(
+        ctx.user.id,
+        input.accountId,
+        input.transactionIds,
+      )
+      return Object.fromEntries(balances)
     }),
 
   getById: authedProcedure

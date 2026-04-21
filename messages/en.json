@@ -741,6 +741,17 @@
         "noneFixed": "No drifted totals found within the €1 tolerance.",
         "noneFixable": "Nothing to fix — all totals are already clean."
       },
+      "resync": {
+        "trigger": "Reset stale paid",
+        "tooltip": "Revert invoices/purchases marked 'paid' but with zero linked payments (e.g. after deleting the transactions they were matched to).",
+        "confirmTitle": "Reset stale paid status?",
+        "confirmDesc": "{invoices} invoices and {purchases} purchases are marked 'paid' but have zero linked payments (likely because the linked transactions were deleted). Revert them to 'sent' / 'received'?",
+        "confirm": "Reset status",
+        "done_one": "Reset {count} stale paid document.",
+        "done_other": "Reset {count} stale paid documents.",
+        "noneFixed": "No stale paid documents found.",
+        "noneFixable": "No stale paid documents — every paid doc still has payments linked."
+      },
       "groupDocCount_one": "{count} document",
       "groupDocCount_other": "{count} documents",
       "groupUnallocated": "{amount} left",

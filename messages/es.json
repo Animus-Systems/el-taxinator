@@ -741,6 +741,17 @@
         "noneFixed": "No se encontraron totales desviados dentro de la tolerancia de 1 €.",
         "noneFixable": "Nada que corregir — todos los totales ya están limpios."
       },
+      "resync": {
+        "trigger": "Restablecer pagadas obsoletas",
+        "tooltip": "Revertir facturas/compras marcadas como 'pagadas' pero sin pagos vinculados (p. ej. tras eliminar las transacciones con las que estaban emparejadas).",
+        "confirmTitle": "¿Restablecer el estado pagado obsoleto?",
+        "confirmDesc": "{invoices} facturas y {purchases} compras están marcadas como 'pagadas' pero no tienen pagos vinculados (probablemente porque las transacciones asociadas fueron eliminadas). ¿Revertirlas a 'enviada' / 'recibida'?",
+        "confirm": "Restablecer estado",
+        "done_one": "Restablecido {count} documento pagado obsoleto.",
+        "done_other": "Restablecidos {count} documentos pagados obsoletos.",
+        "noneFixed": "No se encontraron documentos pagados obsoletos.",
+        "noneFixable": "Sin pagados obsoletos — todos los documentos pagados conservan sus pagos vinculados."
+      },
       "groupDocCount_one": "{count} documento",
       "groupDocCount_other": "{count} documentos",
       "groupUnallocated": "{amount} restante",

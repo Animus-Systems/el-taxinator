@@ -15,6 +15,21 @@ import {
 
 type ActionState<T> = CompatActionResult<T>
 
+/**
+ *  The transaction edit form displays `total` in the user's currency (e.g.
+ *  "16.50") but the `transactions.total` DB column is integer cents. Without
+ *  conversion, Postgres rejects non-integer euros with
+ *  `invalid input syntax for type integer: "16.5"` and happily truncates
+ *  integer euros (€16 → 16¢). Converting at the action boundary keeps the
+ *  tRPC input schema currency-unit-agnostic while making sure the DB always
+ *  receives whole cents.
+ */
+function eurosToCents(value: unknown): number | undefined {
+  const n = numberValue(value)
+  if (n === undefined) return undefined
+  return Math.round(n * 100)
+}
+
 function transactionPayloadFromFormData(formData: FormData): Record<string, unknown> {
   const values = formDataToObject(formData)
   const payload: Record<string, unknown> = {
@@ -30,8 +45,8 @@ function transactionPayloadFromFormData(formData: FormData): Record<string, unkn
     accountId: nullableStringValue(values["accountId"]),
     issuedAt: nullableStringValue(values["issuedAt"]),
     text: nullableStringValue(values["text"]),
-    total: numberValue(values["total"]),
-    convertedTotal: numberValue(values["convertedTotal"]),
+    total: eurosToCents(values["total"]),
+    convertedTotal: eurosToCents(values["convertedTotal"]),
     deductible: booleanValue(values["deductible"]),
     files: parseJsonField<string[]>(values["files"], []),
     items: parseJsonField<unknown[]>(values["items"], []),

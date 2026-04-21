@@ -31,7 +31,26 @@ import {
   applyCSVMapping,
   categorizeTransactions,
   categorizeTransactionsWithFeedback,
+  normaliseCsvDate,
 } from "@/ai/import-csv"
+
+/**
+ *  Safe `issued_at` parser for the commit loop. Candidates may carry the date
+ *  as a YYYY-MM-DD string (after CSV normalisation), a full ISO timestamp
+ *  (from the PDF extractor), or a raw bank-format cell (from older sessions
+ *  that pre-date the normaliser). Returns an ISO timestamp, or null when the
+ *  string can't be parsed — so one bad date never fails a whole row insert.
+ */
+function safeParseCandidateDate(raw: string | null): string | null {
+  if (!raw) return null
+  // Direct ISO / YYYY-MM-DD fast path — `new Date()` accepts these.
+  const direct = new Date(raw)
+  if (!Number.isNaN(direct.getTime())) return direct.toISOString()
+  // Fallback: try common European format used by Spanish banks (DD/MM/YYYY).
+  const parsed = normaliseCsvDate(raw, "dd/MM/yyyy")
+  if (parsed) return new Date(parsed).toISOString()
+  return null
+}
 import { xlsxBufferToCsv, isXlsxFileName, isXlsxMimeType } from "@/lib/xlsx-to-csv"
 import type { TransactionCandidate } from "@/ai/import-csv"
 import { suggestNewCategories } from "@/ai/suggest-categories"
@@ -717,7 +736,7 @@ export async function importRoutes(app: FastifyInstance) {
             type: c.type || "expense",
             categoryCode: c.categoryCode,
             projectCode: c.projectCode,
-            issuedAt: c.issuedAt ? new Date(c.issuedAt).toISOString() : null,
+            issuedAt: safeParseCandidateDate(c.issuedAt),
             accountId: c.accountId || session.accountId || null,
             status: c.status,
             appliedRuleId: c.matchedRuleId ?? null,
@@ -802,8 +821,16 @@ export async function importRoutes(app: FastifyInstance) {
         console.error("[import/commit] recordRuleApplication failed:", err)
       }
 
-      // Mark session as committed
-      await updateImportSession(request.params.id, user.id, { status: "committed" })
+      // Mark session as committed and persist commit diagnostics so the
+      // committed-page UI can warn the user when rows failed to insert
+      // (FK violations, invalid dates, duplicate constraint checks, …).
+      // Without this the session report's candidate counts don't match what
+      // actually landed in the transactions table.
+      await updateImportSession(request.params.id, user.id, {
+        status: "committed",
+        commitCreatedCount: created,
+        commitErrors: rowErrors.length > 0 ? rowErrors : null,
+      })
 
       // Spawn a follow-up pending session for any rows the user explicitly
       // skipped during review. Committed sessions can't be reopened, so these

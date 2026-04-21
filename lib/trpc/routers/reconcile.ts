@@ -33,10 +33,11 @@ import {
   updatePurchasePaymentAmount,
 } from "@/models/purchase-payments"
 import { attachFileToTransaction } from "@/models/files"
-import { getInvoices, updateInvoiceTotalCents } from "@/models/invoices"
+import { getInvoices, updateInvoiceStatus, updateInvoiceTotalCents } from "@/models/invoices"
 import {
   getPurchaseById,
   getPurchases,
+  updatePurchaseStatus,
   updatePurchaseTotalCents,
 } from "@/models/purchases"
 import { getTransactionById } from "@/models/transactions"
@@ -651,6 +652,71 @@ export const reconcileRouter = router({
       }
 
       return { invoicesFixed, purchasesFixed, skippedDifferenceTooLarge }
+    }),
+
+  /** Re-derive `paid` status for documents whose payment rows are gone.
+   *
+   *  When a transaction is deleted the FK cascade removes its `invoice_payments`
+   *  / `purchase_payments` rows, but the invoice/purchase `status` stays at
+   *  'paid' because auto-flip is forward-only (see the comment on
+   *  `maybeAutoFlipPaid`). That leaves stale "paid" docs with zero linked
+   *  payments — this mutation finds them and reverts the status.
+   *
+   *  Conservative: only flips when allocated = 0. If some partial payments
+   *  remain, leave the doc as 'paid' so the user can adjust manually — drift
+   *  is already surfaced in the UI.
+   *
+   *  Targets:
+   *    invoices: paid → sent (paid_at cleared)
+   *    purchases: paid → received (paid_at cleared)
+   *
+   *  `dryRun=true` returns counts only for a preview modal. */
+  resyncPaidStatus: authedProcedure
+    .input(
+      z.object({
+        dryRun: z.boolean().default(false),
+      }).optional(),
+    )
+    .output(
+      z.object({
+        invoicesResynced: z.number().int(),
+        purchasesResynced: z.number().int(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const dryRun = input?.dryRun ?? false
+
+      const [invoices, purchases, allocByInvoice, allocByPurchase] = await Promise.all([
+        getInvoices(ctx.user.id),
+        getPurchases(ctx.user.id),
+        getAllocatedByInvoice(ctx.user.id),
+        getAllocatedByPurchase(ctx.user.id),
+      ])
+
+      let invoicesResynced = 0
+      let purchasesResynced = 0
+
+      for (const inv of invoices) {
+        if (inv.status !== "paid") continue
+        const allocated = allocByInvoice.get(inv.id) ?? 0
+        if (allocated > 0) continue
+        if (!dryRun) {
+          await updateInvoiceStatus(inv.id, ctx.user.id, "sent")
+        }
+        invoicesResynced++
+      }
+
+      for (const pur of purchases) {
+        if (pur.status !== "paid") continue
+        const allocated = allocByPurchase.get(pur.id) ?? 0
+        if (allocated > 0) continue
+        if (!dryRun) {
+          await updatePurchaseStatus(pur.id, ctx.user.id, "received", null)
+        }
+        purchasesResynced++
+      }
+
+      return { invoicesResynced, purchasesResynced }
     }),
 
   /** Unlink one allocation by its payment id. Kind must be supplied because

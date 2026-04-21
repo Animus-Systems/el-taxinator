@@ -159,7 +159,9 @@ export function buildTransactionWhere(
       idx++
     }
 
-    if (filters.accountId) {
+    if (filters.accountId === "none") {
+      conditions.push(`${col("account_id")} IS NULL`)
+    } else if (filters.accountId) {
       conditions.push(`${col("account_id")} = $${idx}`)
       values.push(filters.accountId)
       idx++
@@ -519,6 +521,27 @@ export const deleteTransaction = async (
  * review tool — the caller provides the ids it wants to update, we scope
  * by user_id and fire a single UPDATE.
  */
+/**
+ *  Assign every transaction with a NULL account_id to the given account.
+ *  Used by the "Move all unassigned to X" bulk action on the transactions
+ *  list, which recovers rows that landed without an account during import.
+ *  Scoped to the user; returns the number of rows updated.
+ */
+export async function assignAllUnassignedToAccount(
+  userId: string,
+  accountId: string,
+): Promise<{ updated: number }> {
+  const pool = await getPool()
+  const result = await pool.query(
+    `UPDATE transactions
+       SET account_id = $1, updated_at = now()
+     WHERE user_id = $2
+       AND account_id IS NULL`,
+    [accountId, userId],
+  )
+  return { updated: result.rowCount ?? 0 }
+}
+
 export async function bulkUpdateTransactionType(
   userId: string,
   ids: string[],
@@ -534,6 +557,99 @@ export async function bulkUpdateTransactionType(
     [type, userId, ids],
   )
   return { updated: result.rowCount ?? 0 }
+}
+
+/**
+ *  Signed-total SQL expression. `total` is stored as positive cents in most
+ *  code paths but can also carry an explicit negative sign from legacy imports.
+ *  The rule below mirrors the frontend `totalSignPrefix` helper: when the
+ *  stored value is negative we trust it as-is; otherwise the direction comes
+ *  from `type` and — for transfers/exchanges — `transfer_direction`. Rows with
+ *  no resolvable direction contribute 0 to the running balance.
+ */
+const SIGNED_TOTAL_EXPR = `
+  CASE
+    WHEN total IS NULL THEN 0
+    WHEN total < 0 THEN total
+    WHEN type IN ('income', 'refund') THEN ABS(total)
+    WHEN type = 'expense' THEN -ABS(total)
+    WHEN type IN ('transfer', 'exchange') AND transfer_direction = 'outgoing' THEN -ABS(total)
+    WHEN type IN ('transfer', 'exchange') AND transfer_direction = 'incoming' THEN ABS(total)
+    ELSE 0
+  END
+`
+
+/**
+ *  Current balance per account for a user — sum of signed totals grouped by
+ *  account_id. Returns a map keyed by accountId, plus a single "none" entry
+ *  aggregating every transaction with NULL account_id (typically rows that
+ *  slipped through import without a bank picked). The "none" entry also
+ *  carries a `count` field so the UI can surface how many transactions are
+ *  unassigned.
+ */
+export async function getAccountBalances(userId: string): Promise<{
+  byAccount: Map<string, number>
+  unassigned: { balanceCents: number; count: number }
+}> {
+  const pool = await getPool()
+  const [withAcct, withoutAcct] = await Promise.all([
+    pool.query(
+      `SELECT account_id, SUM(${SIGNED_TOTAL_EXPR})::bigint AS balance
+         FROM transactions
+        WHERE user_id = $1 AND account_id IS NOT NULL
+        GROUP BY account_id`,
+      [userId],
+    ),
+    pool.query(
+      `SELECT SUM(${SIGNED_TOTAL_EXPR})::bigint AS balance, COUNT(*)::int AS n
+         FROM transactions
+        WHERE user_id = $1 AND account_id IS NULL`,
+      [userId],
+    ),
+  ])
+  const byAccount = new Map<string, number>()
+  for (const row of withAcct.rows as Array<{ account_id: string; balance: string | number }>) {
+    byAccount.set(row.account_id, Number(row.balance))
+  }
+  const u = withoutAcct.rows[0] as { balance: string | number | null; n: number } | undefined
+  const unassigned = {
+    balanceCents: u?.balance != null ? Number(u.balance) : 0,
+    count: u?.n ?? 0,
+  }
+  return { byAccount, unassigned }
+}
+
+/**
+ *  Running balance after each listed transaction within a single account. The
+ *  caller passes the transaction ids they want balances for; we compute a
+ *  windowed cumulative sum over the full account ledger (ordered
+ *  chronologically with `id` as a stable tiebreak), then filter to the
+ *  requested ids. Returns a map keyed by transactionId.
+ */
+export async function getRunningBalancesForTransactions(
+  userId: string,
+  accountId: string,
+  transactionIds: string[],
+): Promise<Map<string, number>> {
+  if (transactionIds.length === 0) return new Map()
+  const pool = await getPool()
+  const result = await pool.query(
+    `WITH ledger AS (
+       SELECT id,
+         SUM(${SIGNED_TOTAL_EXPR}) OVER (
+           ORDER BY issued_at ASC NULLS LAST, created_at ASC, id ASC
+         )::bigint AS running
+       FROM transactions
+       WHERE user_id = $1 AND account_id = $2
+     )
+     SELECT id, running FROM ledger WHERE id = ANY($3::uuid[])`,
+    [userId, accountId, transactionIds],
+  )
+  const out = new Map<string, number>()
+  for (const row of result.rows as Array<{ id: string; running: string | number }>) {
+    out.set(row.id, Number(row.running))
+  }
+  return out
 }
 
 export const bulkDeleteTransactions = async (ids: string[], userId: string, entityId: string) => {

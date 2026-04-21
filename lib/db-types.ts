@@ -621,6 +621,11 @@ export const importSessionSchema = z.object({
   pendingTurnAt: z.date().nullable(),
   fileId: z.string().nullable(),
   contextFileIds: z.array(z.string().uuid()).default([]),
+  commitCreatedCount: z.number().int().nullable().optional(),
+  commitErrors: z.array(z.object({
+    rowIndex: z.number().int(),
+    message: z.string(),
+  })).nullable().optional(),
   createdAt: z.date(),
 })
 

@@ -10,8 +10,35 @@ import { Archive, CheckCircle2, Loader2, Paperclip, PanelBottomClose, Trash2, X 
 import { WizardChat } from "./wizard-chat"
 import { WizardCandidatePanel } from "./wizard-candidate-panel"
 import type { TransactionCandidate } from "@/ai/import-csv"
-import { validateImportCommit } from "@/lib/import-review"
+import { validateImportCommit, type ImportCommitValidationError } from "@/lib/import-review"
 import { useWizardDock } from "@/lib/wizard-dock-context"
+
+/**
+ *  Turn the validator's per-row errors into a concise tooltip so a blocked
+ *  commit button says _which_ rows are stopping the import. Groups by reason
+ *  and lists the first few row indexes per group so the user can jump
+ *  straight there instead of guessing.
+ */
+function commitBlockerSummary(errors: ImportCommitValidationError[]): string | null {
+  if (errors.length === 0) return null
+  const byCode = new Map<string, number[]>()
+  for (const e of errors) {
+    const list = byCode.get(e.code) ?? []
+    list.push(e.rowIndex)
+    byCode.set(e.code, list)
+  }
+  const labels: Record<string, string> = {
+    needs_review: "need review",
+    missing_category: "are missing a category",
+  }
+  const parts: string[] = []
+  for (const [code, rows] of byCode) {
+    const shown = rows.slice(0, 5).map((i) => `#${i}`).join(", ")
+    const extra = rows.length > 5 ? ` and ${rows.length - 5} more` : ""
+    parts.push(`${rows.length} row${rows.length === 1 ? "" : "s"} ${labels[code] ?? code} (${shown}${extra})`)
+  }
+  return parts.join(" · ")
+}
 
 type FileUploadResponse = {
   success: boolean
@@ -311,7 +338,11 @@ export function WizardShell({ sessionId }: Props) {
             size="sm"
             onClick={handleCommit}
             disabled={!commitEligible || committing}
-            title={!commitEligible ? t("commitDisabledHint") : undefined}
+            title={
+              !commitEligible
+                ? commitBlockerSummary(validation.errors) ?? t("commitDisabledHint")
+                : undefined
+            }
             className="rounded-full px-4 h-8"
           >
             {committing ? (

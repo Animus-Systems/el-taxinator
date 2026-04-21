@@ -56,6 +56,25 @@ export function validateImportCommit(candidates: ReviewableCandidate[]) {
 type SummaryCounts = Record<TransactionReviewStatus, number>
 type SummaryTotals = Record<TransactionReviewStatus, Record<string, number>>
 
+/**
+ *  Effective review status for a candidate. A business row with no category
+ *  blocks the commit just as hard as a needs_review row does, so for the
+ *  purposes of counting / filtering we treat them as "needs_review" — that
+ *  way the yellow pill surfaces them and the user can spot them in the list
+ *  without first reading the commit button's tooltip. The underlying
+ *  `status` value on disk stays unchanged.
+ */
+export function effectiveReviewStatus(candidate: ReviewableCandidate): TransactionReviewStatus {
+  const raw = candidate.status ?? "needs_review"
+  if (
+    (raw === "business" || raw === "business_non_deductible") &&
+    !candidate.categoryCode
+  ) {
+    return "needs_review"
+  }
+  return raw
+}
+
 export function summarizeImportCandidates(candidates: ReviewableCandidate[]): {
   counts: SummaryCounts
   totals: SummaryTotals
@@ -80,7 +99,7 @@ export function summarizeImportCandidates(candidates: ReviewableCandidate[]): {
   for (const candidate of candidates) {
     if (!candidate.selected) continue
 
-    const status = candidate.status ?? "needs_review"
+    const status = effectiveReviewStatus(candidate)
     counts[status] += 1
 
     if (candidate.total === null || candidate.total === undefined) continue

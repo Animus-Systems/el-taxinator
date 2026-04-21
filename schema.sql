@@ -502,6 +502,8 @@ CREATE TABLE import_sessions (
     pending_turn_at timestamp(3),
     file_id uuid REFERENCES files(id) ON DELETE SET NULL,
     context_file_ids jsonb NOT NULL DEFAULT '[]'::jsonb,
+    commit_created_count integer,
+    commit_errors jsonb,
     created_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
 CREATE INDEX import_sessions_user_id_idx ON import_sessions (user_id);

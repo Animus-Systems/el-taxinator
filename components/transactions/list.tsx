@@ -21,6 +21,14 @@ import { trpc } from "~/trpc"
 import { toast } from "sonner"
 import { AttachReceiptDialog } from "@/components/transactions/attach-receipt-dialog"
 import { EditTransactionDialog } from "@/components/transactions/edit-dialog"
+import { useConfirm } from "@/components/ui/confirm-dialog"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { useTranslations } from "next-intl"
 import { useSearchParams } from "next/navigation"
 import { useRouter } from "@/lib/navigation"
@@ -531,6 +539,23 @@ export function TransactionList({
     return map
   }, [accounts])
 
+  const selectedAccountId = searchParams.get("accountId") || null
+  const isRealAccount = selectedAccountId !== null && selectedAccountId !== "none"
+  const selectedAccount = isRealAccount
+    ? accounts.find((a) => a.id === selectedAccountId) ?? null
+    : null
+
+  const { data: balancesData } = trpc.transactions.accountBalances.useQuery({})
+  const balancesByAccount = balancesData?.byAccount ?? {}
+  const unassignedBalance = balancesData?.unassigned ?? { balanceCents: 0, count: 0 }
+
+  const txIds = useMemo(() => transactions.map((t) => t.id), [transactions])
+  const { data: runningBalances = {} } = trpc.transactions.runningBalances.useQuery(
+    { accountId: selectedAccount?.id ?? "", transactionIds: txIds },
+    { enabled: isRealAccount && !!selectedAccount && txIds.length > 0 },
+  )
+  const showRunningBalance = isRealAccount && Object.keys(runningBalances).length > 0
+
   const [sorting, setSorting] = useState<{ field: string | null; direction: "asc" | "desc" | null }>(() => {
     const ordering = searchParams.get("ordering")
     if (!ordering) return { field: null, direction: null }
@@ -631,7 +656,20 @@ export function TransactionList({
   }
 
   return (
-    <div className="rounded-md border">
+    <div className="space-y-3">
+      <AccountBalanceChips
+        accounts={accounts}
+        balances={balancesByAccount}
+        unassigned={unassignedBalance}
+        selectedAccountId={selectedAccountId}
+      />
+      {selectedAccountId === "none" && unassignedBalance.count > 0 ? (
+        <UnassignedBulkReassign
+          accounts={accounts}
+          count={unassignedBalance.count}
+        />
+      ) : null}
+      <div className="rounded-md border">
       <Table>
         <TableHeader>
           <TableRow>
@@ -651,6 +689,9 @@ export function TransactionList({
                 {field.renderer.sortable && getSortIcon(field.code)}
               </TableHead>
             ))}
+            {showRunningBalance ? (
+              <TableHead className="text-right min-w-[110px]">Balance</TableHead>
+            ) : null}
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -679,6 +720,12 @@ export function TransactionList({
                   {renderFieldInTable(transaction, field)}
                 </TableCell>
               ))}
+              {showRunningBalance ? (
+                <RunningBalanceCell
+                  balanceCents={runningBalances[transaction.id]}
+                  currencyCode={selectedAccount?.currencyCode ?? transaction.currencyCode ?? "EUR"}
+                />
+              ) : null}
             </TableRow>
           ))}
         </TableBody>
@@ -690,9 +737,11 @@ export function TransactionList({
                 {field.renderer.footerValue ? field.renderer.footerValue(transactions) : ""}
               </TableCell>
             ))}
+            {showRunningBalance ? <TableCell /> : null}
           </TableRow>
         </TableFooter>
       </Table>
+      </div>
       {selectedIds.length > 0 && (
         <>
           <BulkActionsMenu
@@ -717,5 +766,187 @@ export function TransactionList({
         <EditTransactionDialog transactionId={editingId} onClose={handleCloseDialog} />
       )}
     </div>
+  )
+}
+
+function AccountBalanceChips({
+  accounts,
+  balances,
+  unassigned,
+  selectedAccountId,
+}: {
+  accounts: BankAccount[]
+  balances: Record<string, number>
+  unassigned: { balanceCents: number; count: number }
+  selectedAccountId: string | null
+}) {
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  if (accounts.length === 0 && unassigned.count === 0) return null
+
+  const go = (accountId: string | null) => {
+    const params = new URLSearchParams(searchParams.toString())
+    if (accountId) {
+      params.set("accountId", accountId)
+    } else {
+      params.delete("accountId")
+    }
+    const next = params.toString()
+    router.replace(next ? `/transactions?${next}` : "/transactions")
+  }
+
+  const unassignedActive = selectedAccountId === "none"
+
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      {accounts.map((account) => {
+        const cents = balances[account.id] ?? 0
+        const active = selectedAccountId === account.id
+        const prefix = cents > 0 ? "+" : cents < 0 ? "−" : ""
+        const amountClass =
+          cents > 0
+            ? "text-emerald-700 dark:text-emerald-400"
+            : cents < 0
+              ? "text-rose-700 dark:text-rose-400"
+              : "text-muted-foreground"
+        return (
+          <button
+            key={account.id}
+            type="button"
+            onClick={() => go(active ? null : account.id)}
+            className={cn(
+              "inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs transition-colors",
+              active
+                ? "border-foreground bg-foreground text-background"
+                : "border-border hover:bg-muted",
+            )}
+            title={account.bankName ? `${account.name} · ${account.bankName}` : account.name}
+          >
+            <span className="font-medium tracking-tight truncate max-w-[160px]">
+              {account.name}
+            </span>
+            <span className={cn("tabular-nums", active ? "text-background/80" : amountClass)}>
+              {prefix}
+              {formatCurrency(Math.abs(cents), account.currencyCode)}
+            </span>
+          </button>
+        )
+      })}
+      {unassigned.count > 0 ? (
+        <button
+          type="button"
+          onClick={() => go(unassignedActive ? null : "none")}
+          className={cn(
+            "inline-flex items-center gap-2 rounded-full border border-dashed px-3 py-1 text-xs transition-colors",
+            unassignedActive
+              ? "border-amber-600 bg-amber-600 text-white"
+              : "border-amber-400 text-amber-900 hover:bg-amber-50 dark:text-amber-200 dark:hover:bg-amber-950/30",
+          )}
+          title="Transactions with no account — probably imported without a bank selected"
+        >
+          <span className="font-medium tracking-tight">Unassigned</span>
+          <span className="tabular-nums opacity-80">{unassigned.count}</span>
+        </button>
+      ) : null}
+    </div>
+  )
+}
+
+function UnassignedBulkReassign({
+  accounts,
+  count,
+}: {
+  accounts: BankAccount[]
+  count: number
+}) {
+  const confirm = useConfirm()
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const utils = trpc.useUtils()
+  const [pickedId, setPickedId] = useState<string | null>(null)
+
+  const mutation = trpc.transactions.assignAllUnassignedToAccount.useMutation({
+    onSuccess: ({ updated }) => {
+      utils.transactions.list.invalidate()
+      utils.transactions.accountBalances.invalidate()
+      toast.success(`Moved ${updated} transaction${updated === 1 ? "" : "s"}.`)
+      // After the move there's nothing left under "Unassigned" — drop the
+      // filter so the user sees the destination account in context.
+      const params = new URLSearchParams(searchParams.toString())
+      params.delete("accountId")
+      const next = params.toString()
+      router.replace(next ? `/transactions?${next}` : "/transactions")
+    },
+    onError: (err) => toast.error(err.message),
+  })
+
+  const onConfirm = async () => {
+    if (!pickedId) return
+    const picked = accounts.find((a) => a.id === pickedId)
+    if (!picked) return
+    const ok = await confirm({
+      title: `Move ${count} transaction${count === 1 ? "" : "s"} to ${picked.name}?`,
+      description:
+        "Every transaction without an account will be reassigned. You can still edit individual rows afterwards.",
+      confirmLabel: "Move all",
+    })
+    if (!ok) return
+    mutation.mutate({ accountId: pickedId })
+  }
+
+  if (accounts.length === 0) return null
+
+  return (
+    <div className="flex flex-wrap items-center gap-3 rounded-md border border-amber-300 bg-amber-50/60 px-3 py-2 text-sm dark:border-amber-900/50 dark:bg-amber-950/20">
+      <span className="text-amber-900 dark:text-amber-200">
+        {count} transaction{count === 1 ? "" : "s"} with no account. Move all to:
+      </span>
+      <Select value={pickedId ?? ""} onValueChange={(v) => setPickedId(v)}>
+        <SelectTrigger className="h-8 w-[220px] bg-background">
+          <SelectValue placeholder="Pick an account…" />
+        </SelectTrigger>
+        <SelectContent>
+          {accounts.map((a) => (
+            <SelectItem key={a.id} value={a.id}>
+              {a.name}
+              {a.bankName ? ` · ${a.bankName}` : ""}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <Button
+        type="button"
+        size="sm"
+        onClick={onConfirm}
+        disabled={!pickedId || mutation.isPending}
+      >
+        {mutation.isPending ? "Moving…" : "Move all"}
+      </Button>
+    </div>
+  )
+}
+
+function RunningBalanceCell({
+  balanceCents,
+  currencyCode,
+}: {
+  balanceCents: number | undefined
+  currencyCode: string
+}) {
+  if (balanceCents === undefined) {
+    return <TableCell className="text-right text-muted-foreground/50 tabular-nums">—</TableCell>
+  }
+  const className =
+    balanceCents > 0
+      ? "text-emerald-700 dark:text-emerald-400"
+      : balanceCents < 0
+        ? "text-rose-700 dark:text-rose-400"
+        : "text-muted-foreground"
+  const prefix = balanceCents > 0 ? "+" : balanceCents < 0 ? "−" : ""
+  return (
+    <TableCell className={cn("text-right tabular-nums", className)}>
+      {prefix}
+      {formatCurrency(Math.abs(balanceCents), currencyCode)}
+    </TableCell>
   )
 }

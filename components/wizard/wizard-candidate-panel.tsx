@@ -10,10 +10,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { ArrowLeftRight, Check, CopyX, EyeOff, Landmark } from "lucide-react"
+import { AlertTriangle, ArrowLeftRight, Check, CopyX, EyeOff, Landmark, Sparkles } from "lucide-react"
 import type { TransactionCandidate } from "@/ai/import-csv"
 import { cn, formatCurrency } from "@/lib/utils"
-import { summarizeImportCandidates } from "@/lib/import-review"
+import { summarizeImportCandidates, effectiveReviewStatus } from "@/lib/import-review"
+import { getLocalizedValue } from "@/lib/i18n-db"
 import { trpc } from "~/trpc"
 
 // Sentinel value used by the counter-account picker to represent "no account
@@ -27,12 +28,35 @@ type Props = {
   candidates: TransactionCandidate[]
 }
 
+/**
+ *  Direction prefix for a candidate amount. Mirrors the transactions-list
+ *  helper: `total` is stored positive (cents), the sign is derived from type
+ *  and, for transfers, the direction. Exchange legs and `other` rows stay
+ *  neutral since they have no intrinsic direction here.
+ */
+function candidateSignPrefix(c: TransactionCandidate): "+" | "−" | "" {
+  const value = c.total ?? 0
+  if (value < 0) return "−"
+  if (value > 0) {
+    if (c.type === "income") return "+"
+    if (c.type === "expense") return "−"
+    if (c.type === "refund") return "+"
+    if (c.type === "transfer") {
+      if (c.transferDirection === "outgoing") return "−"
+      if (c.transferDirection === "incoming") return "+"
+      return ""
+    }
+  }
+  return ""
+}
+
 function formatLegSummary(c?: TransactionCandidate | null): string {
   if (!c) return "—"
   const parts: string[] = []
   if (c.merchant) parts.push(c.merchant)
   if (c.total !== null && c.currencyCode) {
-    parts.push(formatCurrency(c.total, c.currencyCode))
+    const prefix = candidateSignPrefix(c)
+    parts.push(`${prefix}${formatCurrency(Math.abs(c.total), c.currencyCode)}`)
   }
   return parts.join(" · ") || "—"
 }
@@ -96,11 +120,22 @@ const SORT_PRIORITY: Record<string, number> = {
 
 type AccountInfo = { name: string; bankName: string | null }
 
+type AnalysisEntry = {
+  reasoning: string | null
+  provider: string
+  model: string | null
+  createdAt: Date
+}
+
 const PAGE_SIZE = 50
 
 export function WizardCandidatePanel({ sessionId, candidates }: Props) {
-  const { t } = useTranslation("wizard")
+  const { t, i18n } = useTranslation("wizard")
+  const locale = i18n.language || "en"
   const { data: accounts = [] } = trpc.accounts.listActive.useQuery({})
+  const { data: categories = [] } = trpc.categories.list.useQuery({})
+  const { data: projects = [] } = trpc.projects.list.useQuery({})
+  const { data: analysisByRow = {} } = trpc.wizard.analysisForSession.useQuery({ sessionId })
   const accountById = new Map<string, AccountInfo>(
     accounts.map((a) => [a.id, { name: a.name, bankName: a.bankName ?? null }]),
   )
@@ -127,6 +162,12 @@ export function WizardCandidatePanel({ sessionId, candidates }: Props) {
     },
   })
   const setCandidateSelected = trpc.wizard.setCandidateSelected.useMutation({
+    onSuccess: () => {
+      utils.wizard.get.invalidate()
+    },
+  })
+
+  const updateCandidate = trpc.wizard.updateCandidate.useMutation({
     onSuccess: () => {
       utils.wizard.get.invalidate()
     },
@@ -208,7 +249,10 @@ export function WizardCandidatePanel({ sessionId, candidates }: Props) {
     return counts[k] ?? 0
   }
 
-  const filtered = filter === "all" ? candidates : candidates.filter((c) => c.status === filter)
+  const filtered =
+    filter === "all"
+      ? candidates
+      : candidates.filter((c) => effectiveReviewStatus(c) === filter)
   const afterToggles = filtered.filter((c) => {
     const isDuplicate = !!c.extra?.duplicateOfId
     const isDeferred = c.selected === false
@@ -224,8 +268,8 @@ export function WizardCandidatePanel({ sessionId, candidates }: Props) {
   })
   const toggleHiddenCount = filtered.length - afterToggles.length
   const sorted = [...afterToggles].sort((a, b) => {
-    const ap = SORT_PRIORITY[a.status] ?? 99
-    const bp = SORT_PRIORITY[b.status] ?? 99
+    const ap = SORT_PRIORITY[effectiveReviewStatus(a)] ?? 99
+    const bp = SORT_PRIORITY[effectiveReviewStatus(b)] ?? 99
     if (ap !== bp) return ap - bp
     return a.rowIndex - b.rowIndex
   })
@@ -441,7 +485,18 @@ export function WizardCandidatePanel({ sessionId, candidates }: Props) {
                       <CandidateRow
                         c={c}
                         accountById={accountById}
+                        categories={categories}
+                        projects={projects}
+                        analysis={analysisByRow[String(c.rowIndex)] ?? null}
                         onToggleSelected={handleToggleSelected}
+                        onUpdate={(patch) =>
+                          updateCandidate.mutate({
+                            sessionId,
+                            rowIndex: c.rowIndex,
+                            ...patch,
+                          })
+                        }
+                        locale={locale}
                       />
                     </div>
                   )
@@ -465,14 +520,57 @@ export function WizardCandidatePanel({ sessionId, candidates }: Props) {
   )
 }
 
+type CandidatePatch = {
+  type?: string | null
+  categoryCode?: string | null
+  projectCode?: string | null
+  status?:
+    | "needs_review"
+    | "business"
+    | "business_non_deductible"
+    | "personal_taxable"
+    | "personal_ignored"
+    | "internal"
+}
+
+const TRANSACTION_TYPES: string[] = [
+  "income",
+  "expense",
+  "refund",
+  "transfer",
+  "exchange",
+  "other",
+]
+
+const EDITABLE_STATUSES: Array<CandidatePatch["status"] & string> = [
+  "needs_review",
+  "business",
+  "business_non_deductible",
+  "personal_taxable",
+  "personal_ignored",
+  "internal",
+]
+
+const NONE_SENTINEL = "__none__"
+
 function CandidateRow({
   c,
   accountById,
+  categories,
+  projects,
+  analysis,
   onToggleSelected,
+  onUpdate,
+  locale,
 }: {
   c: TransactionCandidate
   accountById: Map<string, AccountInfo>
+  categories: Array<{ code: string; name: unknown }>
+  projects: Array<{ code: string; name: unknown }>
+  analysis: AnalysisEntry | null
   onToggleSelected: (c: TransactionCandidate, next: boolean) => void
+  onUpdate: (patch: CandidatePatch) => void
+  locale: string
 }) {
   const { t } = useTranslation("wizard")
   const [expanded, setExpanded] = useState(false)
@@ -489,7 +587,28 @@ function CandidateRow({
       ? c.merchant
       : null
   const description = c.description?.trim() || null
-  const hasDetail = Boolean(description || nameLineDistinct)
+  const crypto = c.extra?.crypto
+  const counterAccount =
+    c.counterAccountId ? accountById.get(c.counterAccountId) ?? null : null
+  const reasoning = analysis?.reasoning?.trim() || null
+  // Always expandable now — the inline editors (type/category/status) live in
+  // the expanded view and need to be reachable for every row, even rows with
+  // no AI reasoning or raw name discrepancies.
+  const hasDetail = true
+
+  // Match the server's `validateImportCommit` rules so the row can flag
+  // _itself_ as a commit blocker without us plumbing a separate list down.
+  // Only selected rows block the commit button, so deferred rows don't need
+  // the warning.
+  const blocker: "needs_review" | "missing_category" | null =
+    c.selected &&
+    (c.status === "needs_review" || c.status === null || c.status === undefined)
+      ? "needs_review"
+      : c.selected &&
+          (c.status === "business" || c.status === "business_non_deductible") &&
+          !c.categoryCode
+        ? "missing_category"
+        : null
 
   const account = c.accountId ? accountById.get(c.accountId) : null
   const accountLabel = account
@@ -499,11 +618,19 @@ function CandidateRow({
     : null
   const accountShort = accountLabel?.split(" · ")[0] ?? accountLabel
 
+  const prefix = candidateSignPrefix(c)
+  const absTotal = c.total !== null ? Math.abs(c.total) : null
   const amount =
-    c.total !== null && c.currencyCode
-      ? formatCurrency(c.total, c.currencyCode)
-      : c.total !== null
-        ? (c.total / 100).toFixed(2)
+    absTotal !== null && c.currencyCode
+      ? formatCurrency(absTotal, c.currencyCode)
+      : absTotal !== null
+        ? (absTotal / 100).toFixed(2)
+        : ""
+  const amountClass =
+    prefix === "+"
+      ? "text-emerald-600 dark:text-emerald-400"
+      : prefix === "−"
+        ? "text-rose-600 dark:text-rose-400"
         : ""
 
   const lowConfidence = (c.confidence?.overall ?? 1) < 0.6
@@ -513,9 +640,12 @@ function CandidateRow({
   return (
     <div
       className={[
-        "px-4 py-2.5 transition-colors",
+        "px-4 py-2.5 transition-colors border-l-2",
         hasDetail ? "cursor-pointer" : "",
         expanded ? "bg-muted/30" : "hover:bg-muted/15",
+        blocker
+          ? "border-l-rose-500 bg-rose-50/30 dark:bg-rose-950/10"
+          : "border-l-transparent",
       ].join(" ")}
       onClick={() => hasDetail && setExpanded((v) => !v)}
       role={hasDetail ? "button" : undefined}
@@ -540,10 +670,22 @@ function CandidateRow({
           />
           <div className="min-w-0 flex-1">
             <div className="flex items-baseline gap-3">
+              <span
+                className="flex-shrink-0 text-[11px] font-mono tabular-nums text-muted-foreground/70"
+                title={t("rowDetail.rowIndex", { defaultValue: "Row" })}
+              >
+                #{c.rowIndex}
+              </span>
               <div className="min-w-0 flex-1 truncate text-[13px] font-medium tracking-tight">
                 {title}
               </div>
-              <div className="text-[13px] tabular-nums font-medium flex-shrink-0 tracking-tight">
+              <div
+                className={cn(
+                  "text-[13px] tabular-nums font-medium flex-shrink-0 tracking-tight",
+                  amountClass,
+                )}
+              >
+                {prefix}
                 {amount}
               </div>
             </div>
@@ -555,6 +697,19 @@ function CandidateRow({
                 </>
               ) : null}
               <span className="flex-shrink-0">{statusLabel}</span>
+              {blocker ? (
+                <span
+                  className="inline-flex items-center gap-1 rounded-md bg-rose-50 px-1.5 py-0.5 text-[10px] font-medium text-rose-700 ring-1 ring-rose-200 flex-shrink-0 dark:bg-rose-950/40 dark:text-rose-300 dark:ring-rose-900/40"
+                  title={
+                    blocker === "needs_review"
+                      ? "This row still needs a final status before you can commit."
+                      : "Business rows must have a category before you can commit."
+                  }
+                >
+                  <AlertTriangle className="h-3 w-3" />
+                  {blocker === "needs_review" ? "needs review" : "needs category"}
+                </span>
+              ) : null}
               {c.extra?.duplicateOfId ? (
                 <span className="inline-flex items-center gap-1 rounded-md bg-red-50 px-1.5 py-0.5 text-[10px] font-medium text-red-700 ring-1 ring-red-200 flex-shrink-0">
                   <CopyX className="h-3 w-3" />
@@ -600,21 +755,177 @@ function CandidateRow({
       {expanded && hasDetail ? (
         <div
           className={cn(
-            "mt-2 ml-5 space-y-1 text-[12px] text-muted-foreground border-l border-border/60 pl-3",
+            "mt-2 ml-5 space-y-1.5 text-[12px] text-muted-foreground border-l border-border/60 pl-3",
             !c.selected && "opacity-50",
           )}
         >
           {nameLineDistinct ? (
             <div>
-              <span className="text-muted-foreground/60">Raw name: </span>
-              {nameLineDistinct}
+              <span className="text-muted-foreground/60">{t("rowDetail.rawName", { defaultValue: "Raw name" })}: </span>
+              <span className="text-foreground/80">{nameLineDistinct}</span>
             </div>
           ) : null}
           {description ? (
-            <div className="whitespace-pre-wrap break-words">{description}</div>
+            <div className="whitespace-pre-wrap break-words text-foreground/80">
+              {description}
+            </div>
+          ) : null}
+          <div
+            className="grid grid-cols-1 sm:grid-cols-4 gap-2 pt-0.5"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <CandidateEditField label={t("rowDetail.status", { defaultValue: "Status" })}>
+              <Select
+                value={c.status ?? "needs_review"}
+                onValueChange={(v) =>
+                  onUpdate({ status: v as NonNullable<CandidatePatch["status"]> })
+                }
+              >
+                <SelectTrigger
+                  className={cn(
+                    "h-7 text-[11px]",
+                    blocker === "needs_review" && "ring-2 ring-rose-400 border-rose-400",
+                  )}
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {EDITABLE_STATUSES.map((s) => (
+                    <SelectItem key={s} value={s} className="text-xs">
+                      {STATUS_LABEL[s] ?? s}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </CandidateEditField>
+            <CandidateEditField label={t("rowDetail.type", { defaultValue: "Type" })}>
+              <Select
+                value={c.type ?? NONE_SENTINEL}
+                onValueChange={(v) =>
+                  onUpdate({ type: v === NONE_SENTINEL ? null : v })
+                }
+              >
+                <SelectTrigger className="h-7 text-[11px]">
+                  <SelectValue placeholder="—" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NONE_SENTINEL} className="text-xs text-muted-foreground">—</SelectItem>
+                  {TRANSACTION_TYPES.map((typ) => (
+                    <SelectItem key={typ} value={typ} className="text-xs">
+                      {typ}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </CandidateEditField>
+            <CandidateEditField label={t("rowDetail.category", { defaultValue: "Category" })}>
+              <Select
+                value={c.categoryCode ?? NONE_SENTINEL}
+                onValueChange={(v) =>
+                  onUpdate({ categoryCode: v === NONE_SENTINEL ? null : v })
+                }
+              >
+                <SelectTrigger
+                  className={cn(
+                    "h-7 text-[11px]",
+                    blocker === "missing_category" && "ring-2 ring-rose-400 border-rose-400",
+                  )}
+                >
+                  <SelectValue placeholder="—" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NONE_SENTINEL} className="text-xs text-muted-foreground">—</SelectItem>
+                  {categories.map((cat) => (
+                    <SelectItem key={cat.code} value={cat.code} className="text-xs">
+                      {getLocalizedValue(cat.name, locale) || cat.code}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </CandidateEditField>
+            <CandidateEditField label={t("rowDetail.project", { defaultValue: "Project" })}>
+              <Select
+                value={c.projectCode ?? NONE_SENTINEL}
+                onValueChange={(v) =>
+                  onUpdate({ projectCode: v === NONE_SENTINEL ? null : v })
+                }
+              >
+                <SelectTrigger className="h-7 text-[11px]">
+                  <SelectValue placeholder="—" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NONE_SENTINEL} className="text-xs text-muted-foreground">—</SelectItem>
+                  {projects.map((p) => (
+                    <SelectItem key={p.code} value={p.code} className="text-xs">
+                      {getLocalizedValue(p.name, locale) || p.code}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </CandidateEditField>
+          </div>
+          {(c.transferDirection || counterAccount || c.transferId) ? (
+            <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1 text-[11px]">
+              {c.transferDirection ? (
+                <span>
+                  <span className="text-muted-foreground/60">{t("rowDetail.transfer", { defaultValue: "Transfer" })}: </span>
+                  <span className="text-foreground/80">{c.transferDirection}</span>
+                </span>
+              ) : null}
+              {counterAccount ? (
+                <span>
+                  <span className="text-muted-foreground/60">{t("rowDetail.counterAccount", { defaultValue: "Counter account" })}: </span>
+                  <span className="text-foreground/80">
+                    {counterAccount.name}
+                    {counterAccount.bankName ? ` · ${counterAccount.bankName}` : ""}
+                  </span>
+                </span>
+              ) : null}
+            </div>
+          ) : null}
+          {crypto ? (
+            <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1 text-[11px]">
+              <span>
+                <span className="text-muted-foreground/60">{t("rowDetail.crypto", { defaultValue: "Crypto" })}: </span>
+                <span className="text-foreground/80">
+                  {crypto.asset ?? "—"}
+                  {crypto.quantity ? ` · qty ${crypto.quantity}` : ""}
+                  {typeof crypto.pricePerUnit === "number" ? ` · px ${crypto.pricePerUnit}` : ""}
+                </span>
+              </span>
+            </div>
+          ) : null}
+          {reasoning ? (
+            <div className="rounded-md border border-border/40 bg-muted/20 p-2 text-[11px]">
+              <div className="flex items-center gap-1.5 text-muted-foreground/70 mb-1">
+                <Sparkles className="h-3 w-3" />
+                <span>
+                  {t("rowDetail.aiReasoning", { defaultValue: "AI reasoning" })}
+                  {analysis?.model ? ` · ${analysis.model}` : analysis?.provider ? ` · ${analysis.provider}` : ""}
+                </span>
+              </div>
+              <div className="whitespace-pre-wrap break-words text-foreground/80">
+                {reasoning}
+              </div>
+            </div>
           ) : null}
         </div>
       ) : null}
     </div>
+  )
+}
+
+function CandidateEditField({
+  label,
+  children,
+}: {
+  label: string
+  children: React.ReactNode
+}) {
+  return (
+    <label className="flex flex-col gap-1 text-[10px] uppercase tracking-wide text-muted-foreground/70">
+      <span>{label}</span>
+      <span className="normal-case tracking-normal">{children}</span>
+    </label>
   )
 }

@@ -18,6 +18,8 @@ export type ImportSessionData = {
   promptVersion?: string | null
   title?: string | null
   contextFileIds?: string[]
+  commitCreatedCount?: number | null
+  commitErrors?: Array<{ rowIndex: number; message: string }> | null
 }
 
 export const getImportSessions = cache(async (userId: string) => {
@@ -129,6 +131,46 @@ export async function reopenSession(sessionId: string, userId: string): Promise<
             last_activity_at = now()
         WHERE id = ${sessionId} AND user_id = ${userId} AND status = 'abandoned'`,
   )
+}
+
+/**
+ *  Flip a committed session back to pending so its candidates can be
+ *  re-committed. Used when the original commit failed silently (e.g. all rows
+ *  rejected by the INSERT because of an unparseable date) and the user wants
+ *  to retry now that the underlying bug is fixed. Also:
+ *    - resets every candidate's `selected` flag to true so no row is
+ *      accidentally left out of the retry
+ *    - clears the commit diagnostics (commit_created_count, commit_errors)
+ *      so a fresh attempt starts from a clean slate
+ *  Returns the row count of the session after the flip, or 0 when the session
+ *  wasn't committed (or didn't match this user).
+ */
+export async function reopenCommittedSession(
+  sessionId: string,
+  userId: string,
+): Promise<{ found: boolean; rowCount: number }> {
+  const result = await queryOne<{ rowCount: number }>(
+    sql`UPDATE import_sessions
+        SET status = 'pending',
+            commit_created_count = NULL,
+            commit_errors = NULL,
+            data = COALESCE((
+              SELECT jsonb_agg(
+                CASE
+                  WHEN jsonb_typeof(elem) = 'object'
+                    THEN elem || '{"selected": true}'::jsonb
+                  ELSE elem
+                END
+              )
+              FROM jsonb_array_elements(data) AS elem
+            ), '[]'::jsonb),
+            last_activity_at = now()
+        WHERE id = ${sessionId} AND user_id = ${userId} AND status = 'committed'
+        RETURNING row_count AS "rowCount"`,
+  )
+  return result
+    ? { found: true, rowCount: result.rowCount }
+    : { found: false, rowCount: 0 }
 }
 
 // ---------------------------------------------------------------------------

@@ -15,7 +15,7 @@ import path from "path"
 // 2. Add a migration entry here with the next version number
 // 3. The migration SQL should be idempotent (use IF NOT EXISTS, etc.)
 
-export const SCHEMA_VERSION = 34 // bump this when adding a migration
+export const SCHEMA_VERSION = 36 // bump this when adding a migration
 
 export const migrations: { version: number; description: string; sql: string }[] = [
   {
@@ -917,6 +917,28 @@ export const migrations: { version: number; description: string; sql: string }[]
       "Rename transaction type 'conversion' → 'exchange' (matches FX-trading user-facing term). Also cleans up any lingering 'conversion' strings in wizard candidates; the taxonomy on display is now income, expense, refund, transfer, exchange, other.",
     sql: `
       UPDATE transactions SET type = 'exchange' WHERE type = 'conversion';
+    `,
+  },
+  {
+    version: 35,
+    description:
+      "Add commit diagnostics to import_sessions so silent per-row failures during the commit loop surface in the UI. commit_created_count records how many transactions actually landed, commit_errors stores {rowIndex, message} for every row that threw during INSERT.",
+    sql: `
+      ALTER TABLE import_sessions ADD COLUMN IF NOT EXISTS commit_created_count integer;
+      ALTER TABLE import_sessions ADD COLUMN IF NOT EXISTS commit_errors jsonb;
+    `,
+  },
+  {
+    version: 36,
+    description:
+      "Hide the Project column from the transactions list by default. Most users don't track projects and the column eats horizontal space; it stays visible in analysis views. Users who want it back can re-enable it at /settings/fields. Guarded with to_regclass because some test harnesses set up a partial schema without the fields table.",
+    sql: `
+      DO $$
+      BEGIN
+        IF to_regclass('public.fields') IS NOT NULL THEN
+          UPDATE fields SET is_visible_in_list = false WHERE code = 'projectCode';
+        END IF;
+      END $$;
     `,
   },
 ]

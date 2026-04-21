@@ -48,6 +48,14 @@ export type SessionReport = {
     status: string
     rowCount: number
     bankName: string | null
+    /** How many rows the commit loop actually inserted into `transactions`.
+     *  Populated by the commit endpoint; null on older / never-committed
+     *  sessions. When this is less than `rowCount` minus deferred rows, some
+     *  rows threw during INSERT — see `commitErrors`. */
+    commitCreatedCount: number | null
+    /** Per-row failure log captured during commit. Null when nothing failed
+     *  or when the session pre-dates the commit-diagnostics schema. */
+    commitErrors: Array<{ rowIndex: number; message: string }> | null
   }
   user: {
     businessName: string | null
@@ -119,6 +127,8 @@ export async function buildSessionReport(sessionId: string, userId: string): Pro
       status: session.status,
       rowCount: candidates.length,
       bankName: bankName || null,
+      commitCreatedCount: session.commitCreatedCount ?? null,
+      commitErrors: session.commitErrors ?? null,
     },
     user: userSummary(user),
     totals,

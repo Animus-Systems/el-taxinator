@@ -8,6 +8,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Loader2, Sparkles, MessageSquarePlus, FileText, RotateCcw, Trash2, PanelBottomClose } from "lucide-react"
 import { useWizardDock } from "@/lib/wizard-dock-context"
+import { ImportAccountPickerDialog } from "@/components/wizard/import-account-picker-dialog"
 
 export function WizardEntry() {
   const { t } = useTranslation("wizard")
@@ -51,6 +52,9 @@ export function WizardEntry() {
   const [dragActive, setDragActive] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
+  const [pendingFiles, setPendingFiles] = useState<File[] | null>(null)
+
+  const { data: activeAccounts = [] } = trpc.accounts.listActive.useQuery({})
 
   const addContextFile = trpc.wizard.addContextFile.useMutation()
 
@@ -79,7 +83,7 @@ export function WizardEntry() {
     return id
   }
 
-  async function handleFiles(fileList: File[]) {
+  function handleFiles(fileList: File[]) {
     setUploadError(null)
     if (fileList.length === 0) return
     const supported = fileList.filter((f) => {
@@ -90,6 +94,14 @@ export function WizardEntry() {
       setUploadError("Only CSV, XLSX, and PDF files are supported.")
       return
     }
+    // Gate the upload on account selection so imported rows never land with
+    // NULL account_id. The actual POST happens in `uploadWithAccount` once
+    // the dialog resolves.
+    setPendingFiles(supported)
+  }
+
+  async function uploadWithAccount(supported: File[], accountId: string) {
+    setPendingFiles(null)
     const primaryIdx = pickPrimaryIndex(supported)
     const primary = supported[primaryIdx]!
     const contextFiles = supported.filter((_, i) => i !== primaryIdx)
@@ -98,9 +110,9 @@ export function WizardEntry() {
 
     setUploading(true)
     try {
-      // 1. Primary through detect/extract pipeline.
       const form = new FormData()
       form.append("file", primary)
+      form.append("accountId", accountId)
       const endpoint = isPdf ? "/api/import/pdf/extract" : "/api/import/csv"
       const resp = await fetch(endpoint, { method: "POST", body: form, credentials: "include" })
       if (!resp.ok) {
@@ -111,8 +123,6 @@ export function WizardEntry() {
       const sessionId = json.sessionId
       if (!sessionId) throw new Error("no session returned from upload")
 
-      // 2. Context files: upload + attach. Failures are logged but don't block
-      //    navigation — the user can re-attach from the wizard shell if needed.
       for (const ctx of contextFiles) {
         try {
           const fileId = await uploadContextFile(ctx)
@@ -328,6 +338,17 @@ export function WizardEntry() {
         </div>
         {uploadError ? <p className="mt-3 text-sm text-destructive">{uploadError}</p> : null}
       </section>
+
+      <ImportAccountPickerDialog
+        open={pendingFiles !== null}
+        accounts={activeAccounts}
+        onCancel={() => setPendingFiles(null)}
+        onConfirm={(accountId) => {
+          const files = pendingFiles
+          if (!files) return
+          void uploadWithAccount(files, accountId)
+        }}
+      />
     </div>
   )
 }
