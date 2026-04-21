@@ -65,11 +65,20 @@ const reconcileTransactionSchema = z.object({
   id: z.string(),
   name: z.string().nullable(),
   merchant: z.string().nullable(),
+  /** Bank narrative — often carries a reference number / counterparty detail
+   *  that makes it obvious which document a transaction relates to. */
+  description: z.string().nullable(),
   issuedAt: z.date().nullable(),
   totalCents: z.number(),
   /** 'income' | 'expense' | null — null transactions shouldn't appear here. */
   type: z.string().nullable(),
+  /** 'business' | 'business_non_deductible' | 'personal_taxable' | … */
+  status: z.string().nullable(),
   currencyCode: z.string().nullable(),
+  categoryCode: z.string().nullable(),
+  accountId: z.string().nullable(),
+  accountName: z.string().nullable(),
+  note: z.string().nullable(),
   allocatedCents: z.number(),
 })
 
@@ -202,14 +211,23 @@ export const reconcileRouter = router({
         .map((tx) => {
           const fromInvoices = allocByTxInvoice.get(tx.id) ?? 0
           const fromPurchases = allocByTxPurchase.get(tx.id) ?? 0
+          // `accountName` is denormalised onto the row by mapTransactionRow
+          // via the LEFT JOIN in getTransactions, so no extra query needed.
+          const accountName = (tx as { accountName?: string | null }).accountName ?? null
           return {
             id: tx.id,
             name: tx.name,
             merchant: tx.merchant,
+            description: tx.description,
             issuedAt: tx.issuedAt,
             totalCents: Math.abs(tx.total ?? 0),
             type: tx.type,
+            status: tx.status,
             currencyCode: tx.currencyCode,
+            categoryCode: tx.categoryCode,
+            accountId: tx.accountId,
+            accountName,
+            note: tx.note,
             allocatedCents: fromInvoices + fromPurchases,
           }
         })

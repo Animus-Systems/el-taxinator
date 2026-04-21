@@ -465,6 +465,8 @@
   },
   "invoices": {
     "title": "Invoices",
+    "linkedTransactions_one": "{count} transaction linked",
+    "linkedTransactions_other": "{count} transactions linked",
     "newInvoice": "New Invoice",
     "newSimplifiedInvoice": "New Simplified Invoice",
     "simplifiedInvoiceNumber": "Simplified Invoice Number *",
@@ -690,6 +692,13 @@
     "reconcile": {
       "trigger": "Reconcile",
       "title": "Reconcile",
+      "filters": {
+        "searchPlaceholder": "Search number, contact, transaction…",
+        "status": "Status",
+        "allStatuses": "All statuses",
+        "allCurrencies": "All currencies",
+        "clear": "Clear filters"
+      },
       "subtitleV2": "Drag an invoice or purchase onto the transaction that settled it, or let AI propose matches. Cash deposits and aggregated cash payouts are supported.",
       "analyzeWithAi": "Analyze with AI",
       "analyzing": "Analyzing…",
@@ -873,6 +882,8 @@
   },
   "purchases": {
     "title": "Purchases",
+    "linkedTransactions_one": "{count} transaction linked",
+    "linkedTransactions_other": "{count} transactions linked",
     "new": "New purchase",
     "empty": "No purchases yet. Record a supplier invoice to keep your libro de facturas recibidas up to date.",
     "createFirst": "Create first purchase",

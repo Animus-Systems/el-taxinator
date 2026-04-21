@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
   getOrCreateSelfHostedUser: vi.fn(),
   getActiveEntity: vi.fn(),
   createBundle: vi.fn(),
+  createFullBundle: vi.fn(),
   getSettings: vi.fn(),
   updateSettings: vi.fn(),
   getAuthUrl: vi.fn(),
@@ -24,6 +25,7 @@ vi.mock("@/lib/entities", () => ({
 
 vi.mock("@/lib/bundle", () => ({
   createBundle: mocks.createBundle,
+  createFullBundle: mocks.createFullBundle,
 }))
 
 vi.mock("@/models/settings", () => ({
@@ -56,6 +58,7 @@ describe("backup routes", () => {
       type: "autonomo",
     })
     mocks.createBundle.mockResolvedValue(Buffer.from("zip-data"))
+    mocks.createFullBundle.mockResolvedValue(Buffer.from("zip-data"))
     mocks.getSettings.mockResolvedValue({})
     mocks.updateSettings.mockResolvedValue(null)
     mocks.getAuthUrl.mockReturnValue("https://accounts.google.test/o/oauth2/auth")
@@ -87,11 +90,9 @@ describe("backup routes", () => {
 
     expect(response.statusCode).toBe(200)
     expect(response.headers["content-type"]).toContain("application/zip")
-    expect(response.headers["content-disposition"]).toContain(".taxinator.zip")
+    expect(response.headers["content-disposition"]).toMatch(/taxinator-full-.+\.taxinator\.zip/)
     expect(response.body).toBe("zip-data")
-    expect(mocks.createBundle).toHaveBeenCalledWith(
-      expect.objectContaining({ id: "entity-1" }),
-    )
+    expect(mocks.createFullBundle).toHaveBeenCalledWith()
 
     await app.close()
   })
@@ -236,12 +237,10 @@ describe("backup routes", () => {
         }),
       ],
     })
-    expect(mocks.createBundle).toHaveBeenCalledWith(
-      expect.objectContaining({ id: "entity-1" }),
-    )
+    expect(mocks.createFullBundle).toHaveBeenCalledWith()
     expect(mocks.uploadToGoogleDrive).toHaveBeenCalledWith(
       "refresh-token-1",
-      expect.stringContaining(".taxinator.zip"),
+      expect.stringMatching(/^taxinator-full-.+\.taxinator\.zip$/),
       Buffer.from("zip-data"),
       "application/zip",
       expect.objectContaining({

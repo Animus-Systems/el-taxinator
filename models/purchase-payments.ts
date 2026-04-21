@@ -59,6 +59,21 @@ export async function getAllocatedByPurchase(userId: string): Promise<Map<string
   return new Map(rows.map((r) => [r.purchaseId, Number(r.totalCents)]))
 }
 
+/**
+ * Number of linked transactions per purchase. Drives the "chain" icon on
+ * the purchases list. Cash purchases paid out of a lump-sum cash deposit
+ * naturally have >1 and should still surface as linked.
+ */
+export async function getPaymentCountByPurchase(userId: string): Promise<Map<string, number>> {
+  const rows = await queryMany<{ purchaseId: string; count: string | number }>(
+    sql`SELECT purchase_id, COUNT(*)::int AS count
+        FROM purchase_payments
+        WHERE user_id = ${userId}
+        GROUP BY purchase_id`,
+  )
+  return new Map(rows.map((r) => [r.purchaseId, Number(r.count)]))
+}
+
 export async function getPurchaseAllocatedByTransaction(userId: string): Promise<Map<string, number>> {
   const rows = await queryMany<{ transactionId: string; totalCents: string | number }>(
     sql`SELECT transaction_id, SUM(amount_cents)::bigint AS total_cents

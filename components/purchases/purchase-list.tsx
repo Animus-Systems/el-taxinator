@@ -25,7 +25,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import { calcInvoiceTotals } from "@/lib/invoice-calculations"
-import { formatCurrency } from "@/lib/utils"
+import { cn, formatCurrency } from "@/lib/utils"
 import type { PurchaseWithRelations } from "@/models/purchases"
 import { format } from "date-fns"
 import { Link } from "@/lib/navigation"
@@ -33,6 +33,7 @@ import {
   AlertTriangle,
   Eye,
   FileX2,
+  Link2,
   Paperclip,
   Search,
   Trash2,
@@ -102,6 +103,7 @@ export function PurchaseList({
   const { t } = useTranslation("purchases")
   const confirm = useConfirm()
   const utils = trpc.useUtils()
+  const { data: paymentCounts = {} } = trpc.purchasePayments.countsByPurchase.useQuery({})
 
   const [search, setSearch] = useState("")
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all")
@@ -305,7 +307,19 @@ export function PurchaseList({
               return (
                 <TableRow
                   key={purchase.id}
-                  className={STATUS_ROW_ACCENT[purchase.status] ?? ""}
+                  className={cn(
+                    STATUS_ROW_ACCENT[purchase.status] ?? "",
+                    // Subtle rose tint on purchases with no linked outgoing
+                    // transaction. Cancelled + refunded skip the tint since
+                    // they don't expect an outflow. Draft isn't a standard
+                    // purchase status but we exclude defensively for parity
+                    // with the invoices list.
+                    (paymentCounts[purchase.id] ?? 0) === 0 &&
+                      purchase.status !== "cancelled" &&
+                      purchase.status !== "refunded" &&
+                      purchase.status !== "draft" &&
+                      "bg-rose-50/40 hover:bg-rose-50/60 dark:bg-rose-950/10 dark:hover:bg-rose-950/20",
+                  )}
                 >
                   <TableCell>{format(purchase.issueDate, "yyyy-MM-dd")}</TableCell>
                   <TableCell>
@@ -314,6 +328,35 @@ export function PurchaseList({
                   <TableCell className="font-medium">
                     <span className="inline-flex items-center gap-1.5">
                       {purchase.supplierInvoiceNumber}
+                      {(() => {
+                        const linkedCount = paymentCounts[purchase.id] ?? 0
+                        if (linkedCount === 0) return null
+                        const label = t("linkedTransactions", {
+                          count: linkedCount,
+                          defaultValue_one: "{count} transaction linked",
+                          defaultValue_other: "{count} transactions linked",
+                        })
+                        return (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span
+                                className="inline-flex items-center gap-0.5 text-emerald-600 dark:text-emerald-400"
+                                aria-label={label}
+                              >
+                                <Link2 className="h-3.5 w-3.5" aria-hidden />
+                                {linkedCount > 1 ? (
+                                  <span className="text-[10px] font-mono tabular-nums">
+                                    {linkedCount}
+                                  </span>
+                                ) : null}
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent side="top" className="max-w-xs">
+                              {label}
+                            </TooltipContent>
+                          </Tooltip>
+                        )
+                      })()}
                       {missingFile ? (
                         <Tooltip>
                           <TooltipTrigger asChild>

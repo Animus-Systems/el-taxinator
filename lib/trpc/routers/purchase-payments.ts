@@ -8,6 +8,7 @@ import {
   listPaymentsForPurchase,
   listPurchasePaymentsForTransaction,
   getAllocatedByPurchase,
+  getPaymentCountByPurchase,
   getPurchaseAllocatedByTransaction,
   getPurchasePaymentById,
 } from "@/models/purchase-payments"
@@ -83,6 +84,16 @@ export const purchasePaymentsRouter = router({
     .output(z.array(purchasePaymentSchema))
     .query(async ({ ctx, input }) => {
       return listPaymentsForPurchase(input.purchaseId, ctx.user.id)
+    }),
+
+  /** Map of purchaseId → number of linked transactions, for the chain icon
+   *  on the purchases list. */
+  countsByPurchase: authedProcedure
+    .input(z.object({}).optional())
+    .output(z.record(z.string(), z.number().int()))
+    .query(async ({ ctx }) => {
+      const map = await getPaymentCountByPurchase(ctx.user.id)
+      return Object.fromEntries(map)
     }),
 
   listForTransaction: authedProcedure

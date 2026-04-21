@@ -311,6 +311,74 @@ export async function initNewCluster(entityId: string, entityDataDir?: string): 
 }
 
 /**
+ *  Run a callback with a connection string to a specific entity's database,
+ *  starting a transient embedded cluster if its own cluster isn't already
+ *  running. Used by the full-backup path to pg_dump every entity — we can't
+ *  use `startCluster` there because that would evict the currently-active
+ *  entity's cluster and break the live app.
+ *
+ *  Resolution order:
+ *    1. `entity.db` external connection string (dev / external PG scenario)
+ *    2. The globally-running cluster if it matches this entity
+ *    3. A fresh `EmbeddedPostgres` instance pointed at the entity's pgdata,
+ *       started on a temporary port, and stopped in `finally`
+ *
+ *  Callers must treat the connection string as valid only for the duration
+ *  of `fn` — the transient instance is stopped as soon as `fn` resolves.
+ */
+export async function withEntityDb<T>(
+  entity: { id: string; db?: string; dataDir?: string },
+  fn: (connectionString: string) => Promise<T>,
+): Promise<T> {
+  if (entity.db) {
+    return fn(entity.db)
+  }
+  if (getRunningClusterEntityId() === entity.id) {
+    return fn(getEmbeddedConnectionString())
+  }
+
+  const baseDir = entity.dataDir
+    ? path.resolve(entity.dataDir)
+    : getEntityDataDir(entity.id)
+  const dataDir = path.join(baseDir, "pgdata")
+  if (!isAlreadyInitialised(dataDir)) {
+    // The entity has never had a DB written — nothing to dump.
+    throw new Error(`Cluster for "${entity.id}" is not initialised`)
+  }
+  const runtime = loadRuntimeConfigFromPath(path.join(baseDir, RUNTIME_FILE))
+  if (!runtime) {
+    throw new Error(`Cluster for "${entity.id}" has no runtime.json — cannot resolve password`)
+  }
+
+  // Reuse the persisted port when free, otherwise pick a new one so we don't
+  // collide with the live app's cluster on another entity.
+  const port = (await isPortInUse(runtime.port))
+    ? await pickFreePort()
+    : runtime.port
+
+  const instance = new EmbeddedPostgres({
+    databaseDir: dataDir,
+    user: SUPERUSER,
+    password: runtime.password,
+    port,
+    persistent: true,
+  })
+
+  console.log(`[embedded-pg] Starting transient cluster for "${entity.id}" on 127.0.0.1:${port}`)
+  await instance.start()
+  try {
+    const connectionString = `postgresql://${SUPERUSER}:${encodeURIComponent(runtime.password)}@127.0.0.1:${port}/${DB_NAME}`
+    return await fn(connectionString)
+  } finally {
+    try {
+      await instance.stop()
+    } catch (err) {
+      console.warn(`[embedded-pg] Failed to stop transient cluster for "${entity.id}":`, err)
+    }
+  }
+}
+
+/**
  * Stop the embedded cluster gracefully. Safe to call when no cluster is
  * running. Does not delete data (we always run with persistent: true).
  */

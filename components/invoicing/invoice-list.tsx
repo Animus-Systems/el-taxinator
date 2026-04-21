@@ -24,7 +24,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import { calcInvoiceTotals } from "@/lib/invoice-calculations"
-import { formatCurrency } from "@/lib/utils"
+import { cn, formatCurrency } from "@/lib/utils"
 import type { InvoiceWithRelations } from "@/models/invoices"
 import { format } from "date-fns"
 import { Link } from "@/lib/navigation"
@@ -34,6 +34,7 @@ import {
   Eye,
   FileText,
   FileX2,
+  Link2,
   Paperclip,
   Search,
   Trash2,
@@ -108,6 +109,7 @@ export function InvoiceList({
   const confirm = useConfirm()
   const utils = trpc.useUtils()
   const [preview, setPreview] = useState<{ fileId: string; title: string } | null>(null)
+  const { data: paymentCounts = {} } = trpc.invoicePayments.countsByInvoice.useQuery({})
 
   const [search, setSearch] = useState("")
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all")
@@ -370,7 +372,17 @@ export function InvoiceList({
               return (
                 <TableRow
                   key={invoice.id}
-                  className={STATUS_ROW_ACCENT[invoice.status] ?? ""}
+                  className={cn(
+                    STATUS_ROW_ACCENT[invoice.status] ?? "",
+                    // Subtle rose tint on rows with no linked transactions so
+                    // unmatched invoices stand out when scanning the list.
+                    // Skip cancelled (doesn't need payment) and draft (not
+                    // issued yet — no transaction expected).
+                    (paymentCounts[invoice.id] ?? 0) === 0 &&
+                      invoice.status !== "cancelled" &&
+                      invoice.status !== "draft" &&
+                      "bg-rose-50/40 hover:bg-rose-50/60 dark:bg-rose-950/10 dark:hover:bg-rose-950/20",
+                  )}
                 >
                   <TableCell>{format(invoice.issueDate, "yyyy-MM-dd")}</TableCell>
                   <TableCell>
@@ -379,6 +391,35 @@ export function InvoiceList({
                   <TableCell className="font-medium">
                     <span className="inline-flex items-center gap-1.5">
                       {invoice.number}
+                      {(() => {
+                        const linkedCount = paymentCounts[invoice.id] ?? 0
+                        if (linkedCount === 0) return null
+                        const label = t("linkedTransactions", {
+                          count: linkedCount,
+                          defaultValue_one: "{count} transaction linked",
+                          defaultValue_other: "{count} transactions linked",
+                        })
+                        return (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span
+                                className="inline-flex items-center gap-0.5 text-emerald-600 dark:text-emerald-400"
+                                aria-label={label}
+                              >
+                                <Link2 className="h-3.5 w-3.5" aria-hidden />
+                                {linkedCount > 1 ? (
+                                  <span className="text-[10px] font-mono tabular-nums">
+                                    {linkedCount}
+                                  </span>
+                                ) : null}
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent side="top" className="max-w-xs">
+                              {label}
+                            </TooltipContent>
+                          </Tooltip>
+                        )
+                      })()}
                       {missingFile ? (
                         <Tooltip>
                           <TooltipTrigger asChild>

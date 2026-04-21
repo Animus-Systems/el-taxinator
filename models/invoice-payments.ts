@@ -64,6 +64,21 @@ export async function getAllocatedByInvoice(userId: string): Promise<Map<string,
 }
 
 /**
+ * Number of linked transactions per invoice. Drives the "chain" icon on the
+ * invoices list — a count rather than a boolean so the UI can show "3"
+ * when a single invoice was paid off across multiple transactions.
+ */
+export async function getPaymentCountByInvoice(userId: string): Promise<Map<string, number>> {
+  const rows = await queryMany<{ invoiceId: string; count: string | number }>(
+    sql`SELECT invoice_id, COUNT(*)::int AS count
+        FROM invoice_payments
+        WHERE user_id = ${userId}
+        GROUP BY invoice_id`,
+  )
+  return new Map(rows.map((r) => [r.invoiceId, Number(r.count)]))
+}
+
+/**
  * Sum of allocations per transaction for a user. Used to surface
  * "partially allocated" / "fully allocated" state on the reconcile page.
  */

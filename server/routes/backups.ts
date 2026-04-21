@@ -1,7 +1,6 @@
 import type { FastifyInstance } from "fastify"
 
-import { createBundle } from "@/lib/bundle"
-import { getActiveEntity } from "@/lib/entities"
+import { createFullBundle } from "@/lib/bundle"
 import {
   getAuthUrl,
   getTokensFromCode,
@@ -12,15 +11,12 @@ import {
 import { getSettings, updateSettings } from "@/models/settings"
 import { getOrCreateSelfHostedUser } from "@/models/users"
 
-function backupFileName(entityName: string): string {
-  const safeEntityName = entityName
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-
+function backupFileName(): string {
+  // Full backups cover every configured entity, so the filename is no longer
+  // scoped to a single company name — a single timestamped zip contains the
+  // whole app state (all entities + uploads + registry).
   const date = new Date().toISOString().slice(0, 10)
-  return `${safeEntityName || "backup"}-${date}.taxinator.zip`
+  return `taxinator-full-${date}.taxinator.zip`
 }
 
 async function getUser() {
@@ -133,9 +129,8 @@ export async function backupRoutes(app: FastifyInstance) {
         return reply.send({ results: [{ success: false, error: "Google Drive is not connected" }] })
       }
 
-      const entity = await getActiveEntity()
-      const bundle = await createBundle(entity)
-      const fileName = backupFileName(entity.name)
+      const bundle = await createFullBundle()
+      const fileName = backupFileName()
       const upload = await uploadToGoogleDrive(
         refreshToken,
         fileName,

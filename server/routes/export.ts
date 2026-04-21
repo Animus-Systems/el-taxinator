@@ -14,8 +14,8 @@ import type { FastifyInstance } from "fastify"
 import { readFile } from "node:fs/promises"
 import JSZip from "jszip"
 
-import { createBundle } from "@/lib/bundle"
-import { getActiveEntity, getActiveEntityId } from "@/lib/entities"
+import { createFullBundle } from "@/lib/bundle"
+import { getActiveEntityId } from "@/lib/entities"
 import { getOrCreateSelfHostedUser } from "@/models/users"
 import { getTransactions } from "@/models/transactions"
 import { getFilesByIds } from "@/models/files"
@@ -84,19 +84,17 @@ export async function exportRoutes(app: FastifyInstance) {
       const user = await getOrCreateSelfHostedUser()
       if (!user) return reply.code(401).send({ error: "Not authenticated" })
 
-      const entity = await getActiveEntity()
-      const bundle = await createBundle(entity)
-      const safeEntityName = entity.name
-        .trim()
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, "-")
-        .replace(/^-+|-+$/g, "") || "backup"
+      // Full backup covers every configured entity — DB + uploads + registry.
+      // Previously this dumped only the active entity, which silently excluded
+      // anything under other companies from the user's backup.
+      const bundle = await createFullBundle()
+      const date = new Date().toISOString().slice(0, 10)
 
       reply.header("Content-Type", "application/zip")
       reply.header("Content-Length", String(bundle.length))
       reply.header(
         "Content-Disposition",
-        `attachment; filename="${safeEntityName}-${new Date().toISOString().slice(0, 10)}.taxinator.zip"`,
+        `attachment; filename="taxinator-full-${date}.taxinator.zip"`,
       )
       return reply.send(bundle)
     } catch (error) {

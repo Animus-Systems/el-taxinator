@@ -8,6 +8,7 @@ import {
   listPaymentsForInvoice,
   listPaymentsForTransaction,
   getAllocatedByInvoice,
+  getPaymentCountByInvoice,
   getInvoicePaymentById,
 } from "@/models/invoice-payments"
 import { getInvoiceById, updateInvoiceStatus } from "@/models/invoices"
@@ -47,6 +48,17 @@ export const invoicePaymentsRouter = router({
     .output(z.array(invoicePaymentSchema))
     .query(async ({ ctx, input }) => {
       return listPaymentsForInvoice(input.invoiceId, ctx.user.id)
+    }),
+
+  /** Map of invoiceId → number of linked transactions, for the chain icon
+   *  on the invoices list. Single GROUP BY, cheap for any realistic
+   *  ledger size. */
+  countsByInvoice: authedProcedure
+    .input(z.object({}).optional())
+    .output(z.record(z.string(), z.number().int()))
+    .query(async ({ ctx }) => {
+      const map = await getPaymentCountByInvoice(ctx.user.id)
+      return Object.fromEntries(map)
     }),
 
   listForTransaction: authedProcedure

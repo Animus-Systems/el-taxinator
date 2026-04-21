@@ -20,8 +20,10 @@ interface Correction {
   merchant: string | null
   fromCategory: string | null
   fromProject: string | null
+  fromType: string | null
   toCategory: string | null
   toProject: string | null
+  toType: string | null
 }
 
 // ---------------------------------------------------------------------------
@@ -69,10 +71,12 @@ function buildLearnReason(
   groupSize: number,
   categoryCode: string | null,
   projectCode: string | null,
+  type: string | null,
 ): string {
   const parts: string[] = []
   if (categoryCode) parts.push(`category '${categoryCode}'`)
   if (projectCode) parts.push(`project '${projectCode}'`)
+  if (type) parts.push(`type '${type}'`)
   const target = parts.length > 0 ? ` to ${parts.join(" + ")}` : ""
   return `Learned from ${groupSize} rows you recategorized${target} in this import.`
 }
@@ -98,7 +102,10 @@ export async function learnFromImport(
     originalsMap.set(orig.rowIndex, orig)
   }
 
-  // Identify corrections: selected candidates where category/project changed
+  // Identify corrections: selected candidates where category/project/type
+  // changed. Type corrections (e.g. transfer → exchange on recurring FX
+  // conversions) are just as worth learning as category changes — the user
+  // shouldn't have to retype them every import.
   const corrections: Correction[] = []
   for (const candidate of finalCandidates) {
     if (!candidate.selected) continue
@@ -108,16 +115,19 @@ export async function learnFromImport(
 
     const categoryChanged = candidate.categoryCode !== original.categoryCode
     const projectChanged = candidate.projectCode !== original.projectCode
+    const typeChanged = candidate.type !== original.type
 
-    if (categoryChanged || projectChanged) {
+    if (categoryChanged || projectChanged || typeChanged) {
       corrections.push({
         rowIndex: candidate.rowIndex,
         name: candidate.name,
         merchant: candidate.merchant,
         fromCategory: original.categoryCode,
         fromProject: original.projectCode,
+        fromType: original.type,
         toCategory: candidate.categoryCode,
         toProject: candidate.projectCode,
+        toType: candidate.type,
       })
     }
   }
@@ -125,10 +135,12 @@ export async function learnFromImport(
   // Need at least 3 corrections to learn anything
   if (corrections.length < 3) return 0
 
-  // Group corrections by target category+project key
+  // Group corrections by target category+project+type key — all three are
+  // rule-configurable, so same-target corrections on a recurring pattern
+  // should share a rule.
   const groups = new Map<string, Correction[]>()
   for (const correction of corrections) {
-    const key = `${correction.toCategory ?? "null"}|${correction.toProject ?? "null"}`
+    const key = `${correction.toCategory ?? "null"}|${correction.toProject ?? "null"}|${correction.toType ?? "null"}`
     const group = groups.get(key)
     if (group) {
       group.push(correction)
@@ -155,10 +167,11 @@ export async function learnFromImport(
     const commonPattern = findCommonSubstring(names)
     if (!commonPattern) continue
 
-    // Parse the group key back to category/project
-    const [toCategory, toProject] = key.split("|")
+    // Parse the group key back to category/project/type
+    const [toCategory, toProject, toType] = key.split("|")
     const categoryCode: string | null = !toCategory || toCategory === "null" ? null : toCategory
     const projectCode: string | null = !toProject || toProject === "null" ? null : toProject
+    const type: string | null = !toType || toType === "null" ? null : toType
 
     // Confidence proportional to group size, capped at 0.9
     const confidence = Math.min(0.5 + group.length / 10, 0.9)
@@ -170,13 +183,14 @@ export async function learnFromImport(
         r.matchValue.toLowerCase() === commonPattern.toLowerCase()
     )
 
-    const reason = buildLearnReason(group.length, categoryCode, projectCode)
+    const reason = buildLearnReason(group.length, categoryCode, projectCode, type)
 
     if (existingRule) {
       // Update existing learned rule
       await updateRule(existingRule.id, userId, {
         categoryCode,
         projectCode,
+        type,
         confidence,
         learnReason: reason,
       })
@@ -190,6 +204,7 @@ export async function learnFromImport(
         matchValue: commonPattern,
         categoryCode,
         projectCode,
+        type,
         source: "learned",
         confidence,
         isActive: true,

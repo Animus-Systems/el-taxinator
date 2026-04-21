@@ -47,12 +47,21 @@ import {
   Pencil,
   Receipt,
   RefreshCw,
+  Search,
   Sparkles,
   Unlink,
   Wrench,
   X,
 } from "lucide-react"
 import { Input } from "@/components/ui/input"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { DateRangePresetFilter } from "@/components/ui/date-range-preset-filter"
 import { Link } from "@/lib/navigation"
 import { useConfirm } from "@/components/ui/confirm-dialog"
 import { toast } from "sonner"
@@ -76,10 +85,16 @@ type ReconcileTx = {
   id: string
   name: string | null
   merchant: string | null
+  description: string | null
   issuedAt: Date | null
   totalCents: number
   type: string | null
+  status: string | null
   currencyCode: string | null
+  categoryCode: string | null
+  accountId: string | null
+  accountName: string | null
+  note: string | null
   allocatedCents: number
 }
 
@@ -160,6 +175,28 @@ function confidenceColor(c: number): string {
   return "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
 }
 
+// Map document statuses to coloured badge classes. Unknown statuses fall
+// back to neutral so new statuses don't render invisible text.
+function statusBadgeClass(status: string): string {
+  switch (status) {
+    case "paid":
+      return "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
+    case "sent":
+    case "received":
+      return "bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-300"
+    case "overdue":
+      return "bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300"
+    case "draft":
+      return "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
+    case "cancelled":
+      return "bg-zinc-100 text-zinc-500 line-through dark:bg-zinc-900 dark:text-zinc-400"
+    case "refunded":
+      return "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300"
+    default:
+      return "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
+  }
+}
+
 // ─── Card components ──────────────────────────────────────────────────────
 
 function DocumentCard({
@@ -190,6 +227,13 @@ function DocumentCard({
             <span className="truncate text-sm font-medium">{doc.number}</span>
             <Badge variant="outline" className={cn("text-[10px]", accent.chip, "border-transparent")}>
               {doc.kind === "invoice" ? "Invoice" : "Purchase"}
+            </Badge>
+            <Badge
+              variant="outline"
+              className={cn("text-[10px] border-transparent", statusBadgeClass(doc.status))}
+              title={doc.status}
+            >
+              {doc.status}
             </Badge>
           </div>
           {!compact && (
@@ -281,6 +325,15 @@ export function ReconcilePage() {
   const [suggestions, setSuggestions] = useState<SuggestedMatch[]>([])
   const [dismissedIdx, setDismissedIdx] = useState<Set<number>>(new Set())
   const [activeDrag, setActiveDrag] = useState<ReconcileDoc | null>(null)
+
+  // Filter bar state. All filters are AND-combined. Applied to both unlinked
+  // documents/transactions AND linked pairs so the "narrow down" is consistent
+  // across tabs.
+  const [filterSearch, setFilterSearch] = useState("")
+  const [filterDateFrom, setFilterDateFrom] = useState("")
+  const [filterDateTo, setFilterDateTo] = useState("")
+  const [filterStatus, setFilterStatus] = useState<string>("all")
+  const [filterCurrency, setFilterCurrency] = useState<string>("all")
 
   const { data, isLoading } = trpc.reconcile.data.useQuery({})
   // Fetch existing links lazily — only when the user switches to a linked
@@ -558,14 +611,115 @@ export function ReconcilePage() {
 
   // ─── Render ───
 
-  const invoiceDocs = documents.filter((d) => d.kind === "invoice")
-  const purchaseDocs = documents.filter((d) => d.kind === "purchase")
-  const incomeTx = transactions.filter((t) => t.type === "income")
-  const expenseTx = transactions.filter((t) => t.type === "expense")
+  // Available filter dropdown options derived from the raw data.
+  const availableStatuses = useMemo(
+    () => Array.from(new Set(documents.map((d) => d.status))).sort(),
+    [documents],
+  )
+  const availableCurrencies = useMemo(() => {
+    const set = new Set<string>()
+    for (const d of documents) set.add(d.currencyCode)
+    for (const tx of transactions) if (tx.currencyCode) set.add(tx.currencyCode)
+    return Array.from(set).sort()
+  }, [documents, transactions])
+
+  const dateFromMs = filterDateFrom ? new Date(filterDateFrom).getTime() : null
+  const dateToMs = filterDateTo ? new Date(`${filterDateTo}T23:59:59`).getTime() : null
+  const searchNeedle = filterSearch.trim().toLowerCase()
+
+  function docMatches(d: ReconcileDoc): boolean {
+    if (filterStatus !== "all" && d.status !== filterStatus) return false
+    if (filterCurrency !== "all" && d.currencyCode !== filterCurrency) return false
+    if (dateFromMs !== null && d.issueDate.getTime() < dateFromMs) return false
+    if (dateToMs !== null && d.issueDate.getTime() > dateToMs) return false
+    if (searchNeedle) {
+      const hay = [d.number, d.contactName ?? "", d.notes ?? ""]
+        .join(" ")
+        .toLowerCase()
+      if (!hay.includes(searchNeedle)) return false
+    }
+    return true
+  }
+
+  function txMatches(t: ReconcileTx): boolean {
+    if (filterCurrency !== "all" && t.currencyCode !== filterCurrency) return false
+    if (t.issuedAt) {
+      const ms = t.issuedAt.getTime()
+      if (dateFromMs !== null && ms < dateFromMs) return false
+      if (dateToMs !== null && ms > dateToMs) return false
+    }
+    if (searchNeedle) {
+      const hay = [
+        t.name ?? "",
+        t.merchant ?? "",
+        t.description ?? "",
+        t.note ?? "",
+        t.accountName ?? "",
+        t.categoryCode ?? "",
+      ]
+        .join(" ")
+        .toLowerCase()
+      if (!hay.includes(searchNeedle)) return false
+    }
+    return true
+  }
+
+  const filterActive =
+    filterSearch.length > 0 ||
+    filterDateFrom !== "" ||
+    filterDateTo !== "" ||
+    filterStatus !== "all" ||
+    filterCurrency !== "all"
+
+  const invoiceDocs = documents.filter((d) => d.kind === "invoice" && docMatches(d))
+  const purchaseDocs = documents.filter((d) => d.kind === "purchase" && docMatches(d))
+  const incomeTx = transactions.filter((t) => t.type === "income" && txMatches(t))
+  const expenseTx = transactions.filter((t) => t.type === "expense" && txMatches(t))
 
   const links = linksQuery.data ?? []
-  const linkedInvoicePairs = links.filter((l) => l.documentKind === "invoice")
-  const linkedPurchasePairs = links.filter((l) => l.documentKind === "purchase")
+  // For linked pairs, a row passes if EITHER side matches the filter. Users
+  // expect "show me pairs involving X" to find the pair regardless of which
+  // leg mentions X.
+  function linkedPairMatches(p: LinkedPair): boolean {
+    if (filterStatus !== "all") {
+      // Linked pairs carry no doc status in the payload; skip status filtering
+      // for linked tabs (no visible breakage — just no-op).
+    }
+    if (filterCurrency !== "all") {
+      if (
+        p.documentCurrencyCode !== filterCurrency &&
+        p.transactionCurrencyCode !== filterCurrency
+      ) {
+        return false
+      }
+    }
+    const docMs = p.documentIssueDate.getTime()
+    const txMs = p.transactionIssuedAt?.getTime() ?? null
+    if (dateFromMs !== null && docMs < dateFromMs && (txMs === null || txMs < dateFromMs)) {
+      return false
+    }
+    if (dateToMs !== null && docMs > dateToMs && (txMs === null || txMs > dateToMs)) {
+      return false
+    }
+    if (searchNeedle) {
+      const hay = [
+        p.documentNumber,
+        p.documentContactName ?? "",
+        p.transactionName ?? "",
+        p.transactionMerchant ?? "",
+      ]
+        .join(" ")
+        .toLowerCase()
+      if (!hay.includes(searchNeedle)) return false
+    }
+    return true
+  }
+  const linkedInvoicePairs = links.filter(
+    (l) => l.documentKind === "invoice" && linkedPairMatches(l),
+  )
+  const linkedPurchasePairs = links.filter(
+    (l) => l.documentKind === "purchase" && linkedPairMatches(l),
+  )
 
   async function onUnlinkPair(pair: LinkedPair): Promise<void> {
     const ok = await confirmDialog({
@@ -731,6 +885,78 @@ export function ReconcilePage() {
             </ul>
           </section>
         )}
+
+        {/* ── Filter bar ──────────────────────────────────── */}
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative min-w-[200px]">
+            <Search className="absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              type="search"
+              value={filterSearch}
+              onChange={(e) => setFilterSearch(e.target.value)}
+              placeholder={t("reconcile.filters.searchPlaceholder", {
+                defaultValue: "Search number, contact, transaction…",
+              })}
+              className="h-9 pl-7"
+            />
+          </div>
+          <DateRangePresetFilter
+            value={{ from: filterDateFrom, to: filterDateTo }}
+            onChange={(r) => {
+              setFilterDateFrom(r.from)
+              setFilterDateTo(r.to)
+            }}
+          />
+          <Select value={filterStatus} onValueChange={setFilterStatus}>
+            <SelectTrigger className="h-9 w-[140px]">
+              <SelectValue placeholder={t("reconcile.filters.status", { defaultValue: "Status" })} />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">
+                {t("reconcile.filters.allStatuses", { defaultValue: "All statuses" })}
+              </SelectItem>
+              {availableStatuses.map((s) => (
+                <SelectItem key={s} value={s}>
+                  {s}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {availableCurrencies.length > 1 ? (
+            <Select value={filterCurrency} onValueChange={setFilterCurrency}>
+              <SelectTrigger className="h-9 w-[120px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">
+                  {t("reconcile.filters.allCurrencies", { defaultValue: "All currencies" })}
+                </SelectItem>
+                {availableCurrencies.map((c) => (
+                  <SelectItem key={c} value={c}>
+                    {c}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : null}
+          {filterActive ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setFilterSearch("")
+                setFilterDateFrom("")
+                setFilterDateTo("")
+                setFilterStatus("all")
+                setFilterCurrency("all")
+              }}
+            >
+              <X className="mr-1 h-3.5 w-3.5" />
+              {t("reconcile.filters.clear", { defaultValue: "Clear filters" })}
+            </Button>
+          ) : null}
+        </div>
 
         {/* ── Tab bar ──────────────────────────────────────── */}
         <div className="flex flex-wrap gap-1 border-b">
@@ -1640,17 +1866,80 @@ function SubList({
 }
 
 function TransactionRow({ tx }: { tx: ReconcileTx }) {
+  const [expanded, setExpanded] = useState(false)
   const unallocated = Math.max(tx.totalCents - tx.allocatedCents, 0)
+  const description = tx.description?.trim() || null
+  const note = tx.note?.trim() || null
+  const merchantSecondary = tx.merchant && tx.name ? tx.merchant : null
+  const hasExtra = Boolean(description || note || merchantSecondary || tx.categoryCode || tx.accountName)
+
   return (
-    <div className="flex items-start justify-between gap-2">
-      <div className="min-w-0 flex-1">
+    <div
+      className={cn(
+        "flex items-start justify-between gap-2",
+        hasExtra && "cursor-pointer",
+      )}
+      onClick={hasExtra ? () => setExpanded((v) => !v) : undefined}
+    >
+      <div className="min-w-0 flex-1 space-y-0.5">
         <div className="truncate text-sm font-medium">
           {tx.name || tx.merchant || tx.id.slice(0, 8)}
         </div>
-        <div className="text-xs text-muted-foreground">
-          {tx.issuedAt ? format(tx.issuedAt, "yyyy-MM-dd") : "—"}
-          {tx.merchant && tx.name ? ` · ${tx.merchant}` : ""}
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-muted-foreground">
+          {tx.issuedAt ? (
+            <span className="tabular-nums">{format(tx.issuedAt, "yyyy-MM-dd")}</span>
+          ) : (
+            <span>—</span>
+          )}
+          {merchantSecondary ? <span>· {merchantSecondary}</span> : null}
+          {tx.accountName ? (
+            <span className="inline-flex items-center gap-1">
+              ·
+              <span className="rounded bg-muted px-1 py-0.5 text-[10px] text-foreground/80">
+                {tx.accountName}
+              </span>
+            </span>
+          ) : null}
+          {tx.categoryCode ? (
+            <span className="inline-flex items-center gap-1">
+              ·
+              <span className="rounded bg-muted px-1 py-0.5 text-[10px] text-foreground/80">
+                {tx.categoryCode}
+              </span>
+            </span>
+          ) : null}
+          {tx.status && tx.status !== "business" ? (
+            <span className="inline-flex items-center gap-1">
+              ·
+              <span className="rounded bg-muted px-1 py-0.5 text-[10px] text-foreground/80">
+                {tx.status}
+              </span>
+            </span>
+          ) : null}
         </div>
+        {description && !expanded ? (
+          <div
+            className="truncate text-[11px] text-muted-foreground/80"
+            title={description}
+          >
+            {description}
+          </div>
+        ) : null}
+        {expanded && (description || note) ? (
+          <div className="mt-1 space-y-1 rounded-md border border-border/40 bg-muted/20 p-2 text-[11px]">
+            {description ? (
+              <div className="whitespace-pre-wrap break-words text-foreground/80">
+                {description}
+              </div>
+            ) : null}
+            {note ? (
+              <div className="whitespace-pre-wrap break-words text-foreground/70 border-t border-border/40 pt-1">
+                <span className="text-muted-foreground/70">Note: </span>
+                {note}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
       </div>
       <div className="shrink-0 text-right">
         <div className="text-sm font-medium">

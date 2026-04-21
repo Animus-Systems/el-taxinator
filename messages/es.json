@@ -465,6 +465,8 @@
   },
   "invoices": {
     "title": "Facturas",
+    "linkedTransactions_one": "{count} transacción vinculada",
+    "linkedTransactions_other": "{count} transacciones vinculadas",
     "newInvoice": "Nueva factura",
     "newSimplifiedInvoice": "Nueva factura simplificada",
     "simplifiedInvoiceNumber": "Número de factura simplificada *",
@@ -690,6 +692,13 @@
     "reconcile": {
       "trigger": "Conciliar",
       "title": "Conciliar",
+      "filters": {
+        "searchPlaceholder": "Buscar número, contacto, transacción…",
+        "status": "Estado",
+        "allStatuses": "Todos los estados",
+        "allCurrencies": "Todas las monedas",
+        "clear": "Limpiar filtros"
+      },
       "subtitleV2": "Arrastra una factura emitida o recibida sobre la transacción que la liquidó, o deja que la IA proponga emparejamientos. Admite ingresos en efectivo y pagos agrupados.",
       "analyzeWithAi": "Analizar con IA",
       "analyzing": "Analizando…",
@@ -873,6 +882,8 @@
   },
   "purchases": {
     "title": "Compras",
+    "linkedTransactions_one": "{count} transacción vinculada",
+    "linkedTransactions_other": "{count} transacciones vinculadas",
     "new": "Nueva compra",
     "empty": "Aún no hay compras. Registra una factura de proveedor para mantener al día tu libro de facturas recibidas.",
     "createFirst": "Crear la primera compra",
