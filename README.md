@@ -140,6 +140,12 @@ To point at an external Postgres for advanced use cases, set
 `DATABASE_URL` or add an entity with an explicit connection string in
 `data/entities.json`.
 
+## Versioning
+
+El Taxinator follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Every notable change is recorded in [CHANGELOG.md](CHANGELOG.md) using the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format. The current version lives in `package.json`.
+
+The first tracked release is **0.5.0**.
+
 ## Acknowledgments
 
 This project is a fork of [Taxinator](https://github.com/vas3k/Taxinator) by [vas3k](https://github.com/vas3k). The original project provided an excellent foundation for AI-powered receipt scanning and transaction management. We've taken it in a new direction:
