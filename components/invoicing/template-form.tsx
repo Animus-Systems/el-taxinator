@@ -200,11 +200,10 @@ export function TemplateForm({ mode, onDone }: Props) {
     try {
       const fd = new FormData()
       fd.set("file", file)
-      // The existing /api/invoices/extract route persists a file and returns
-      // its fileId, but it also runs LLM extraction. For logo upload we want
-      // a simpler path — reuse attach-pdf logic by adapting to a minimal
-      // endpoint. For now, inline-upload via the files compat endpoint.
-      const res = await fetch("/api/files/upload", {
+      // Asset endpoint persists with isReviewed=true so the logo never
+      // appears in the unreviewed inbox — it's a branding asset, not a
+      // document to review.
+      const res = await fetch("/api/files/upload-asset", {
         method: "POST",
         body: fd,
       })

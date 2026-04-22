@@ -57,6 +57,44 @@ export async function filesRoutes(app: FastifyInstance) {
     }
   })
 
+  // ─── Upload asset (logos, signatures, etc. — not inbox items) ────────
+  // Mirrors /api/files/upload but persists with isReviewed=true so
+  // branding assets never show up in the unreviewed-inbox list. Used by
+  // the invoice-template form's logo picker and any future asset-upload
+  // surface (e.g. signatures, email banners).
+  app.post("/api/files/upload-asset", async (request, reply) => {
+    try {
+      const user = await getOrCreateSelfHostedUser()
+      if (!user) return reply.code(401).send({ success: false, error: "Not authenticated" })
+
+      const entityId = await getActiveEntityId()
+      const created: { id: string; filename: string }[] = []
+
+      for await (const part of (request as unknown as { parts(): AsyncIterableIterator<import("@fastify/multipart").Multipart> }).parts()) {
+        if (part.type !== "file") continue
+        const buffer = await part.toBuffer()
+        const file = await persistUploadedFile(user.id, entityId, {
+          fileName: part.filename,
+          mimetype: part.mimetype,
+          buffer,
+          isReviewed: true,
+        })
+        created.push({ id: file.id, filename: file.filename })
+      }
+
+      if (created.length === 0) {
+        return reply.code(400).send({ success: false, error: "No files uploaded" })
+      }
+      return reply.send({ success: true, files: created })
+    } catch (error) {
+      console.error("[files/upload-asset] Error:", error)
+      return reply.code(500).send({
+        success: false,
+        error: error instanceof Error ? error.message : "Upload failed",
+      })
+    }
+  })
+
   // ─── Download (stream original bytes, attachment disposition) ────────
   app.get<{ Params: { id: string } }>("/files/download/:id", async (request, reply) => {
     try {

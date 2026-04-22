@@ -15,7 +15,7 @@ import path from "path"
 // 2. Add a migration entry here with the next version number
 // 3. The migration SQL should be idempotent (use IF NOT EXISTS, etc.)
 
-export const SCHEMA_VERSION = 40 // bump this when adding a migration
+export const SCHEMA_VERSION = 41 // bump this when adding a migration
 
 export const migrations: { version: number; description: string; sql: string }[] = [
   {
@@ -1051,6 +1051,25 @@ export const migrations: { version: number; description: string; sql: string }[]
         ALTER TABLE invoices ADD COLUMN IF NOT EXISTS fx_rate_to_eur numeric(20, 10);
         ALTER TABLE invoices ADD COLUMN IF NOT EXISTS fx_rate_date date;
         ALTER TABLE invoices ADD COLUMN IF NOT EXISTS fx_rate_source text;
+      END $$;
+    `,
+  },
+  {
+    version: 41,
+    description:
+      "Backfill: mark any file referenced by invoice_templates.logo_file_id as reviewed. These are branding assets — they should never have landed in the unreviewed inbox. Pre-v41 uploads went through the generic /api/files/upload which hardcoded isReviewed=false; the new /api/files/upload-asset route flags them as reviewed at upload time.",
+    sql: `
+      DO $$
+      BEGIN
+        IF to_regclass('public.invoice_templates') IS NULL OR to_regclass('public.files') IS NULL THEN
+          RETURN;
+        END IF;
+        UPDATE files
+        SET is_reviewed = true
+        WHERE is_reviewed = false
+          AND id IN (
+            SELECT logo_file_id FROM invoice_templates WHERE logo_file_id IS NOT NULL
+          );
       END $$;
     `,
   },
