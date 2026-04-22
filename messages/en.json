@@ -687,7 +687,13 @@
         "watermarkCancelled": "Cancelled watermark",
         "watermarkCancelledPlaceholder": "CANCELLED",
         "watermarkRejected": "Rejected watermark",
-        "watermarkRejectedPlaceholder": "REJECTED"
+        "watermarkRejectedPlaceholder": "REJECTED",
+        "priceInEur": "FX block — 'Price in EUR' label",
+        "priceInEurPlaceholder": "Price in EUR",
+        "rateLine": "FX block — rate line ({code} is replaced with the invoice currency)",
+        "rateLinePlaceholder": "Price EUR/{code}",
+        "ratesTakenFrom": "FX block — attribution label",
+        "ratesTakenFromPlaceholder": "Prices taken from"
       }
     },
     "attachPdf": {

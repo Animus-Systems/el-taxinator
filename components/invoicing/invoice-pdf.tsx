@@ -81,6 +81,11 @@ type LabelSet = {
   watermarkDraft: string
   watermarkCancelled: string
   watermarkRejected: string
+  /** FX block on non-EUR invoices. `rateLine` contains a `{code}` token that
+   *  the renderer swaps for the invoice's currency (e.g. "Price EUR/GBP"). */
+  priceInEur: string
+  rateLine: string
+  ratesTakenFrom: string
 }
 
 const LABELS_EN: LabelSet = {
@@ -104,6 +109,9 @@ const LABELS_EN: LabelSet = {
   watermarkDraft: "DRAFT",
   watermarkCancelled: "CANCELLED",
   watermarkRejected: "REJECTED",
+  priceInEur: "Price in EUR",
+  rateLine: "Price EUR/{code}",
+  ratesTakenFrom: "Prices taken from",
 }
 
 const LABELS_ES: LabelSet = {
@@ -127,6 +135,9 @@ const LABELS_ES: LabelSet = {
   watermarkDraft: "BORRADOR",
   watermarkCancelled: "ANULADA",
   watermarkRejected: "RECHAZADA",
+  priceInEur: "Precio en EUR",
+  rateLine: "Cambio EUR/{code}",
+  ratesTakenFrom: "Precios tomados de",
 }
 
 /** Fallback label set used when the template or caller supplies no
@@ -173,6 +184,55 @@ function formatCents(cents: number, currencyCode: string): string {
     }).format(cents / 100)
   } catch {
     return `${(cents / 100).toFixed(2)} ${currencyCode}`
+  }
+}
+
+/**
+ * Inputs `fxBlockLines` needs to decide whether to render and what text
+ * to produce. Extracted from the JSX so the label/formatting logic can be
+ * unit-tested independently of the PDF renderer — PDF buffers compress
+ * text streams, so buffer-level string matching isn't reliable.
+ */
+export type FxBlockInput = {
+  currencyCode: string
+  fxRateToEur: string | null
+  fxRateDate: Date | null
+  fxRateSource: string | null
+  /** Invoice total after IRPF withholding, in minor units of currencyCode. */
+  totalAfterIrpf: number
+  /** Already-resolved labels (template overrides + language defaults layered). */
+  labels: {
+    priceInEur: string
+    rateLine: string
+    ratesTakenFrom: string
+  }
+}
+
+/**
+ * Compute the three lines of the FX block. Returns null when the block
+ * should not render (EUR invoice, missing rate, malformed rate). The JSX
+ * wraps each element of the returned tuple in its own <Text/>.
+ *
+ * The rate line appends the effective date in parentheses so the reader can
+ * see exactly which trading day ECB published the rate on — useful when
+ * the invoice's issue date falls on a weekend or holiday and the rate
+ * lookup fell back to a prior trading day.
+ */
+export function fxBlockLines(input: FxBlockInput):
+  | { priceLine: string; rateLine: string; sourceLine: string }
+  | null {
+  const code = input.currencyCode.toUpperCase()
+  if (code === "EUR") return null
+  if (!input.fxRateToEur || !input.fxRateDate) return null
+  const rate = Number(input.fxRateToEur)
+  if (!Number.isFinite(rate) || rate <= 0) return null
+  const eurAmount = (input.totalAfterIrpf / 100) * rate
+  const source = input.fxRateSource ?? "https://www.ecb.europa.eu"
+  const rateDateText = format(input.fxRateDate, "dd/MM/yyyy")
+  return {
+    priceLine: `${input.labels.priceInEur}: ${eurAmount.toFixed(4)}`,
+    rateLine: `${input.labels.rateLine.replace("{code}", code)}: ${code} 1 = EUR ${rate.toFixed(4)} (${rateDateText})`,
+    sourceLine: `${input.labels.ratesTakenFrom}: ${source}`,
   }
 }
 
@@ -458,6 +518,37 @@ export function InvoicePDF({
             </Text>
           </View>
         </View>
+
+        {/* ── FX block: "Price in EUR" for non-EUR invoices ───────────── */}
+        {/* Matches the format the user typed by hand on GBP/USD invoices
+            for years — authoritative EUR amount, rate, and ECB source.
+            Layout wraps the pure fxBlockLines helper (exported for tests)
+            in <Text/> nodes. */}
+        {(() => {
+          const totalAfterIrpf =
+            total -
+            (invoice.irpfRate > 0 ? Math.round((subtotal * invoice.irpfRate) / 100) : 0)
+          const block = fxBlockLines({
+            currencyCode: currency,
+            fxRateToEur: invoice.fxRateToEur,
+            fxRateDate: invoice.fxRateDate,
+            fxRateSource: invoice.fxRateSource,
+            totalAfterIrpf,
+            labels: {
+              priceInEur: L("priceInEur"),
+              rateLine: L("rateLine"),
+              ratesTakenFrom: L("ratesTakenFrom"),
+            },
+          })
+          if (!block) return null
+          return (
+            <View style={{ marginTop: 16, fontSize: 9, color: "#6b7280" }}>
+              <Text>{block.priceLine}</Text>
+              <Text>{block.rateLine}</Text>
+              <Text>{block.sourceLine}</Text>
+            </View>
+          )
+        })()}
 
         {template?.belowTotalsText && (
           <View style={{ marginTop: 20 }}>

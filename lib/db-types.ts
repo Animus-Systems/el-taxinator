@@ -860,6 +860,9 @@ export const invoiceTemplateLabelsSchema = z
     watermarkDraft: z.string().optional(),
     watermarkCancelled: z.string().optional(),
     watermarkRejected: z.string().optional(),
+    priceInEur: z.string().optional(),
+    rateLine: z.string().optional(),
+    ratesTakenFrom: z.string().optional(),
   })
   .passthrough()
 export type InvoiceTemplateLabels = z.infer<typeof invoiceTemplateLabelsSchema>
@@ -911,6 +914,14 @@ export const invoiceSchema = z.object({
    * like €60.00 that no integer pre-tax × 1.07 can represent exactly. */
   totalCents: z.number().int().nullable(),
   irpfRate: z.number(),
+  /** Locked EUR exchange rate for non-EUR invoices. `fxRateToEur` is EUR per
+   * 1 unit of the invoice's currencyCode, stored as a string to preserve
+   * full numeric precision coming out of Postgres. `fxRateDate` may differ
+   * from issueDate (e.g. weekend → fallback to prior trading day). Null for
+   * EUR invoices or when the ECB lookup was unreachable/unknown. */
+  fxRateToEur: z.string().nullable().default(null),
+  fxRateDate: z.date().nullable().default(null),
+  fxRateSource: z.string().nullable().default(null),
   createdAt: z.date(),
   updatedAt: z.date(),
 })

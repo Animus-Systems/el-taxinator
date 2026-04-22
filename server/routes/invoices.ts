@@ -27,6 +27,7 @@ import {
   loadTemplateWithLogo,
   regenerateInvoicePdfForId,
 } from "@/lib/invoice-pdf-generation"
+import { getEurPerUnit } from "@/models/fx-rates"
 import { fullPathForFile } from "@/lib/files"
 import { readFile } from "node:fs/promises"
 
@@ -172,6 +173,12 @@ function buildSyntheticInvoiceForPreview(
     currencyCode,
     totalCents: body.totalCents ?? null,
     irpfRate: Number.isFinite(body.irpfRate) ? Number(body.irpfRate) : 0,
+    // FX fields are populated by the route handler after this call when
+    // currencyCode !== EUR. Defaults keep EUR previews and failed lookups
+    // rendering without the FX block.
+    fxRateToEur: null,
+    fxRateDate: null,
+    fxRateSource: null,
     createdAt: new Date(),
     updatedAt: new Date(),
     client: null,
@@ -284,6 +291,9 @@ function buildSampleInvoiceForTemplatePreview(userId: string): InvoiceWithRelati
     currencyCode: "EUR",
     totalCents: null,
     irpfRate: 0,
+    fxRateToEur: null,
+    fxRateDate: null,
+    fxRateSource: null,
     createdAt: issue,
     updatedAt: issue,
     client: {
@@ -637,6 +647,18 @@ export async function invoicesRoutes(app: FastifyInstance) {
           ? await getContactById(body.contactId, user.id)
           : null
         synthetic.client = client
+
+        // Populate the FX block for non-EUR previews so the user sees the
+        // "Price in EUR" block before saving. Skip gracefully on lookup
+        // failures — preview rendering must never hard-fail.
+        if (synthetic.currencyCode && synthetic.currencyCode !== "EUR") {
+          const fx = await getEurPerUnit(synthetic.currencyCode, synthetic.issueDate)
+          if (fx) {
+            synthetic.fxRateToEur = fx.eurPerUnit
+            synthetic.fxRateDate = fx.effectiveDate
+            synthetic.fxRateSource = fx.source
+          }
+        }
 
         const entityId = await getActiveEntityId()
         const { template, logoBytes } = await loadTemplateWithLogo(

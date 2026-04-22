@@ -19,7 +19,7 @@ import {
 import { suggestNextInvoiceNumber } from "@/lib/invoice-series"
 import { getFileById } from "@/models/files"
 import type { InvoiceData } from "@/models/invoices"
-import { regenerateInvoicePdfSafe } from "@/lib/invoice-pdf-generation"
+import { applyFxRate, regenerateInvoicePdfSafe } from "@/lib/invoice-pdf-generation"
 import {
   invoiceSchema,
   invoiceItemSchema,
@@ -158,7 +158,14 @@ export const invoicesRouter = router({
           message: `An invoice with number "${input.number}" already exists for this client.`,
         })
       }
-      const invoice = await createInvoice(ctx.user.id, input as InvoiceData)
+      const fx = await applyFxRate({
+        currencyCode: input.currencyCode ?? "EUR",
+        issueDate: input.issueDate,
+        fxRateToEur: null,
+        fxRateDate: null,
+        fxRateSource: null,
+      })
+      const invoice = await createInvoice(ctx.user.id, { ...input, ...fx } as InvoiceData)
       // Auto-generate the PDF so drafts have an attached file immediately,
       // ready to preview or send. Rendering failures are logged but don't
       // block creation — the UI's Regenerate button is always a fallback.
@@ -172,7 +179,18 @@ export const invoicesRouter = router({
     .output(invoiceUpdateResultSchema)
     .mutation(async ({ ctx, input }) => {
       const { id, ...data } = input
-      const result = await updateInvoice(id, ctx.user.id, data as InvoiceData)
+      // Read the existing row so an idempotent re-save (same issue date,
+      // same currency) reuses the originally-locked rate instead of racing
+      // to ECB on every edit.
+      const existing = await getInvoiceById(id, ctx.user.id)
+      const fx = await applyFxRate({
+        currencyCode: data.currencyCode ?? existing?.currencyCode ?? "EUR",
+        issueDate: data.issueDate,
+        fxRateToEur: existing?.fxRateToEur ?? null,
+        fxRateDate: existing?.fxRateDate ?? null,
+        fxRateSource: existing?.fxRateSource ?? null,
+      })
+      const result = await updateInvoice(id, ctx.user.id, { ...data, ...fx } as InvoiceData)
       // Content changed — the attached PDF is now stale. Regenerate so the
       // stored file matches what the UI shows.
       await regenerateInvoicePdfSafe(id, ctx.user)
@@ -208,7 +226,31 @@ export const invoicesRouter = router({
     .input(z.object({ id: z.string(), currencyCode: z.string().length(3) }))
     .output(invoiceSchema.nullable())
     .mutation(async ({ ctx, input }) => {
-      return updateInvoiceCurrency(input.id, ctx.user.id, input.currencyCode)
+      // Need the invoice's issue_date to look up the ECB rate for the new
+      // currency. Also must force a fresh lookup: the old stored rate was
+      // for the previous currency, so passing null inputs sidesteps the
+      // idempotency check in applyFxRate.
+      const existing = await getInvoiceById(input.id, ctx.user.id)
+      if (!existing) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Invoice not found" })
+      }
+      const fx = await applyFxRate({
+        currencyCode: input.currencyCode,
+        issueDate: existing.issueDate,
+        fxRateToEur: null,
+        fxRateDate: null,
+        fxRateSource: null,
+      })
+      const updated = await updateInvoiceCurrency(
+        input.id,
+        ctx.user.id,
+        input.currencyCode,
+        fx,
+      )
+      // Regenerate the attached PDF so the printed totals (and the FX
+      // block) reflect the new currency.
+      if (updated) await regenerateInvoicePdfSafe(input.id, ctx.user)
+      return updated
     }),
 
   /** Overwrite the printed-total override. `null` clears the override so the

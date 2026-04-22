@@ -687,7 +687,13 @@
         "watermarkCancelled": "Marca de agua anulada",
         "watermarkCancelledPlaceholder": "ANULADA",
         "watermarkRejected": "Marca de agua rechazada",
-        "watermarkRejectedPlaceholder": "RECHAZADA"
+        "watermarkRejectedPlaceholder": "RECHAZADA",
+        "priceInEur": "Bloque FX — etiqueta 'Precio en EUR'",
+        "priceInEurPlaceholder": "Precio en EUR",
+        "rateLine": "Bloque FX — línea de cambio ({code} se sustituye por la moneda)",
+        "rateLinePlaceholder": "Cambio EUR/{code}",
+        "ratesTakenFrom": "Bloque FX — etiqueta de atribución",
+        "ratesTakenFromPlaceholder": "Precios tomados de"
       }
     },
     "attachPdf": {

@@ -20,6 +20,8 @@ import { PdfPreviewDialog } from "./pdf-preview-dialog"
 import { AttachPdfDialog } from "./attach-pdf-dialog"
 import { useConfirm } from "@/components/ui/confirm-dialog"
 import { ContactPicker } from "@/components/contacts/contact-picker"
+import { CurrencyPicker } from "@/components/currency-picker"
+import { fxBlockLines } from "@/components/invoicing/invoice-pdf"
 
 const STATUSES = ["draft", "sent", "paid", "overdue", "cancelled"] as const
 
@@ -92,18 +94,10 @@ export function InvoiceDetail({
     setTotal.mutate({ id: invoice.id, totalCents: Math.round(euros * 100) })
     setEditingTotal(false)
   }
-  const [currencyDraft, setCurrencyDraft] = useState(invoiceCurrency)
-  useEffect(() => {
-    setCurrencyDraft(invoiceCurrency)
-  }, [invoiceCurrency])
-
-  function commitCurrency(): void {
-    const next = currencyDraft.trim().toUpperCase()
-    if (next.length !== 3 || next === invoiceCurrency) {
-      setCurrencyDraft(invoiceCurrency)
-      return
-    }
-    updateCurrency.mutate({ id: invoice.id, currencyCode: next })
+  function handleCurrencyChange(next: string): void {
+    const normalized = next.trim().toUpperCase()
+    if (normalized.length !== 3 || normalized === invoiceCurrency) return
+    updateCurrency.mutate({ id: invoice.id, currencyCode: normalized })
   }
   const { data: payments = [] } = trpc.invoicePayments.listForInvoice.useQuery({
     invoiceId: invoice.id,
@@ -242,24 +236,16 @@ export function InvoiceDetail({
             <label className="text-xs text-muted-foreground">
               {t("currency", { defaultValue: "Currency" })}
             </label>
-            <Input
-              value={currencyDraft}
-              onChange={(e) =>
-                setCurrencyDraft(e.target.value.toUpperCase().slice(0, 3))
-              }
-              onBlur={commitCurrency}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault()
-                  commitCurrency()
-                }
-              }}
-              disabled={updateCurrency.isPending}
-              maxLength={3}
-              className="h-9 w-20 uppercase"
-              placeholder="EUR"
-              aria-label={t("currency", { defaultValue: "Currency" })}
-            />
+            <div className="w-44">
+              <CurrencyPicker
+                value={invoiceCurrency}
+                onChange={handleCurrencyChange}
+                placeholder={t("currencyPlaceholder", { defaultValue: "EUR" })}
+                searchPlaceholder={t("currencySearchPlaceholder", {
+                  defaultValue: "Search code or name…",
+                })}
+              />
+            </div>
           </div>
           <Select value={invoice.status} onValueChange={handleStatusChange} disabled={isPending}>
             <SelectTrigger className="w-36">
@@ -438,6 +424,39 @@ export function InvoiceDetail({
           </TableRow>
         </TableFooter>
       </Table>
+
+      {/* FX block — mirrors what prints on the PDF for non-EUR invoices.
+          Surfaced in the UI too so users can see the locked rate at a glance
+          without opening the PDF. Falls back to null for EUR invoices or when
+          the rate hasn't been locked (lookup failed, etc.). */}
+      {(() => {
+        const totalAfterIrpf =
+          total -
+          (invoice.irpfRate > 0 ? Math.round((subtotal * invoice.irpfRate) / 100) : 0)
+        const fx = fxBlockLines({
+          currencyCode: invoiceCurrency,
+          fxRateToEur: invoice.fxRateToEur,
+          fxRateDate: invoice.fxRateDate,
+          fxRateSource: invoice.fxRateSource,
+          totalAfterIrpf,
+          labels: {
+            priceInEur: t("fx.priceInEur", { defaultValue: "Price in EUR" }),
+            rateLine: t("fx.rateLine", { defaultValue: "Price EUR/{code}" }),
+            ratesTakenFrom: t("fx.ratesTakenFrom", { defaultValue: "Prices taken from" }),
+          },
+        })
+        if (!fx) return null
+        return (
+          <div className="p-4 border rounded-lg space-y-1 text-sm">
+            <p className="font-medium">
+              {t("fx.heading", { defaultValue: "EUR reference" })}
+            </p>
+            <p className="text-muted-foreground">{fx.priceLine}</p>
+            <p className="text-muted-foreground">{fx.rateLine}</p>
+            <p className="text-muted-foreground">{fx.sourceLine}</p>
+          </div>
+        )
+      })()}
 
       {invoice.notes && (
         <div className="p-4 border rounded-lg">

@@ -128,6 +128,10 @@ function buildSyntheticQuoteForPreview(
     currencyCode: "EUR",
     totalCents: null,
     irpfRate: 0,
+    // Quotes never render the FX block (they're EUR-only at the DB level).
+    fxRateToEur: null,
+    fxRateDate: null,
+    fxRateSource: null,
     createdAt: new Date(),
     updatedAt: new Date(),
     client: null,

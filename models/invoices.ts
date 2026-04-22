@@ -52,6 +52,12 @@ export type InvoiceData = {
   currencyCode?: string
   totalCents?: number | null
   irpfRate?: number
+  /** Locked EUR rate fields for non-EUR invoices. Populated by the tRPC
+   *  layer via `applyFxRate` before calling create/update — `buildInsert`
+   *  and `buildUpdate` pass them through as-is. */
+  fxRateToEur?: string | null
+  fxRateDate?: Date | null
+  fxRateSource?: string | null
   items: InvoiceItemData[]
 }
 
@@ -454,13 +460,27 @@ export async function updateInvoiceCurrency(
   id: string,
   userId: string,
   currencyCode: string,
+  fx?: {
+    fxRateToEur: string | null
+    fxRateDate: Date | null
+    fxRateSource: string | null
+  },
 ) {
   const normalized = currencyCode.trim().toUpperCase()
   if (!/^[A-Z]{3}$/.test(normalized)) {
     throw new Error(`Invalid currency code: ${currencyCode}`)
   }
+  // Bundle the currency + FX columns into a single UPDATE so we never
+  // leave the row in an intermediate state where `currency_code` is GBP
+  // but `fx_rate_to_eur` is still the USD rate from before.
+  const data: Record<string, unknown> = { currencyCode: normalized }
+  if (fx) {
+    data["fxRateToEur"] = fx.fxRateToEur
+    data["fxRateDate"] = fx.fxRateDate
+    data["fxRateSource"] = fx.fxRateSource
+  }
   return queryOne<Invoice>(
-    buildUpdate("invoices", { currencyCode: normalized }, "id = $1 AND user_id = $2", [id, userId]),
+    buildUpdate("invoices", data, "id = $1 AND user_id = $2", [id, userId]),
   )
 }
 

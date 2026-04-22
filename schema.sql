@@ -304,6 +304,9 @@ CREATE TABLE invoices (
     currency_code text NOT NULL DEFAULT 'EUR',
     total_cents integer,
     kind text NOT NULL DEFAULT 'invoice' CHECK (kind IN ('invoice', 'simplified')),
+    fx_rate_to_eur numeric(20, 10),
+    fx_rate_date date,
+    fx_rate_source text,
     created_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL,
     updated_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL,
     irpf_rate double precision DEFAULT 0.0 NOT NULL
@@ -694,6 +697,17 @@ CREATE TABLE chat_messages (
 );
 CREATE INDEX chat_messages_user_created_idx ON chat_messages (user_id, created_at);
 CREATE UNIQUE INDEX chat_messages_user_summary_idx ON chat_messages (user_id) WHERE role = 'system';
+
+-- ─── FX Rates (shared ECB daily reference rates, user-agnostic) ─────────────
+
+CREATE TABLE fx_rates (
+    rate_date date NOT NULL,
+    currency text NOT NULL,
+    eur_per_unit numeric(20, 10) NOT NULL,
+    fetched_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    PRIMARY KEY (rate_date, currency)
+);
+CREATE INDEX fx_rates_currency_idx ON fx_rates (currency, rate_date DESC);
 
 -- ─── Schema Version ─────────────────────────────────────────────────────────
 

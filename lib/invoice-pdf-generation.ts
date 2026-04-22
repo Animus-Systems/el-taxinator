@@ -20,6 +20,7 @@ import {
   type QuoteWithRelations,
 } from "@/models/invoices"
 import { getTemplateById } from "@/models/invoice-templates"
+import { getEurPerUnit } from "@/models/fx-rates"
 import { renderInvoicePdfBuffer } from "@/components/invoicing/invoice-pdf"
 import type {
   InvoiceTemplate,
@@ -28,6 +29,77 @@ import type {
   InvoiceItem,
   Product,
 } from "@/lib/db-types"
+
+// ───────────────────────────────────────────────────────────────────────────
+// FX rate locking for non-EUR invoices
+// ───────────────────────────────────────────────────────────────────────────
+
+/** Inputs applyFxRate reads from the invoice-like entity under save. */
+export type FxApplyInputs = {
+  currencyCode: string
+  issueDate: Date
+  fxRateToEur: string | null
+  fxRateDate: Date | null
+  /** Pass the already-stored source so the idempotent keep can preserve it.
+   *  Fresh lookups overwrite this with ECB's attribution URL. */
+  fxRateSource?: string | null
+}
+
+/** Output written back onto the invoice row. `fxRateSource` is only
+ *  populated on a fresh lookup — idempotent keeps preserve whatever was
+ *  stored previously (via the caller's existing row). */
+export type FxApplyResult = {
+  fxRateToEur: string | null
+  fxRateDate: Date | null
+  fxRateSource: string | null
+}
+
+/**
+ * Compute the locked FX rate columns for an invoice about to be saved.
+ *
+ * - EUR invoices: all nulls (also clears any prior values if the currency
+ *   was switched from a foreign currency back to EUR).
+ * - Non-EUR with no stored rate yet: look up the ECB reference rate for
+ *   `issueDate` and return that.
+ * - Non-EUR with a stored rate whose `fxRateDate` is within
+ *   `FX_IDEMPOTENCY_WINDOW_DAYS` of the current `issueDate`: keep it —
+ *   re-saving the invoice shouldn't force a fresh ECB lookup.
+ * - Non-EUR with a stored rate older than the window (e.g. user bumped the
+ *   issue date by a month): re-lookup.
+ *
+ * Returns all-nulls when the ECB lookup returns null — never throws.
+ */
+const FX_IDEMPOTENCY_WINDOW_DAYS = 7
+const MS_PER_DAY = 86_400_000
+
+export async function applyFxRate(entity: FxApplyInputs): Promise<FxApplyResult> {
+  const code = entity.currencyCode.trim().toUpperCase()
+  if (code === "EUR") {
+    return { fxRateToEur: null, fxRateDate: null, fxRateSource: null }
+  }
+
+  if (entity.fxRateToEur && entity.fxRateDate) {
+    const diffDays =
+      Math.abs(entity.issueDate.getTime() - entity.fxRateDate.getTime()) / MS_PER_DAY
+    if (diffDays <= FX_IDEMPOTENCY_WINDOW_DAYS) {
+      return {
+        fxRateToEur: entity.fxRateToEur,
+        fxRateDate: entity.fxRateDate,
+        fxRateSource: entity.fxRateSource ?? null,
+      }
+    }
+  }
+
+  const fresh = await getEurPerUnit(code, entity.issueDate)
+  if (!fresh) {
+    return { fxRateToEur: null, fxRateDate: null, fxRateSource: null }
+  }
+  return {
+    fxRateToEur: fresh.eurPerUnit,
+    fxRateDate: fresh.effectiveDate,
+    fxRateSource: fresh.source,
+  }
+}
 
 /**
  * Resolve a templateId to the template row plus pre-loaded logo bytes.
@@ -190,6 +262,10 @@ export function quoteToInvoiceShape(
     currencyCode: "EUR",
     totalCents: null,
     irpfRate: 0,
+    // Quotes are EUR-only at the DB level, so the FX block never renders.
+    fxRateToEur: null,
+    fxRateDate: null,
+    fxRateSource: null,
     createdAt: quote.createdAt,
     updatedAt: quote.updatedAt,
     client: quote.client,

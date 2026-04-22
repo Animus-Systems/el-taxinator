@@ -15,7 +15,7 @@ import path from "path"
 // 2. Add a migration entry here with the next version number
 // 3. The migration SQL should be idempotent (use IF NOT EXISTS, etc.)
 
-export const SCHEMA_VERSION = 39 // bump this when adding a migration
+export const SCHEMA_VERSION = 40 // bump this when adding a migration
 
 export const migrations: { version: number; description: string; sql: string }[] = [
   {
@@ -1026,6 +1026,31 @@ export const migrations: { version: number; description: string; sql: string }[]
           ALTER TABLE quotes
             ADD COLUMN pdf_file_id uuid REFERENCES files(id) ON DELETE SET NULL;
         END IF;
+      END $$;
+    `,
+  },
+  {
+    version: 40,
+    description:
+      "FX block on non-EUR invoices: shared cache of ECB daily reference rates (fx_rates), plus per-invoice locked rate columns so the 'Price in EUR' block on a PDF always reflects the rate on the original issue date, not today's rate. Shared cache has no user_id — ECB rates are public. Quotes are always EUR at the DB level so they don't need these columns.",
+    sql: `
+      CREATE TABLE IF NOT EXISTS fx_rates (
+        rate_date date NOT NULL,
+        currency text NOT NULL,
+        eur_per_unit numeric(20, 10) NOT NULL,
+        fetched_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL,
+        PRIMARY KEY (rate_date, currency)
+      );
+      CREATE INDEX IF NOT EXISTS fx_rates_currency_idx ON fx_rates (currency, rate_date DESC);
+
+      DO $$
+      BEGIN
+        IF to_regclass('public.invoices') IS NULL THEN
+          RETURN;
+        END IF;
+        ALTER TABLE invoices ADD COLUMN IF NOT EXISTS fx_rate_to_eur numeric(20, 10);
+        ALTER TABLE invoices ADD COLUMN IF NOT EXISTS fx_rate_date date;
+        ALTER TABLE invoices ADD COLUMN IF NOT EXISTS fx_rate_source text;
       END $$;
     `,
   },
