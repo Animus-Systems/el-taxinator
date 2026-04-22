@@ -524,33 +524,57 @@ export function PurchaseDetail({ purchase }: { purchase: PurchaseWithRelations }
             <TableHeader>
               <TableRow>
                 <TableHead>{t("paymentDate")}</TableHead>
+                <TableHead>{t("paymentTransaction", { defaultValue: "Transaction" })}</TableHead>
                 <TableHead>{t("paymentSource")}</TableHead>
                 <TableHead className="text-right">{t("amount")}</TableHead>
                 <TableHead className="text-right">{t("actions")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {payments.map((p) => (
-                <TableRow key={p.id}>
-                  <TableCell>{format(p.createdAt, "yyyy-MM-dd")}</TableCell>
-                  <TableCell>
-                    <Badge variant="secondary">{p.source}</Badge>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    {formatCurrency(p.amountCents, purchase.currencyCode)}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => deletePayment.mutate({ id: p.id })}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
+              {payments.map((p) => {
+                const tx = p.transaction
+                const txLabel = tx?.name || tx?.merchant || tx?.id
+                return (
+                  <TableRow key={p.id}>
+                    <TableCell>{format(p.createdAt, "yyyy-MM-dd")}</TableCell>
+                    <TableCell className="max-w-[280px]">
+                      {tx ? (
+                        <Link
+                          href={`/transactions/${tx.id}`}
+                          className="text-primary underline-offset-2 hover:underline truncate block"
+                        >
+                          <span className="truncate">{txLabel}</span>
+                          {tx.issuedAt && (
+                            <span className="text-xs text-muted-foreground ml-1">
+                              · {format(tx.issuedAt, "yyyy-MM-dd")}
+                            </span>
+                          )}
+                        </Link>
+                      ) : (
+                        <span className="text-muted-foreground">
+                          {t("paymentTransactionMissing", { defaultValue: "—" })}
+                        </span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="secondary">{p.source}</Badge>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {formatCurrency(p.amountCents, purchase.currencyCode)}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => deletePayment.mutate({ id: p.id })}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                )
+              })}
             </TableBody>
           </Table>
         )}

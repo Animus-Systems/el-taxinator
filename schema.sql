@@ -233,6 +233,9 @@ CREATE TABLE quotes (
     id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
     user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     contact_id uuid REFERENCES contacts(id) ON DELETE SET NULL,
+    pdf_file_id uuid REFERENCES files(id) ON DELETE SET NULL,
+    -- template_id FK constraint added below (after invoice_templates is declared)
+    template_id uuid,
     number text NOT NULL,
     status text DEFAULT 'draft' NOT NULL,
     issue_date timestamp(3) NOT NULL,
@@ -254,12 +257,44 @@ CREATE TABLE quote_items (
     "position" integer DEFAULT 0 NOT NULL
 );
 
+CREATE TABLE invoice_templates (
+    id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
+    user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name text NOT NULL,
+    is_default boolean DEFAULT false NOT NULL,
+    logo_file_id uuid REFERENCES files(id) ON DELETE SET NULL,
+    logo_position text DEFAULT 'left' NOT NULL CHECK (logo_position IN ('left','right','center')),
+    accent_color text DEFAULT '#4f46e5' NOT NULL,
+    font_preset text DEFAULT 'helvetica' NOT NULL CHECK (font_preset IN ('helvetica','times','courier')),
+    header_text text,
+    footer_text text,
+    bank_details_text text,
+    business_details_text text,
+    below_totals_text text,
+    show_prominent_total boolean DEFAULT false NOT NULL,
+    show_vat_column boolean DEFAULT true NOT NULL,
+    labels jsonb,
+    show_bank_details boolean DEFAULT false NOT NULL,
+    payment_terms_days integer,
+    language text DEFAULT 'es' NOT NULL CHECK (language IN ('es','en')),
+    created_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    updated_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+CREATE INDEX invoice_templates_user_id_idx ON invoice_templates (user_id);
+CREATE UNIQUE INDEX invoice_templates_user_default_idx ON invoice_templates (user_id) WHERE is_default = true;
+
+-- Deferred FK: quotes.template_id declared above without an inline FK because
+-- invoice_templates didn't exist yet. Bolt the constraint on now.
+ALTER TABLE quotes ADD CONSTRAINT quotes_template_id_fk
+  FOREIGN KEY (template_id) REFERENCES invoice_templates(id) ON DELETE SET NULL;
+
 CREATE TABLE invoices (
     id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
     user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     contact_id uuid REFERENCES contacts(id) ON DELETE SET NULL,
     quote_id uuid UNIQUE REFERENCES quotes(id) ON DELETE SET NULL,
     pdf_file_id uuid REFERENCES files(id) ON DELETE SET NULL,
+    template_id uuid REFERENCES invoice_templates(id) ON DELETE SET NULL,
     number text NOT NULL,
     status text DEFAULT 'draft' NOT NULL,
     issue_date timestamp(3) NOT NULL,

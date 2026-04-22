@@ -76,7 +76,7 @@ export function LineItemsEditor({ products, initialItems, onChange, currency = "
       <div className="grid grid-cols-[2fr_1fr_1fr_1fr_auto] gap-2 text-sm font-medium text-muted-foreground">
         <span>Description</span>
         <span>Qty</span>
-        <span>Unit Price (€)</span>
+        <span>Unit Price ({currency})</span>
         <span>VAT %</span>
         <span />
       </div>

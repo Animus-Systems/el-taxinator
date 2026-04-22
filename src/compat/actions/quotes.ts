@@ -7,6 +7,7 @@ function quotePayload(formData: FormData): Record<string, unknown> {
   const values = formDataToObject(formData)
   return {
     contactId: nullableStringValue(values["contactId"]),
+    templateId: nullableStringValue(values["templateId"]),
     number: values["number"],
     status: nullableStringValue(values["status"]),
     issueDate: values["issueDate"],

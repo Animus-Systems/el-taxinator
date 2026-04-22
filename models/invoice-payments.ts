@@ -49,6 +49,49 @@ export async function listPaymentsForTransaction(
   )
 }
 
+export type InvoicePaymentWithTransaction = InvoicePayment & {
+  transaction: {
+    id: string
+    name: string | null
+    merchant: string | null
+    issuedAt: Date | null
+  } | null
+}
+
+/**
+ * Same as listPaymentsForInvoice, plus the linked transaction's display
+ * fields via JOIN. `transaction` is null if the linked row was deleted.
+ */
+export async function listPaymentsForInvoiceWithTransaction(
+  invoiceId: string,
+  userId: string,
+): Promise<InvoicePaymentWithTransaction[]> {
+  const rows = await queryMany<
+    InvoicePayment & {
+      txId: string | null
+      txName: string | null
+      txMerchant: string | null
+      txIssuedAt: Date | null
+    }
+  >(
+    sql`SELECT ip.*, t.id AS tx_id, t.name AS tx_name,
+               t.merchant AS tx_merchant, t.issued_at AS tx_issued_at
+        FROM invoice_payments ip
+        LEFT JOIN transactions t ON t.id = ip.transaction_id
+        WHERE ip.invoice_id = ${invoiceId} AND ip.user_id = ${userId}
+        ORDER BY ip.created_at ASC`,
+  )
+  return rows.map((r) => {
+    const { txId, txName, txMerchant, txIssuedAt, ...payment } = r
+    return {
+      ...payment,
+      transaction: txId
+        ? { id: txId, name: txName, merchant: txMerchant, issuedAt: txIssuedAt }
+        : null,
+    }
+  })
+}
+
 /**
  * Sum of allocations per invoice for a user, as { invoiceId → cents } map.
  * Used to compute outstanding balance and to detect fully-paid invoices.

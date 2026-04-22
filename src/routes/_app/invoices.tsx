@@ -9,6 +9,7 @@ import { trpc } from "~/trpc"
 import { InvoiceList } from "@/components/invoicing/invoice-list"
 import { ImportInvoicesDialog } from "@/components/invoicing/import-invoices-dialog"
 import { NewInvoiceDialog } from "@/components/invoicing/new-invoice-dialog"
+import { TemplatesManagerDialog } from "@/components/invoicing/templates-manager-dialog"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -39,6 +40,7 @@ export function InvoicesPage() {
   const { t: tQuotes } = useTranslation("quotes")
   const [newKind, setNewKind] = useState<"invoice" | "simplified" | null>(null)
   const [importOpen, setImportOpen] = useState(false)
+  const [templatesOpen, setTemplatesOpen] = useState(false)
 
   const { data: invoices, isLoading } = trpc.invoices.list.useQuery({})
 
@@ -62,6 +64,9 @@ export function InvoicesPage() {
         <div className="flex gap-2">
           <Button asChild variant="outline">
             <Link href="/quotes">{tQuotes("title")}</Link>
+          </Button>
+          <Button variant="outline" onClick={() => setTemplatesOpen(true)}>
+            {t("template.manage", { defaultValue: "Templates" })}
           </Button>
           <Button variant="outline" onClick={() => setImportOpen(true)}>
             <Sparkles /> <span className="hidden md:block">{t("uploadExternal.trigger")}</span>
@@ -114,6 +119,7 @@ export function InvoicesPage() {
         kind={newKind ?? "invoice"}
       />
       <ImportInvoicesDialog open={importOpen} onOpenChange={setImportOpen} />
+      <TemplatesManagerDialog open={templatesOpen} onOpenChange={setTemplatesOpen} />
     </>
   )
 }

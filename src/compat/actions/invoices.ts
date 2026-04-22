@@ -11,6 +11,7 @@ function invoicePayload(formData: FormData): Record<string, unknown> {
   return {
     contactId: nullableStringValue(values["contactId"]),
     quoteId: nullableStringValue(values["quoteId"]),
+    templateId: nullableStringValue(values["templateId"]),
     number: values["number"],
     kind,
     status: nullableStringValue(values["status"]),

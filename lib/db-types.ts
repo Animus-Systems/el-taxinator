@@ -793,6 +793,8 @@ export const quoteSchema = z.object({
   id: z.string(),
   userId: z.string(),
   contactId: z.string().nullable(),
+  pdfFileId: z.string().nullable(),
+  templateId: z.string().nullable(),
   number: z.string(),
   status: z.string(),
   issueDate: z.date(),
@@ -821,12 +823,79 @@ export const quoteItemSchema = z.object({
 export const invoiceKindSchema = z.enum(["invoice", "simplified"])
 export type InvoiceKind = z.infer<typeof invoiceKindSchema>
 
+export const logoPositionSchema = z.enum(["left", "right", "center"])
+export type LogoPosition = z.infer<typeof logoPositionSchema>
+
+export const fontPresetSchema = z.enum(["helvetica", "times", "courier"])
+export type FontPreset = z.infer<typeof fontPresetSchema>
+
+export const templateLanguageSchema = z.enum(["es", "en"])
+export type TemplateLanguage = z.infer<typeof templateLanguageSchema>
+
+/**
+ * Per-template overrides for every user-visible string the PDF renders.
+ * Every key is optional — the renderer falls back to hardcoded defaults
+ * when a key is missing. This is deliberately permissive (non-strict JSON)
+ * so stored rows can be extended with new keys without a schema migration.
+ */
+export const invoiceTemplateLabelsSchema = z
+  .object({
+    invoiceTitle: z.string().optional(),
+    issueDate: z.string().optional(),
+    dueDate: z.string().optional(),
+    billTo: z.string().optional(),
+    description: z.string().optional(),
+    qty: z.string().optional(),
+    unitPrice: z.string().optional(),
+    vatPercent: z.string().optional(),
+    amount: z.string().optional(),
+    subtotal: z.string().optional(),
+    vat: z.string().optional(),
+    irpfRetention: z.string().optional(),
+    totalToPay: z.string().optional(),
+    prominentTotal: z.string().optional(),
+    notes: z.string().optional(),
+    bankDetails: z.string().optional(),
+    generated: z.string().optional(),
+    watermarkDraft: z.string().optional(),
+    watermarkCancelled: z.string().optional(),
+    watermarkRejected: z.string().optional(),
+  })
+  .passthrough()
+export type InvoiceTemplateLabels = z.infer<typeof invoiceTemplateLabelsSchema>
+
+export const invoiceTemplateSchema = z.object({
+  id: z.string(),
+  userId: z.string(),
+  name: z.string(),
+  isDefault: z.boolean(),
+  logoFileId: z.string().nullable(),
+  logoPosition: logoPositionSchema,
+  accentColor: z.string(),
+  fontPreset: fontPresetSchema,
+  headerText: z.string().nullable(),
+  footerText: z.string().nullable(),
+  bankDetailsText: z.string().nullable(),
+  businessDetailsText: z.string().nullable(),
+  belowTotalsText: z.string().nullable(),
+  showProminentTotal: z.boolean(),
+  showVatColumn: z.boolean(),
+  labels: invoiceTemplateLabelsSchema.nullable(),
+  showBankDetails: z.boolean(),
+  paymentTermsDays: z.number().int().nullable(),
+  language: templateLanguageSchema,
+  createdAt: z.date(),
+  updatedAt: z.date(),
+})
+export type InvoiceTemplate = z.infer<typeof invoiceTemplateSchema>
+
 export const invoiceSchema = z.object({
   id: z.string(),
   userId: z.string(),
   contactId: z.string().nullable(),
   quoteId: z.string().nullable(),
   pdfFileId: z.string().nullable(),
+  templateId: z.string().nullable(),
   number: z.string(),
   kind: invoiceKindSchema.default("invoice"),
   status: z.string(),

@@ -15,6 +15,7 @@ import {
   productSchema,
   invoiceSchema,
 } from "@/lib/db-types"
+import { regenerateQuotePdfSafe } from "@/lib/invoice-pdf-generation"
 
 // Quote item with optional product relation
 const quoteItemWithProductSchema = quoteItemSchema.extend({
@@ -39,6 +40,7 @@ const quoteItemInputSchema = z.object({
 
 const quoteInputSchema = z.object({
   contactId: z.string().nullish(),
+  templateId: z.string().nullish(),
   number: z.string(),
   status: z.string().optional(),
   issueDate: z.union([z.date(), z.string().transform((v) => new Date(v))]),
@@ -77,7 +79,9 @@ export const quotesRouter = router({
     .input(quoteInputSchema)
     .output(quoteWithRelationsSchema)
     .mutation(async ({ ctx, input }) => {
-      return createQuote(ctx.user.id, input as QuoteData)
+      const quote = await createQuote(ctx.user.id, input as QuoteData)
+      await regenerateQuotePdfSafe(quote.id, ctx.user)
+      return quote
     }),
 
   update: authedProcedure
@@ -86,7 +90,9 @@ export const quotesRouter = router({
     .output(quoteUpdateResultSchema)
     .mutation(async ({ ctx, input }) => {
       const { id, ...data } = input
-      return updateQuote(id, ctx.user.id, data as QuoteData)
+      const result = await updateQuote(id, ctx.user.id, data as QuoteData)
+      await regenerateQuotePdfSafe(id, ctx.user)
+      return result
     }),
 
   delete: authedProcedure

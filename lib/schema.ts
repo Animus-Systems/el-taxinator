@@ -15,7 +15,7 @@ import path from "path"
 // 2. Add a migration entry here with the next version number
 // 3. The migration SQL should be idempotent (use IF NOT EXISTS, etc.)
 
-export const SCHEMA_VERSION = 36 // bump this when adding a migration
+export const SCHEMA_VERSION = 39 // bump this when adding a migration
 
 export const migrations: { version: number; description: string; sql: string }[] = [
   {
@@ -937,6 +937,94 @@ export const migrations: { version: number; description: string; sql: string }[]
       BEGIN
         IF to_regclass('public.fields') IS NOT NULL THEN
           UPDATE fields SET is_visible_in_list = false WHERE code = 'projectCode';
+        END IF;
+      END $$;
+    `,
+  },
+  {
+    version: 37,
+    description:
+      "Add invoice_templates (named branding profiles) and link invoices to a template. ON DELETE SET NULL on invoices.template_id so deleting a template never loses historical invoices — PDF re-generation just falls back to user defaults. Partial unique index on (user_id) WHERE is_default enforces 'at most one default template per user' while allowing any number of non-defaults. Guarded with to_regclass so test harnesses that set up a partial schema without files/invoices tables can still run subsequent migrations.",
+    sql: `
+      DO $$
+      BEGIN
+        IF to_regclass('public.files') IS NULL OR to_regclass('public.invoices') IS NULL THEN
+          RETURN;
+        END IF;
+        CREATE TABLE IF NOT EXISTS invoice_templates (
+          id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+          user_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          name text NOT NULL,
+          is_default boolean NOT NULL DEFAULT false,
+          logo_file_id uuid REFERENCES files(id) ON DELETE SET NULL,
+          logo_position text NOT NULL DEFAULT 'left'
+            CHECK (logo_position IN ('left','right','center')),
+          accent_color text NOT NULL DEFAULT '#4f46e5',
+          font_preset text NOT NULL DEFAULT 'helvetica'
+            CHECK (font_preset IN ('helvetica','times','courier')),
+          header_text text,
+          footer_text text,
+          bank_details_text text,
+          show_bank_details boolean NOT NULL DEFAULT false,
+          payment_terms_days integer,
+          language text NOT NULL DEFAULT 'es' CHECK (language IN ('es','en')),
+          created_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL,
+          updated_at timestamp(3) DEFAULT CURRENT_TIMESTAMP NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS invoice_templates_user_id_idx ON invoice_templates (user_id);
+        CREATE UNIQUE INDEX IF NOT EXISTS invoice_templates_user_default_idx
+          ON invoice_templates (user_id) WHERE is_default = true;
+        IF NOT EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_name = 'invoices' AND column_name = 'template_id'
+        ) THEN
+          ALTER TABLE invoices
+            ADD COLUMN template_id uuid REFERENCES invoice_templates(id) ON DELETE SET NULL;
+        END IF;
+      END $$;
+    `,
+  },
+  {
+    version: 38,
+    description:
+      "Expand invoice_templates with enough knobs to recreate real-world invoice layouts: multi-line business_details_text (overrides user.business_*), below_totals_text for currency-conversion or extra info blocks, show_prominent_total toggle (big total next to dates), show_vat_column toggle (hide the VAT column), and labels jsonb with per-template overrides for every visible string in the PDF (invoice title, date labels, column headers, totals labels, footer defaults).",
+    sql: `
+      DO $$
+      BEGIN
+        IF to_regclass('public.invoice_templates') IS NULL THEN
+          RETURN;
+        END IF;
+        ALTER TABLE invoice_templates ADD COLUMN IF NOT EXISTS business_details_text text;
+        ALTER TABLE invoice_templates ADD COLUMN IF NOT EXISTS below_totals_text text;
+        ALTER TABLE invoice_templates ADD COLUMN IF NOT EXISTS show_prominent_total boolean NOT NULL DEFAULT false;
+        ALTER TABLE invoice_templates ADD COLUMN IF NOT EXISTS show_vat_column boolean NOT NULL DEFAULT true;
+        ALTER TABLE invoice_templates ADD COLUMN IF NOT EXISTS labels jsonb;
+      END $$;
+    `,
+  },
+  {
+    version: 39,
+    description:
+      "Link quotes to an invoice template so quote PDFs reuse the same branding as invoices (same logo, colors, font, labels). The quote renderer layers a QUOTE-flavored title override on top so the output reads 'QUOTE #…' instead of 'INVOICE #…'. ON DELETE SET NULL — deleting a template doesn't orphan quotes, they just fall back to the default layout.",
+    sql: `
+      DO $$
+      BEGIN
+        IF to_regclass('public.quotes') IS NULL OR to_regclass('public.invoice_templates') IS NULL THEN
+          RETURN;
+        END IF;
+        IF NOT EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_name = 'quotes' AND column_name = 'template_id'
+        ) THEN
+          ALTER TABLE quotes
+            ADD COLUMN template_id uuid REFERENCES invoice_templates(id) ON DELETE SET NULL;
+        END IF;
+        IF NOT EXISTS (
+          SELECT 1 FROM information_schema.columns
+          WHERE table_name = 'quotes' AND column_name = 'pdf_file_id'
+        ) THEN
+          ALTER TABLE quotes
+            ADD COLUMN pdf_file_id uuid REFERENCES files(id) ON DELETE SET NULL;
         END IF;
       END $$;
     `,

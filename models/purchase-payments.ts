@@ -49,6 +49,51 @@ export async function listPurchasePaymentsForTransaction(
   )
 }
 
+export type PurchasePaymentWithTransaction = PurchasePayment & {
+  transaction: {
+    id: string
+    name: string | null
+    merchant: string | null
+    issuedAt: Date | null
+  } | null
+}
+
+/**
+ * Same rows as listPaymentsForPurchase but JOINed with the transactions
+ * table so the UI can show which transaction is linked (name/merchant/date)
+ * without an N+1 fetch. `transaction` is null when the linked transaction
+ * has been deleted.
+ */
+export async function listPaymentsForPurchaseWithTransaction(
+  purchaseId: string,
+  userId: string,
+): Promise<PurchasePaymentWithTransaction[]> {
+  const rows = await queryMany<
+    PurchasePayment & {
+      txId: string | null
+      txName: string | null
+      txMerchant: string | null
+      txIssuedAt: Date | null
+    }
+  >(
+    sql`SELECT pp.*, t.id AS tx_id, t.name AS tx_name,
+               t.merchant AS tx_merchant, t.issued_at AS tx_issued_at
+        FROM purchase_payments pp
+        LEFT JOIN transactions t ON t.id = pp.transaction_id
+        WHERE pp.purchase_id = ${purchaseId} AND pp.user_id = ${userId}
+        ORDER BY pp.created_at ASC`,
+  )
+  return rows.map((r) => {
+    const { txId, txName, txMerchant, txIssuedAt, ...payment } = r
+    return {
+      ...payment,
+      transaction: txId
+        ? { id: txId, name: txName, merchant: txMerchant, issuedAt: txIssuedAt }
+        : null,
+    }
+  })
+}
+
 export async function getAllocatedByPurchase(userId: string): Promise<Map<string, number>> {
   const rows = await queryMany<{ purchaseId: string; totalCents: string | number }>(
     sql`SELECT purchase_id, SUM(amount_cents)::bigint AS total_cents

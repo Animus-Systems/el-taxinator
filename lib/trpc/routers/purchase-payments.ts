@@ -6,6 +6,7 @@ import {
   createPurchasePayment,
   deletePurchasePayment,
   listPaymentsForPurchase,
+  listPaymentsForPurchaseWithTransaction,
   listPurchasePaymentsForTransaction,
   getAllocatedByPurchase,
   getPaymentCountByPurchase,
@@ -81,9 +82,22 @@ export async function maybeAutoFlipPaidPurchase(purchaseId: string, userId: stri
 export const purchasePaymentsRouter = router({
   listForPurchase: authedProcedure
     .input(z.object({ purchaseId: z.string() }))
-    .output(z.array(purchasePaymentSchema))
+    .output(
+      z.array(
+        purchasePaymentSchema.extend({
+          transaction: z
+            .object({
+              id: z.string(),
+              name: z.string().nullable(),
+              merchant: z.string().nullable(),
+              issuedAt: z.date().nullable(),
+            })
+            .nullable(),
+        }),
+      ),
+    )
     .query(async ({ ctx, input }) => {
-      return listPaymentsForPurchase(input.purchaseId, ctx.user.id)
+      return listPaymentsForPurchaseWithTransaction(input.purchaseId, ctx.user.id)
     }),
 
   /** Map of purchaseId → number of linked transactions, for the chain icon

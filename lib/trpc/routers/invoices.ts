@@ -14,9 +14,12 @@ import {
   convertQuoteToInvoice,
   setInvoicePdfFileId,
   findDuplicateInvoice,
+  listNumbersByKind,
 } from "@/models/invoices"
+import { suggestNextInvoiceNumber } from "@/lib/invoice-series"
 import { getFileById } from "@/models/files"
 import type { InvoiceData } from "@/models/invoices"
+import { regenerateInvoicePdfSafe } from "@/lib/invoice-pdf-generation"
 import {
   invoiceSchema,
   invoiceItemSchema,
@@ -50,6 +53,7 @@ const invoiceInputSchema = z.object({
   contactId: z.string().nullish(),
   quoteId: z.string().nullish(),
   pdfFileId: z.string().nullish(),
+  templateId: z.string().nullish(),
   number: z.string(),
   kind: z.enum(["invoice", "simplified"]).optional(),
   status: z.string().optional(),
@@ -98,6 +102,46 @@ export const invoicesRouter = router({
       return getInvoiceById(input.id, ctx.user.id)
     }),
 
+  /**
+   * Non-blocking duplicate check for the invoice number field. The create
+   * mutation enforces uniqueness on submit, but typing the same number as
+   * an existing invoice surfaces this warning inline so the user can fix
+   * it before clicking Create. `excludeId` lets the edit form ignore the
+   * row it's currently editing.
+   */
+  checkDuplicate: authedProcedure
+    .input(z.object({ number: z.string(), excludeId: z.string().optional() }))
+    .output(z.object({ duplicate: z.boolean(), existingId: z.string().nullable() }))
+    .query(async ({ ctx, input }) => {
+      const trimmed = input.number.trim()
+      if (!trimmed) return { duplicate: false, existingId: null }
+      const dup = await findDuplicateInvoice(ctx.user.id, null, trimmed)
+      if (!dup) return { duplicate: false, existingId: null }
+      if (input.excludeId && dup.id === input.excludeId) {
+        return { duplicate: false, existingId: null }
+      }
+      return { duplicate: true, existingId: dup.id }
+    }),
+
+  /**
+   * Suggest the next invoice number for this user based on existing rows
+   * in the requested kind's series. Falls back to a date-stamped placeholder
+   * when the user has no invoices of that kind yet.
+   */
+  nextNumber: authedProcedure
+    .meta({ openapi: { method: "GET", path: "/api/v1/invoices/next-number" } })
+    .input(z.object({ kind: z.enum(["invoice", "simplified"]) }))
+    .output(z.object({ number: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const rows = await listNumbersByKind(ctx.user.id, input.kind)
+      const now = new Date()
+      const prefix = input.kind === "simplified" ? "R" : "F"
+      const fallback = `${prefix}-${now.getFullYear()}-${String(
+        now.getMonth() + 1,
+      ).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}-001`
+      return { number: suggestNextInvoiceNumber(rows, fallback) }
+    }),
+
   create: authedProcedure
     .meta({ openapi: { method: "POST", path: "/api/v1/invoices" } })
     .input(invoiceInputSchema)
@@ -114,7 +158,12 @@ export const invoicesRouter = router({
           message: `An invoice with number "${input.number}" already exists for this client.`,
         })
       }
-      return createInvoice(ctx.user.id, input as InvoiceData)
+      const invoice = await createInvoice(ctx.user.id, input as InvoiceData)
+      // Auto-generate the PDF so drafts have an attached file immediately,
+      // ready to preview or send. Rendering failures are logged but don't
+      // block creation — the UI's Regenerate button is always a fallback.
+      await regenerateInvoicePdfSafe(invoice.id, ctx.user)
+      return invoice
     }),
 
   update: authedProcedure
@@ -123,7 +172,11 @@ export const invoicesRouter = router({
     .output(invoiceUpdateResultSchema)
     .mutation(async ({ ctx, input }) => {
       const { id, ...data } = input
-      return updateInvoice(id, ctx.user.id, data as InvoiceData)
+      const result = await updateInvoice(id, ctx.user.id, data as InvoiceData)
+      // Content changed — the attached PDF is now stale. Regenerate so the
+      // stored file matches what the UI shows.
+      await regenerateInvoicePdfSafe(id, ctx.user)
+      return result
     }),
 
   updateStatus: authedProcedure
@@ -131,7 +184,15 @@ export const invoicesRouter = router({
     .input(z.object({ id: z.string(), status: z.string() }))
     .output(invoiceSchema.nullable())
     .mutation(async ({ ctx, input }) => {
-      return updateInvoiceStatus(input.id, ctx.user.id, input.status)
+      const updated = await updateInvoiceStatus(input.id, ctx.user.id, input.status)
+      if (updated) {
+        // Status transitions (draft → sent, sent → paid, etc.) are a natural
+        // checkpoint to refresh the attached PDF — the renderer will pick
+        // up any template or business-detail changes the user made since
+        // the invoice was originally created.
+        await regenerateInvoicePdfSafe(input.id, ctx.user)
+      }
+      return updated
     }),
 
   updateContact: authedProcedure

@@ -31,6 +31,7 @@ import { bundleRoutes } from "./routes/bundle"
 import { filesRoutes } from "./routes/files"
 import { exportRoutes } from "./routes/export"
 import { invoicesRoutes } from "./routes/invoices"
+import { quotesRoutes } from "./routes/quotes"
 import { purchasesRoutes } from "./routes/purchases"
 import { receiptsRoutes } from "./routes/receipts"
 import { personalRoutes } from "./routes/personal"
@@ -202,6 +203,7 @@ async function main() {
   await app.register(filesRoutes)
   await app.register(exportRoutes)
   await app.register(invoicesRoutes)
+  await app.register(quotesRoutes)
   await app.register(purchasesRoutes)
   await app.register(receiptsRoutes)
   await app.register(personalRoutes)

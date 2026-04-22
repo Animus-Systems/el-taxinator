@@ -471,17 +471,23 @@ export function InvoiceDetail({
         </div>
         {payments.length > 0 && (
           <ul className="divide-y rounded-md border">
-            {payments.map((p) => (
+            {payments.map((p) => {
+              const tx = p.transaction
+              const txLabel =
+                tx?.name || tx?.merchant || t("payments.transactionLink")
+              return (
               <li key={p.id} className="flex items-center justify-between px-3 py-2 text-sm">
                 <div className="flex min-w-0 flex-col">
                   <Link
                     href={`/transactions/${p.transactionId}`}
                     className="truncate text-primary underline-offset-2 hover:underline"
                   >
-                    {t("payments.transactionLink")}
+                    {txLabel}
                   </Link>
                   <span className="text-xs text-muted-foreground">
-                    {format(p.createdAt, "yyyy-MM-dd HH:mm")}
+                    {tx?.issuedAt
+                      ? format(tx.issuedAt, "yyyy-MM-dd")
+                      : format(p.createdAt, "yyyy-MM-dd HH:mm")}
                     {p.source === "ai" ? ` · ${t("payments.sourceAi")}` : ""}
                   </span>
                 </div>
@@ -499,7 +505,8 @@ export function InvoiceDetail({
                   </Button>
                 </div>
               </li>
-            ))}
+              )
+            })}
           </ul>
         )}
       </div>

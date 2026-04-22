@@ -5,7 +5,7 @@ import { invoicePaymentSchema } from "@/lib/db-types"
 import {
   createInvoicePayment,
   deleteInvoicePayment,
-  listPaymentsForInvoice,
+  listPaymentsForInvoiceWithTransaction,
   listPaymentsForTransaction,
   getAllocatedByInvoice,
   getPaymentCountByInvoice,
@@ -45,9 +45,22 @@ export async function maybeAutoFlipPaid(invoiceId: string, userId: string): Prom
 export const invoicePaymentsRouter = router({
   listForInvoice: authedProcedure
     .input(z.object({ invoiceId: z.string() }))
-    .output(z.array(invoicePaymentSchema))
+    .output(
+      z.array(
+        invoicePaymentSchema.extend({
+          transaction: z
+            .object({
+              id: z.string(),
+              name: z.string().nullable(),
+              merchant: z.string().nullable(),
+              issuedAt: z.date().nullable(),
+            })
+            .nullable(),
+        }),
+      ),
+    )
     .query(async ({ ctx, input }) => {
-      return listPaymentsForInvoice(input.invoiceId, ctx.user.id)
+      return listPaymentsForInvoiceWithTransaction(input.invoiceId, ctx.user.id)
     }),
 
   /** Map of invoiceId → number of linked transactions, for the chain icon

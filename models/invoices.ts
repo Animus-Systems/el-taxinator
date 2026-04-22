@@ -2,6 +2,7 @@ import { getPool } from "@/lib/pg"
 import {
   sql,
   queryOne,
+  queryMany,
   buildInsert,
   buildUpdate,
   execute,
@@ -39,6 +40,7 @@ export type InvoiceData = {
   contactId?: string | null
   quoteId?: string | null
   pdfFileId?: string | null
+  templateId?: string | null
   number: string
   /** 'invoice' for factura ordinaria (default), 'simplified' for factura
    * simplificada. Determines which numbering series this row belongs to. */
@@ -64,12 +66,28 @@ export type QuoteItemData = {
 
 export type QuoteData = {
   contactId?: string | null
+  pdfFileId?: string | null
+  templateId?: string | null
   number: string
   status?: string
   issueDate: Date
   expiryDate?: Date | null
   notes?: string | null
   items: QuoteItemData[]
+}
+
+/** Set (or clear) the attached PDF reference on an existing quote. */
+export async function setQuotePdfFileId(
+  id: string,
+  userId: string,
+  pdfFileId: string | null,
+): Promise<Quote | null> {
+  return queryOne<Quote>(
+    sql`UPDATE quotes
+        SET pdf_file_id = ${pdfFileId}, updated_at = now()
+        WHERE id = ${id} AND user_id = ${userId}
+        RETURNING *`,
+  )
 }
 
 // ---------------------------------------------------------------------------
@@ -280,6 +298,22 @@ async function fetchClientInTx(
  * accounting convention), so we check across the user's entire invoice set —
  * not per-contact.
  */
+/**
+ * List (number, createdAt) pairs for a user's invoices of a given kind. Used
+ * by the next-number suggestion to pick the active series and its max ordinal.
+ * Capped at 500 rows — enough for any realistic active series.
+ */
+export async function listNumbersByKind(
+  userId: string,
+  kind: "invoice" | "simplified",
+): Promise<{ number: string; createdAt: Date }[]> {
+  return queryMany<{ number: string; createdAt: Date }>(sql`
+    SELECT number, created_at FROM invoices
+    WHERE user_id = ${userId} AND kind = ${kind}
+    ORDER BY created_at DESC
+    LIMIT 500`)
+}
+
 export async function findDuplicateInvoice(
   userId: string,
   _contactId: string | null,

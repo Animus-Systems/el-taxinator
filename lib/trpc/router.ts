@@ -1,6 +1,7 @@
 import { router } from "./init"
 import { transactionsRouter } from "./routers/transactions"
 import { invoicesRouter } from "./routers/invoices"
+import { invoiceTemplatesRouter } from "./routers/invoice-templates"
 import { invoicePaymentsRouter } from "./routers/invoice-payments"
 import { purchasesRouter } from "./routers/purchases"
 import { purchasePaymentsRouter } from "./routers/purchase-payments"
@@ -36,6 +37,7 @@ import { personalTaxRouter } from "./routers/personal-tax"
 export const appRouter = router({
   transactions: transactionsRouter,
   invoices: invoicesRouter,
+  invoiceTemplates: invoiceTemplatesRouter,
   invoicePayments: invoicePaymentsRouter,
   purchases: purchasesRouter,
   purchasePayments: purchasePaymentsRouter,

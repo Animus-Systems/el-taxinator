@@ -3,10 +3,11 @@
  *
  * Fetches quotes list via tRPC and renders QuoteList.
  */
+import { useState, type ComponentProps } from "react"
 import { useTranslation } from "react-i18next"
-import type { ComponentProps } from "react"
 import { trpc } from "~/trpc"
 import { QuoteList } from "@/components/invoicing/quote-list"
+import { TemplatesManagerDialog } from "@/components/invoicing/templates-manager-dialog"
 import { Button } from "@/components/ui/button"
 import { Plus } from "lucide-react"
 import { Link } from "@/lib/navigation"
@@ -27,6 +28,7 @@ function normalizeQuote(q: {
 export function QuotesPage() {
   const { t } = useTranslation("quotes")
   const { t: tInvoices } = useTranslation("invoices")
+  const [templatesOpen, setTemplatesOpen] = useState(false)
 
   const { data: quotes, isLoading } = trpc.quotes.list.useQuery({})
 
@@ -51,6 +53,9 @@ export function QuotesPage() {
           <Button asChild variant="outline">
             <Link href="/invoices">{tInvoices("title")}</Link>
           </Button>
+          <Button variant="outline" onClick={() => setTemplatesOpen(true)}>
+            {tInvoices("template.manage", { defaultValue: "Templates" })}
+          </Button>
           <Button asChild>
             <Link href="/quotes/new">
               <Plus /> <span className="hidden md:block">{t("newQuote")}</span>
@@ -61,6 +66,7 @@ export function QuotesPage() {
       <main>
         <QuoteList quotes={quoteList} />
       </main>
+      <TemplatesManagerDialog open={templatesOpen} onOpenChange={setTemplatesOpen} />
     </>
   )
 }
