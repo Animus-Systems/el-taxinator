@@ -45,29 +45,40 @@ function cleanupExpiredEntries(): void {
   lastCleanup = Date.now()
 }
 
+import { createHash } from "crypto"
+
 /**
- * Get client identifier from request
- * Uses IP address + user agent as identifier
+ * Hash ip + user-agent into a 16-char key. Exported so Fastify/tRPC adapters
+ * can derive a key without materializing a Web `Request`.
+ */
+export function deriveClientKey(ip: string, userAgent: string): string {
+  return createHash("sha256").update(`${ip}:${userAgent}`).digest("hex").substring(0, 16)
+}
+
+/**
+ * Get client identifier from a Web-Fetch `Request`
  */
 function getClientIdentifier(request: Request): string {
-  // Try to get IP from various headers (common proxies/load balancers)
   const forwarded = request.headers.get("x-forwarded-for")
   const realIp = request.headers.get("x-real-ip")
   const cfConnectingIp = request.headers.get("cf-connecting-ip")
-  
-  const ip = forwarded?.split(",")[0]?.trim() 
-    || realIp 
-    || cfConnectingIp 
+
+  const ip = forwarded?.split(",")[0]?.trim()
+    || realIp
+    || cfConnectingIp
     || "unknown"
-  
+
   const userAgent = request.headers.get("user-agent") || "unknown"
-  
-  // Hash to prevent storage of PII
-  const crypto = require("crypto")
-  const hash = crypto.createHash("sha256")
-  hash.update(`${ip}:${userAgent}`)
-  
-  return hash.digest("hex").substring(0, 16)
+  return deriveClientKey(ip, userAgent)
+}
+
+/**
+ * Check and update rate limit for a derived client key. Exported so callers
+ * outside the Web-`Request` world (Fastify, tRPC) can drive the limiter
+ * with a key they built themselves.
+ */
+export function checkRateLimitByKey(key: string, config: RateLimitConfig): RateLimitResult {
+  return checkRateLimit(key, config)
 }
 
 /**

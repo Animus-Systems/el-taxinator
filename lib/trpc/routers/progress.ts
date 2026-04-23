@@ -21,7 +21,7 @@ export const progressRouter = router({
       z.object({
         id: z.string(),
         type: z.string().nullish(),
-        data: z.any().nullish(),
+        data: z.unknown().nullish(),
         total: z.number().int().default(0),
       }),
     )

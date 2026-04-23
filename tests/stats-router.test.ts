@@ -86,7 +86,7 @@ describe("statsRouter.analytics", () => {
       ],
     })
 
-    const caller = createCaller({ user })
+    const caller = createCaller({ user, req: null })
     const result = await caller.analytics({
       dateFrom: "2026-01-01",
       dateTo: "2026-02-29",
@@ -141,7 +141,7 @@ describe("statsRouter.analytics", () => {
       otherCurrencies: [],
     })
 
-    const caller = createCaller({ user })
+    const caller = createCaller({ user, req: null })
     await caller.analytics({
       currency: "USD",
       dateFrom: "2026-01-01",
@@ -156,7 +156,7 @@ describe("statsRouter.analytics", () => {
   })
 
   it("rejects callers without an authenticated user", async () => {
-    const caller = createCaller({ user: null })
+    const caller = createCaller({ user: null, req: null })
 
     await expect(
       caller.analytics({

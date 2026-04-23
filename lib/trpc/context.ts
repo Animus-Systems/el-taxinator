@@ -1,8 +1,15 @@
+import type { FastifyRequest } from "fastify"
 import { getSession } from "@/lib/auth"
 import type { User } from "@/lib/db-types"
 
 export type TRPCContext = {
   user: User | null
+  /**
+   * Raw Fastify request for procedures that need headers/IP — null when
+   * called via the server-side caller (SSR, scripts, tests) where there
+   * is no HTTP request.
+   */
+  req: FastifyRequest | null
 }
 
 /**
@@ -17,5 +24,6 @@ export async function createTRPCContext(): Promise<TRPCContext> {
 
   return {
     user: (session?.user as User | undefined) ?? null,
+    req: null,
   }
 }

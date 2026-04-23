@@ -15,7 +15,7 @@ import path from "path"
 // 2. Add a migration entry here with the next version number
 // 3. The migration SQL should be idempotent (use IF NOT EXISTS, etc.)
 
-export const SCHEMA_VERSION = 41 // bump this when adding a migration
+export const SCHEMA_VERSION = 42 // bump this when adding a migration
 
 export const migrations: { version: number; description: string; sql: string }[] = [
   {
@@ -1070,6 +1070,21 @@ export const migrations: { version: number; description: string; sql: string }[]
           AND id IN (
             SELECT logo_file_id FROM invoice_templates WHERE logo_file_id IS NOT NULL
           );
+      END $$;
+    `,
+  },
+  {
+    version: 42,
+    description:
+      "files: covering index on (user_id, is_reviewed, created_at DESC) for the unreviewed-inbox hot path and related user-scoped list queries.",
+    sql: `
+      DO $$
+      BEGIN
+        IF to_regclass('public.files') IS NULL THEN
+          RETURN;  -- minimal test schemas may not include the files table
+        END IF;
+        CREATE INDEX IF NOT EXISTS files_user_reviewed_created_idx
+          ON files (user_id, is_reviewed, created_at DESC);
       END $$;
     `,
   },

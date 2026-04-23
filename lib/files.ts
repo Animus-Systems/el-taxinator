@@ -62,6 +62,15 @@ export function safePathJoin(basePath: string, ...paths: string[]) {
   return joinedPath
 }
 
+export function contentDispositionHeader(
+  disposition: "attachment" | "inline",
+  filename: string,
+): string {
+  const ascii = filename.replace(/[^\x20-\x7E]/g, "_").replace(/["\\]/g, "_")
+  const utf8 = encodeURIComponent(filename)
+  return `${disposition}; filename="${ascii}"; filename*=UTF-8''${utf8}`
+}
+
 export async function fileExists(filePath: string) {
   try {
     await access(path.normalize(filePath), constants.F_OK)

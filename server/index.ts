@@ -128,14 +128,14 @@ async function resolveSelfHostedUser(): Promise<User | null> {
  * on Next.js cookies() from next/headers.
  */
 async function createFastifyContext(
-  _opts: CreateFastifyContextOptions,
+  opts: CreateFastifyContextOptions,
 ): Promise<TRPCContext> {
   try {
     const user = await resolveSelfHostedUser()
-    return { user }
+    return { user, req: opts.req }
   } catch (error) {
     console.error("[server] Failed to resolve self-hosted user:", error)
-    return { user: null }
+    return { user: null, req: opts.req }
   }
 }
 

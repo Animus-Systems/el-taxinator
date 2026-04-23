@@ -13,8 +13,16 @@ import path from "node:path"
 
 import { getOrCreateSelfHostedUser } from "@/models/users"
 import { getFileById, persistUploadedFile } from "@/models/files"
-import { fullPathForFile, getUserPreviewsDirectory, previewFilePath, safePathJoin } from "@/lib/files"
+import { contentDispositionHeader, fullPathForFile, getUserPreviewsDirectory, previewFilePath, safePathJoin } from "@/lib/files"
 import { getActiveEntityId } from "@/lib/entities"
+import { verifyUpload } from "@/lib/upload-allowlist"
+import { checkFastifyRateLimit, createRateLimitHeaders } from "../rate-limit-adapter"
+
+const UPLOAD_RATE_LIMIT = {
+  windowMs: 60_000,
+  maxRequests: 30,
+  keyPrefix: "files:upload:",
+} as const
 
 export async function filesRoutes(app: FastifyInstance) {
   // @fastify/multipart is registered by importRoutes too — calling register
@@ -26,6 +34,12 @@ export async function filesRoutes(app: FastifyInstance) {
   // ─── Upload (legacy drop-zone + upload buttons) ──────────────────────
   app.post("/api/files/upload", async (request, reply) => {
     try {
+      const rl = checkFastifyRateLimit(request, UPLOAD_RATE_LIMIT)
+      if (!rl.allowed) {
+        for (const [k, v] of Object.entries(createRateLimitHeaders(rl))) reply.header(k, v)
+        return reply.code(429).send({ success: false, error: "Too many uploads, try again shortly." })
+      }
+
       const user = await getOrCreateSelfHostedUser()
       if (!user) return reply.code(401).send({ success: false, error: "Not authenticated" })
 
@@ -35,9 +49,13 @@ export async function filesRoutes(app: FastifyInstance) {
       for await (const part of (request as unknown as { parts(): AsyncIterableIterator<import("@fastify/multipart").Multipart> }).parts()) {
         if (part.type !== "file") continue
         const buffer = await part.toBuffer()
+        const check = verifyUpload(part.mimetype, buffer)
+        if (!check.ok) {
+          return reply.code(415).send({ success: false, error: check.reason })
+        }
         const file = await persistUploadedFile(user.id, entityId, {
           fileName: part.filename,
-          mimetype: part.mimetype,
+          mimetype: check.mimetype,
           buffer,
           isReviewed: false,
         })
@@ -64,6 +82,12 @@ export async function filesRoutes(app: FastifyInstance) {
   // surface (e.g. signatures, email banners).
   app.post("/api/files/upload-asset", async (request, reply) => {
     try {
+      const rl = checkFastifyRateLimit(request, UPLOAD_RATE_LIMIT)
+      if (!rl.allowed) {
+        for (const [k, v] of Object.entries(createRateLimitHeaders(rl))) reply.header(k, v)
+        return reply.code(429).send({ success: false, error: "Too many uploads, try again shortly." })
+      }
+
       const user = await getOrCreateSelfHostedUser()
       if (!user) return reply.code(401).send({ success: false, error: "Not authenticated" })
 
@@ -73,9 +97,13 @@ export async function filesRoutes(app: FastifyInstance) {
       for await (const part of (request as unknown as { parts(): AsyncIterableIterator<import("@fastify/multipart").Multipart> }).parts()) {
         if (part.type !== "file") continue
         const buffer = await part.toBuffer()
+        const check = verifyUpload(part.mimetype, buffer)
+        if (!check.ok) {
+          return reply.code(415).send({ success: false, error: check.reason })
+        }
         const file = await persistUploadedFile(user.id, entityId, {
           fileName: part.filename,
-          mimetype: part.mimetype,
+          mimetype: check.mimetype,
           buffer,
           isReviewed: true,
         })
@@ -109,10 +137,9 @@ export async function filesRoutes(app: FastifyInstance) {
       const stats = await stat(abs).catch(() => null)
       if (!stats) return reply.code(404).send({ error: "File bytes missing on disk" })
 
-      const safeFilename = file.filename.replace(/["\\]/g, "_")
       reply.header("Content-Type", file.mimetype || "application/octet-stream")
       reply.header("Content-Length", String(stats.size))
-      reply.header("Content-Disposition", `attachment; filename="${safeFilename}"`)
+      reply.header("Content-Disposition", contentDispositionHeader("attachment", file.filename))
       return reply.send(createReadStream(abs))
     } catch (error) {
       console.error("[files/download] Error:", error)
@@ -136,10 +163,9 @@ export async function filesRoutes(app: FastifyInstance) {
       const stats = await stat(abs).catch(() => null)
       if (!stats) return reply.code(404).send({ error: "File bytes missing on disk" })
 
-      const safeFilename = file.filename.replace(/["\\]/g, "_")
       reply.header("Content-Type", file.mimetype || "application/octet-stream")
       reply.header("Content-Length", String(stats.size))
-      reply.header("Content-Disposition", `inline; filename="${safeFilename}"`)
+      reply.header("Content-Disposition", contentDispositionHeader("inline", file.filename))
       return reply.send(createReadStream(abs))
     } catch (error) {
       console.error("[files/view] Error:", error)

@@ -4,6 +4,7 @@ import {
   queryOne,
   queryMany,
   buildInsert,
+  buildMultiRowInsert,
   buildUpdate,
   execute,
   mapRow,
@@ -264,23 +265,23 @@ function firstRowOrThrow<T>(rows: Record<string, unknown>[], context: string): T
   return mapRow<T>(row)
 }
 
-/** Insert items within a transaction. */
+/** Insert items within a transaction using one batched multi-row INSERT. */
 async function insertItems<TItem>(
   txClient: PoolClient,
   items: Record<string, unknown>[],
   config: DocumentConfig,
   docId: string,
 ): Promise<TItem[]> {
-  const inserted: TItem[] = []
-  for (const item of items) {
-    const itemInsert = buildInsert(config.itemsTable, {
-      ...item,
-      [config.itemFk]: docId,
-    })
-    const result = await txClient.query(itemInsert.text, itemInsert.values)
-    inserted.push(firstRowOrThrow<TItem>(result.rows, `insert ${config.itemsTable}`))
+  if (items.length === 0) return []
+  const rows = items.map((item) => ({ ...item, [config.itemFk]: docId }))
+  const q = buildMultiRowInsert(config.itemsTable, rows)
+  const result = await txClient.query(q.text, q.values)
+  if (result.rows.length !== q.rowCount) {
+    throw new Error(
+      `insertItems: expected ${q.rowCount} rows, got ${result.rows.length} from ${config.itemsTable}`,
+    )
   }
-  return inserted
+  return result.rows.map((r) => mapRow<TItem>(r))
 }
 
 /** Fetch client within a transaction. */

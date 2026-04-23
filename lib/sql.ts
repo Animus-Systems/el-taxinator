@@ -215,6 +215,51 @@ export function buildInsert(
 }
 
 /**
+ * Bulk-insert helper. Builds `INSERT … VALUES (…),(…),… RETURNING *` from
+ * an array of row objects. Every row must produce the same column set (after
+ * undefined filtering) — throws otherwise. Respects the same camelCase →
+ * snake_case / Date / jsonb serialization as `buildInsert`. Postgres preserves
+ * the input-row order in `RETURNING`.
+ */
+export function buildMultiRowInsert(
+  table: string,
+  rows: Record<string, unknown>[],
+): SqlQuery & { rowCount: number } {
+  assertSafeIdentifier(table, "table name")
+  if (rows.length === 0) {
+    throw new Error(`buildMultiRowInsert: rows must be non-empty for table ${table}`)
+  }
+
+  const normalized = rows.map((r) => (r["id"] ? r : { id: randomUUID(), ...r }))
+  const firstRow = normalized[0]!
+  const columns = Object.entries(firstRow)
+    .filter(([, v]) => v !== undefined)
+    .map(([k]) => k)
+
+  for (const col of columns) assertSafeIdentifier(camelToSnake(col), "column name")
+  const snakeColumns = columns.map((c) => camelToSnake(c))
+
+  const values: unknown[] = []
+  const rowPlaceholders: string[] = []
+
+  for (const row of normalized) {
+    const ph: string[] = []
+    for (const col of columns) {
+      const v = row[col]
+      if (v === undefined) {
+        throw new Error(`buildMultiRowInsert: row missing column '${col}' for table ${table}`)
+      }
+      values.push(serializeValue(v))
+      ph.push(`$${values.length}`)
+    }
+    rowPlaceholders.push(`(${ph.join(", ")})`)
+  }
+
+  const text = `INSERT INTO ${table} (${snakeColumns.join(", ")}) VALUES ${rowPlaceholders.join(", ")} RETURNING *`
+  return { text, values, rowCount: normalized.length }
+}
+
+/**
  * Builds an UPDATE SET query from a plain object.
  *
  * - Converts camelCase keys to snake_case column names

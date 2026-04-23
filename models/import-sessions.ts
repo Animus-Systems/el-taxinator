@@ -22,12 +22,6 @@ export type ImportSessionData = {
   commitErrors?: Array<{ rowIndex: number; message: string }> | null
 }
 
-export const getImportSessions = cache(async (userId: string) => {
-  return queryMany<ImportSession>(
-    sql`SELECT * FROM import_sessions WHERE user_id = ${userId} AND status = 'pending' ORDER BY last_activity_at DESC`
-  )
-})
-
 export const getImportSessionById = cache(async (id: string, userId: string) => {
   return queryOne<ImportSession>(
     sql`SELECT * FROM import_sessions WHERE id = ${id} AND user_id = ${userId}`

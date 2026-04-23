@@ -1,21 +1,16 @@
 import { z } from "zod"
+import { TRPCError } from "@trpc/server"
 import { router, authedProcedure } from "../init"
 import { getSettings, updateSettings, getLLMSettings } from "@/models/settings"
 import { settingSchema, type Setting } from "@/lib/db-types"
 import { PROVIDERS } from "@/lib/llm-providers"
 import { testLLMProvider } from "@/ai/providers/llmProvider"
 import type { LLMProvider } from "@/ai/providers/llmProvider"
+import { checkFastifyRateLimit } from "@/server/rate-limit-adapter"
 
-const llmProviderSchema = z.object({
-  provider: z.string(),
-  apiKey: z.string(),
-  model: z.string(),
-  thinking: z.string().optional(),
-})
-
-const llmSettingsSchema = z.object({
-  providers: z.array(llmProviderSchema),
-})
+const SETTING_CODE_RE = /^[a-z][a-z0-9_]{0,63}$/
+const settingCodeSchema = z.string().regex(SETTING_CODE_RE, "invalid setting code")
+const settingValueSchema = z.string().max(10_000).optional()
 
 const llmHintItemSchema = z.object({
   provider: z.string(),
@@ -40,31 +35,27 @@ export const settingsRouter = router({
 
   update: authedProcedure
     .meta({ openapi: { method: "POST", path: "/api/v1/settings" } })
-    .input(z.record(z.string(), z.string().optional()))
+    .input(z.record(settingCodeSchema, settingValueSchema))
     .output(z.record(z.string(), settingSchema.nullable()))
     .mutation(async ({ ctx, input }) => {
+      if (ctx.req) {
+        const rl = checkFastifyRateLimit(ctx.req, {
+          windowMs: 60_000,
+          maxRequests: 60,
+          keyPrefix: "settings:update:",
+        })
+        if (!rl.allowed) {
+          throw new TRPCError({
+            code: "TOO_MANY_REQUESTS",
+            message: "Too many settings updates",
+          })
+        }
+      }
       const results: Record<string, Setting | null> = {}
       for (const [code, value] of Object.entries(input)) {
         results[code] = await updateSettings(ctx.user.id, code, value) ?? null
       }
       return results
-    }),
-
-  getLLM: authedProcedure
-    .meta({ openapi: { method: "GET", path: "/api/v1/settings/llm" } })
-    .input(z.object({}))
-    .output(llmSettingsSchema)
-    .query(async ({ ctx }) => {
-      const settings = await getSettings(ctx.user.id)
-      const llm = getLLMSettings(settings)
-      return {
-        providers: llm.providers.map((p) => ({
-          provider: p.provider,
-          apiKey: p.apiKey,
-          model: p.model,
-          ...(p.thinking !== undefined && { thinking: p.thinking }),
-        })),
-      }
     }),
 
   testProvider: authedProcedure

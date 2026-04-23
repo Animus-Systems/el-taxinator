@@ -11,7 +11,7 @@ describe("server tRPC batching", () => {
     await registerFastifyTrpcRoutes(app, {
       prefix: "/api/trpc",
       router: appRouter,
-      createContext: async () => ({ user: null }),
+      createContext: async () => ({ user: null, req: null }),
     })
 
     await app.ready()

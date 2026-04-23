@@ -98,6 +98,7 @@ CREATE TABLE files (
     cached_parse_result jsonb,
     is_splitted boolean DEFAULT false NOT NULL
 );
+CREATE INDEX files_user_reviewed_created_idx ON files (user_id, is_reviewed, created_at DESC);
 
 CREATE TABLE transactions (
     id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,

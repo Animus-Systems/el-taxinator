@@ -43,6 +43,7 @@ import {
   makeFailureMessage,
 } from "@/ai/wizard"
 import { buildSessionReport } from "@/ai/session-report"
+import { sessionReportSchema } from "@/ai/session-report-schema"
 import { getUserById } from "@/models/users"
 import type { EntityType, TransactionReviewStatusValue } from "@/lib/db-types"
 import type { TransactionCandidate } from "@/ai/import-csv"
@@ -258,11 +259,7 @@ export const wizardRouter = router({
 
   getReportPreview: authedProcedure
     .input(z.object({ sessionId: z.string() }))
-    // `buildSessionReport` returns a rich nested object; tRPC transports it via
-    // superjson so Date/jsonb fields survive the wire. Using z.any() here avoids
-    // duplicating the SessionReport shape in Zod form — see ai/session-report.ts
-    // for the canonical TypeScript type.
-    .output(z.any())
+    .output(sessionReportSchema)
     .query(async ({ ctx, input }) => {
       return buildSessionReport(input.sessionId, ctx.user.id)
     }),
