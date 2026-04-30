@@ -1,10 +1,12 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { protectedProcedure, router, tenantProcedure } from "../trpc.js";
+import { protectedProcedure, router, tenantAdminProcedure, tenantProcedure } from "../trpc.js";
 
 const ENTITY_TYPES = ["autonomo", "sl", "individual"] as const;
 const TENANT_ROLES = ["owner", "admin", "accountant", "member"] as const;
 const SLUG_RE = /^[a-z0-9-]+$/;
+
+const tenantPathInput = z.object({ tenantId: z.string().uuid() });
 
 const tenantSchema = z.object({
   id: z.string().uuid(),
@@ -171,6 +173,113 @@ export const tenantsRouter = router({
         role: ctx.membership.role as typeof TENANT_ROLES[number],
       };
     }),
+
+  invites: router({
+    list: tenantAdminProcedure
+      .meta({
+        openapi: { method: "GET", path: "/tenants/{tenantId}/invites", tags: ["tenants"] },
+      })
+      .input(tenantPathInput)
+      .output(z.array(z.object({
+        id: z.string().uuid(),
+        email: z.string(),
+        role: z.enum(TENANT_ROLES),
+        createdAt: z.string(),
+        expiresAt: z.string(),
+        acceptedAt: z.string().nullable(),
+        revokedAt: z.string().nullable(),
+      })))
+      .query(async ({ ctx }) => {
+        const result = await ctx.appDb.withTenant(
+          ctx.tenantId,
+          { userId: ctx.authUser.userId },
+          async (client) =>
+            client.query<{
+              id: string;
+              email: string;
+              role: typeof TENANT_ROLES[number];
+              created_at: string;
+              expires_at: string;
+              accepted_at: string | null;
+              revoked_at: string | null;
+            }>(
+              "SELECT id, email::text AS email, role, created_at, expires_at, accepted_at, revoked_at "
+                + "FROM core.tenant_invite ORDER BY created_at DESC",
+            ),
+        );
+        return result.rows.map((row) => ({
+          id: row.id,
+          email: row.email,
+          role: row.role,
+          createdAt: row.created_at,
+          expiresAt: row.expires_at,
+          acceptedAt: row.accepted_at,
+          revokedAt: row.revoked_at,
+        }));
+      }),
+
+    create: tenantAdminProcedure
+      .meta({
+        openapi: { method: "POST", path: "/tenants/{tenantId}/invites", tags: ["tenants"] },
+      })
+      .input(tenantPathInput.extend({
+        email: z.string().email(),
+        role: z.enum(TENANT_ROLES).default("member"),
+        expiresInDays: z.number().int().min(1).max(180).default(14),
+      }))
+      .output(z.object({ id: z.string().uuid(), email: z.string(), role: z.enum(TENANT_ROLES), expiresAt: z.string() }))
+      .mutation(async ({ ctx, input }) => {
+        // ensure_user_exists keeps invited_by FK satisfied — admin's user
+        // projection might be missing if this is the first action they take.
+        const result = await ctx.appDb.withTenant(
+          ctx.tenantId,
+          { userId: ctx.authUser.userId },
+          async (client) => {
+            await client.query("SELECT core.ensure_user_exists($1)", [ctx.authUser.userId]);
+            return client.query<{ id: string; email: string; role: typeof TENANT_ROLES[number]; expires_at: string }>(
+              `INSERT INTO core.tenant_invite (tenant_id, email, role, invited_by, expires_at)
+               VALUES (core.current_tenant_id(), $1, $2, $3, now() + ($4 || ' days')::interval)
+               ON CONFLICT (tenant_id, email) DO UPDATE
+                 SET role        = EXCLUDED.role,
+                     expires_at  = EXCLUDED.expires_at,
+                     accepted_at = NULL,
+                     revoked_at  = NULL,
+                     invited_by  = EXCLUDED.invited_by
+               RETURNING id, email::text AS email, role, expires_at`,
+              [input.email, input.role, ctx.authUser.userId, input.expiresInDays],
+            );
+          },
+        );
+        const row = result.rows[0];
+        if (!row) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
+        return {
+          id: row.id,
+          email: row.email,
+          role: row.role,
+          expiresAt: row.expires_at,
+        };
+      }),
+
+    revoke: tenantAdminProcedure
+      .meta({
+        openapi: { method: "DELETE", path: "/tenants/{tenantId}/invites/{id}", tags: ["tenants"] },
+      })
+      .input(tenantPathInput.extend({ id: z.string().uuid() }))
+      .output(z.object({ ok: z.literal(true) }))
+      .mutation(async ({ ctx, input }) => {
+        const result = await ctx.appDb.withTenant(
+          ctx.tenantId,
+          { userId: ctx.authUser.userId },
+          (client) =>
+            client.query(
+              "UPDATE core.tenant_invite SET revoked_at = now() WHERE id = $1 AND accepted_at IS NULL RETURNING id",
+              [input.id],
+            ),
+        );
+        if (!result.rowCount) throw new TRPCError({ code: "NOT_FOUND" });
+        return { ok: true as const };
+      }),
+  }),
 
   members: router({
     list: tenantProcedure

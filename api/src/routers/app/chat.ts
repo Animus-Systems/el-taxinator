@@ -70,7 +70,12 @@ export const chatRouter = router({
     }),
 
   post: tenantProcedure
-    .meta({ openapi: { method: "POST", path: "/tenants/{tenantId}/chat", tags: ["chat"] } })
+    .meta({
+      openapi: { method: "POST", path: "/tenants/{tenantId}/chat", tags: ["chat"] },
+      // Chat rows are user-scoped via RLS — the accountant has their own
+      // private thread inside the tenant, separate from the owner's.
+      accountantWritable: true,
+    })
     .input(tenantPathInput.extend({
       role: z.enum(ROLES),
       content: z.string().min(1),
@@ -104,7 +109,10 @@ export const chatRouter = router({
     }),
 
   delete: tenantProcedure
-    .meta({ openapi: { method: "DELETE", path: "/tenants/{tenantId}/chat/{id}", tags: ["chat"] } })
+    .meta({
+      openapi: { method: "DELETE", path: "/tenants/{tenantId}/chat/{id}", tags: ["chat"] },
+      accountantWritable: true,
+    })
     .input(tenantPathInput.extend({ id: z.string().uuid() }))
     .output(z.object({ ok: z.literal(true) }))
     .mutation(async ({ ctx, input }) => {
@@ -118,7 +126,10 @@ export const chatRouter = router({
   // Wipe everything for the current user in this tenant — useful for "start
   // fresh" or GDPR-style local deletion. Doesn't touch other users' chats.
   clear: tenantProcedure
-    .meta({ openapi: { method: "DELETE", path: "/tenants/{tenantId}/chat", tags: ["chat"] } })
+    .meta({
+      openapi: { method: "DELETE", path: "/tenants/{tenantId}/chat", tags: ["chat"] },
+      accountantWritable: true,
+    })
     .input(tenantPathInput)
     .output(z.object({ deletedCount: z.number().int() }))
     .mutation(async ({ ctx }) => {

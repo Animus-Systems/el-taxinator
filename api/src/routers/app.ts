@@ -1,4 +1,5 @@
 import { router } from "../trpc.js";
+import { accountantCommentsRouter } from "./app/accountantComments.js";
 import { accountsRouter } from "./app/accounts.js";
 import { aliasesRouter } from "./app/aliases.js";
 import { businessFactsRouter } from "./app/businessFacts.js";
@@ -21,11 +22,11 @@ import { rulesRouter } from "./app/rules.js";
 import { taxFilingsRouter } from "./app/taxFilings.js";
 import { transactionsRouter } from "./app/transactions.js";
 
-// Phase 6 domain routers — adds crypto FIFO matching, tax filings checklist,
-// AI-learned business facts, personal IRPF inputs (income sources +
-// deductions), curated knowledge packs, and per-user chat history on top
-// of the Phase 5 invoicing/purchases core.
+// Phase 7 domain routers — adds accountantComments on top of Phase 6.
+// Accountant role hardening lives in tenantProcedure (mutations require
+// meta.accountantWritable for accountant members).
 export const appRouter = router({
+  accountantComments: accountantCommentsRouter,
   accounts: accountsRouter,
   aliases: aliasesRouter,
   businessFacts: businessFactsRouter,

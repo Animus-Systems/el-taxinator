@@ -19,7 +19,16 @@ export type Context = {
   };
 };
 
-const t = initTRPC.context<Context>().meta<OpenApiMeta>().create();
+// `accountantWritable` opts a mutation in for the read-mostly accountant role.
+// Any tenant mutation without this flag is rejected when the caller's
+// membership.role is 'accountant'. Default-deny keeps surprises minimal —
+// new mutations don't accidentally let accountants edit books unless we
+// explicitly mark them safe.
+export type TenantMeta = OpenApiMeta & { accountantWritable?: boolean };
+
+export type Context2 = Context;
+
+const t = initTRPC.context<Context>().meta<TenantMeta>().create();
 
 export const router = t.router;
 export const publicProcedure = t.procedure;
@@ -47,7 +56,7 @@ const fetchTenantMembership = async (
   return result.rows[0] ?? null;
 };
 
-export const tenantProcedure = protectedProcedure.use(async ({ ctx, next }) => {
+export const tenantProcedure = protectedProcedure.use(async ({ ctx, next, type, meta }) => {
   const tenantId = ctx.req.tenantId;
   if (!tenantId) throw new TRPCError({ code: "BAD_REQUEST", message: "Missing tenantId in URL." });
 
@@ -55,6 +64,21 @@ export const tenantProcedure = protectedProcedure.use(async ({ ctx, next }) => {
   if (!membership || membership.status !== "active") {
     throw new TRPCError({ code: "FORBIDDEN", message: "Not a member of this tenant." });
   }
+
+  // Accountants are read-only by default. A handful of mutations (post a
+  // comment, mark a filing filed, post a chat message) opt in via
+  // .meta({ accountantWritable: true }).
+  if (
+    type === "mutation"
+    && membership.role === "accountant"
+    && !meta?.accountantWritable
+  ) {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "Accountants have read-only access to this tenant's books.",
+    });
+  }
+
   return next({ ctx: { ...ctx, tenantId, membership } });
 });
 

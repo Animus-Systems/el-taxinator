@@ -136,9 +136,12 @@ export const taxFilingsRouter = router({
   // can be empty or already-completed; we don't enforce checklist closure
   // here because Hacienda accepts late or partial filings and the wizard
   // wants to record reality, not ideals.
+  // Accountants file on behalf of the owner — opt them in for this mutation
+  // even though they're read-only on the rest of tax-filings CRUD.
   markFiled: tenantProcedure
     .meta({
       openapi: { method: "POST", path: "/tenants/{tenantId}/tax-filings/{id}/file", tags: ["tax-filings"] },
+      accountantWritable: true,
     })
     .input(tenantPathInput.extend({
       id: z.string().uuid(),
