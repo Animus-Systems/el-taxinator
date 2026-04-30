@@ -10,6 +10,7 @@ import { getBearerToken, verifyAccessToken } from "./auth/jwt.js";
 import { config } from "./config.js";
 import { appDb } from "./db/appDb.js";
 import { identityDb } from "./db/identityDb.js";
+import { mountFileRoutes } from "./files/uploadRoutes.js";
 import { appRouterRoot } from "./routers/root.js";
 import type { Context } from "./trpc.js";
 
@@ -29,6 +30,10 @@ app.use(
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   }),
 );
+
+// File upload routes mount BEFORE the JSON body parser so multer sees the
+// raw multipart stream. JSON middleware below handles everything else.
+mountFileRoutes(app, { appDb });
 
 app.use(express.json({ limit: "2mb" }));
 
