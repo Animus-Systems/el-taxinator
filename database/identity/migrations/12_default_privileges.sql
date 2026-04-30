@@ -1,0 +1,14 @@
+-- Identity DB: default privilege hardening
+--
+-- Ensure functions created in Identity schemas do NOT become executable by PUBLIC.
+-- (Postgres defaults grant EXECUTE on newly-created functions to PUBLIC.)
+
+BEGIN;
+
+ALTER DEFAULT PRIVILEGES FOR ROLE identity_owner IN SCHEMA iam REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC;
+ALTER DEFAULT PRIVILEGES FOR ROLE identity_owner IN SCHEMA oidc REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC;
+ALTER DEFAULT PRIVILEGES FOR ROLE identity_owner IN SCHEMA ops REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC;
+ALTER DEFAULT PRIVILEGES FOR ROLE identity_owner IN SCHEMA admin REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC;
+
+COMMIT;
+
