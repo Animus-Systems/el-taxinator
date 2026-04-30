@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import cors from "cors";
 import express from "express";
+import swaggerUi from "swagger-ui-express";
 import { TRPCError } from "@trpc/server";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { createOpenApiExpressMiddleware } from "trpc-openapi";
@@ -11,6 +12,7 @@ import { config } from "./config.js";
 import { appDb } from "./db/appDb.js";
 import { identityDb } from "./db/identityDb.js";
 import { mountFileRoutes } from "./files/uploadRoutes.js";
+import { buildOpenApiDocument } from "./openapiDocument.js";
 import { appRouterRoot } from "./routers/root.js";
 import type { Context } from "./trpc.js";
 
@@ -90,6 +92,26 @@ const createContext = ({ req }: { req: express.Request }): Context => {
     },
   };
 };
+
+// Swagger UI / openapi.json — only when DOCS_ENABLED (default: not isProd).
+// Wraps the swagger-ui handlers because their default types collide with our
+// strict express types.
+if (config.docsEnabled) {
+  const openApiDocument = buildOpenApiDocument(config.baseUrl);
+  app.get("/openapi.json", (_req, res) => {
+    res.json(openApiDocument);
+  });
+  const wrap = (handler: unknown): express.RequestHandler => (req, res, next) => {
+    if (typeof handler !== "function") {
+      next(new Error("Swagger handler was not a function"));
+      return;
+    }
+    Reflect.apply(handler as (req: express.Request, res: express.Response, next: express.NextFunction) => unknown,
+      undefined, [req, res, next]);
+  };
+  app.use("/docs", ...swaggerUi.serve.map(wrap));
+  app.use("/docs", wrap(swaggerUi.setup(openApiDocument)));
+}
 
 app.use(
   "/openapi",
